@@ -133,3 +133,98 @@ try { delete window._fe; } catch(e) {}
 
 
 console.log('%c🔒 Security patch v1.2 loaded', 'color:#10b981;font-weight:700;');
+/* =========================================================
+   NEXAR Mobile Scroll FABs (v1)
+   Two floating buttons (▲ top / ▼ bottom) shown only on
+   mobile when NEXAR tab is active. Each hides when you're
+   already near that end. Scrolls window (main page scroll).
+   ========================================================= */
+(function nexarMobileScrollFabs() {
+  if (window.__nexarFabsInit) return;
+  window.__nexarFabsInit = true;
+
+  var css = document.createElement('style');
+  css.id = 'nexar-fab-css';
+  css.textContent = [
+    '.nexar-fab{position:fixed;right:14px;width:44px;height:44px;',
+    'border-radius:50%;background:rgba(8,18,26,0.92);',
+    'border:1px solid rgba(52,211,178,0.55);color:#34d3b2;',
+    'font-size:16px;font-weight:700;line-height:1;padding:0;',
+    'display:none;align-items:center;justify-content:center;',
+    'cursor:pointer;z-index:9998;opacity:0;pointer-events:none;',
+    'box-shadow:0 4px 14px rgba(0,0,0,0.45),0 0 0 1px rgba(52,211,178,0.08);',
+    '-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);',
+    'transition:opacity .18s ease, transform .18s ease;font-family:inherit;}',
+    '.nexar-fab.on{display:flex;opacity:0.92;pointer-events:auto;}',
+    '.nexar-fab:active{transform:scale(0.92);}',
+    '#nexar-fab-up{bottom:150px;}',
+    '#nexar-fab-down{bottom:96px;}',
+    '@media (min-width:769px){.nexar-fab{display:none !important;}}'
+  ].join('');
+  document.head.appendChild(css);
+
+  var up = document.createElement('button');
+  up.id = 'nexar-fab-up';
+  up.className = 'nexar-fab';
+  up.setAttribute('aria-label', 'Scroll to top');
+  up.textContent = '▲';
+  up.addEventListener('click', function () {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  var down = document.createElement('button');
+  down.id = 'nexar-fab-down';
+  down.className = 'nexar-fab';
+  down.setAttribute('aria-label', 'Scroll to bottom');
+  down.textContent = '▼';
+  down.addEventListener('click', function () {
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: 'smooth'
+    });
+  });
+
+  document.body.appendChild(up);
+  document.body.appendChild(down);
+
+  function isMobile() {
+    return window.matchMedia('(max-width: 768px)').matches;
+  }
+
+  function isNexarActive() {
+    var n = document.getElementById('nexar');
+    if (!n) return false;
+    if (n.offsetParent === null) return false;
+    var cs = getComputedStyle(n);
+    return cs.display !== 'none' && cs.visibility !== 'hidden';
+  }
+
+  function update() {
+    if (!isMobile() || !isNexarActive()) {
+      up.classList.remove('on');
+      down.classList.remove('on');
+      return;
+    }
+    var y = window.scrollY || window.pageYOffset || 0;
+    var max = (document.documentElement.scrollHeight || 0) - window.innerHeight;
+    var nearTop = y < 200;
+    var nearBottom = y > max - 200;
+    up.classList.toggle('on', !nearTop);
+    down.classList.toggle('on', !nearBottom);
+  }
+
+  var ticking = false;
+  function onScroll() {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      update();
+      ticking = false;
+    });
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', update, { passive: true });
+  setInterval(update, 600); // catches tab switches without hooking showTab()
+  update();
+})();
