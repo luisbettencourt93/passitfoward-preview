@@ -3509,7 +3509,7 @@
     <p>Help others know what you bring to the table.</p>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;">
       <div id="edit-avatar-preview" style="width:56px;height:56px;border-radius:50%;background:rgba(45,212,160,0.12);border:2px solid rgba(45,212,160,0.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#2dd4a0;overflow:hidden;flex-shrink:0;"><i class="fas fa-user"></i></div>
-      <div style="flex:1;"><input type="url" id="edit-avatar-url" aria-label="Avatar URL" placeholder="Profile picture URL (from X, LinkedIn, or any image link)" class="form-input" style="margin:0;" oninput="const v=this.value.trim();const p=document.getElementById('edit-avatar-preview');if(v&&v.startsWith('http')){p.innerHTML='<img alt="" src=&quot;'+v+'&quot; style=&quot;width:100%;height:100%;object-fit:cover;&quot; onerror=&quot;this.parentElement.innerHTML=\\'<i class=fas fa-user></i>\\'&quot;>';}else{p.innerHTML='<i class=\\'fas fa-user\\'></i>';}"><div style="font-size:0.65rem;color:#4b5563;margin-top:3px;">Tip: Right-click your X profile pic → Copy image address</div></div>
+      <div style="flex:1;"><input type="url" id="edit-avatar-url" aria-label="Avatar URL" placeholder="Profile picture URL (from X, LinkedIn, or any image link)" class="form-input" style="margin:0;" oninput="updateAvatarPreview(this.value)"><div style="font-size:0.65rem;color:#4b5563;margin-top:3px;">Tip: Right-click your X profile pic → Copy image address</div></div>
     </div>
     <textarea id="edit-bio" aria-label="Your bio" placeholder="Short bio — who you are, what you're building..." class="form-input" style="height:90px; resize:vertical; margin-bottom:0.8rem;"></textarea>
     <div class="skills-input-row">
@@ -3824,6 +3824,32 @@ function attrSafe(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// Safely update the avatar preview next to the Edit Profile avatar URL input.
+// Builds DOM via element APIs — no innerHTML with user input.
+function updateAvatarPreview(url) {
+  const preview = document.getElementById('edit-avatar-preview');
+  if (!preview) return;
+  const v = String(url || '').trim();
+  preview.innerHTML = '';
+  if (v && /^https?:\/\//i.test(v)) {
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = v;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+    img.onerror = () => {
+      preview.innerHTML = '';
+      const icon = document.createElement('i');
+      icon.className = 'fas fa-user';
+      preview.appendChild(icon);
+    };
+    preview.appendChild(img);
+  } else {
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-user';
+    preview.appendChild(icon);
+  }
 }
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -4778,7 +4804,8 @@ async function loadOpportunitiesAndRender() {
      opportunities = data.map(r => ({
   id: r.id, title: r.title, desc: r.description, category: r.category,
   interest: r.interest, poster: r.poster_handle, poster_id: r.poster_id,
-  budget: r.budget || '', type: r.type || 'need', location: r.location || ''
+  budget: r.budget || '', type: r.type || 'need', location: r.location || '',
+  created_at: r.created_at || ''
 }));
     }
    // Load active forged deals (in-progress lock — shows "Deal in Progress" badge)
