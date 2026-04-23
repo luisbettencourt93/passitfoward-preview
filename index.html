@@ -1674,6 +1674,46 @@
   position: relative; z-index: 1;
 }
 
+/* -- Mobile scroll FABs (NEXAR stream) ---------------------------------- */
+.nexar-fabs {
+  position: absolute;
+  right: 20px;
+  bottom: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.nexar-fabs.visible { opacity: 1; pointer-events: auto; }
+.nexar-fab {
+  width: 38px; height: 38px;
+  background: rgba(13, 21, 38, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(45, 212, 160, 0.3);
+  color: #2dd4a0;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+  transition: transform 0.12s, background 0.12s, border-color 0.12s;
+  padding: 0;
+}
+.nexar-fab:hover {
+  background: rgba(45, 212, 160, 0.15);
+  border-color: rgba(45, 212, 160, 0.55);
+  transform: translateY(-1px);
+}
+.nexar-fab:active { transform: translateY(0); }
+@media (max-width: 640px) {
+  .nexar-fabs { right: 14px; bottom: 100px; gap: 10px; }
+  .nexar-fab { width: 42px; height: 42px; font-size: 15px; }
+}
+
 /* -- Mobile ----------------------------------------------------------- */
 @media (max-width: 640px) {
   .nexar-wrap { margin-top: -10px; min-height: calc(100vh - 64px); }
@@ -3018,6 +3058,16 @@
     <div class="nexar-shell">
       <div class="nexar-stream" id="nexar-stream">
         <!-- messages rendered here by renderNexarMessage() -->
+      </div>
+
+      <!-- FABs: scroll-to-top / scroll-to-latest (mobile-friendly) -->
+      <div class="nexar-fabs" id="nexar-fabs" aria-hidden="true">
+        <button class="nexar-fab" id="nexar-fab-top" onclick="nexarScrollTo('top')" aria-label="Scroll to top" title="Scroll to top">
+          <i class="fas fa-chevron-up"></i>
+        </button>
+        <button class="nexar-fab" id="nexar-fab-bottom" onclick="nexarScrollTo('bottom')" aria-label="Scroll to latest" title="Scroll to latest">
+          <i class="fas fa-chevron-down"></i>
+        </button>
       </div>
 
       <!-- UPGRADE BANNER (shown when free user hits limit) -->
@@ -4740,6 +4790,13 @@ const { data: fulfilledDeals } = await sb.from('forged_deals').select('opportuni
 window._fulfilledOppIds = new Set((fulfilledDeals||[]).filter(d=>d.opportunity_id).map(d=>String(d.opportunity_id)));
   }
   renderOpportunities();
+  // Also refresh Live Market views if that tab is visible — fixes "trending
+  // disappears" bug where realtime events / new posts left Live Market stale.
+  const lfTab = document.getElementById('livefeed');
+  if (lfTab && lfTab.style.display === 'block') {
+    try { renderLiveFeedOpps(); } catch(_) {}
+    try { renderTrendingOpps(); } catch(_) {}
+  }
 }
 
 function renderFilters() {
@@ -4856,6 +4913,10 @@ const newOpp = { title, desc: desc||'No description', category, budget, location
 
   opportunities.unshift(newOpp);
   renderOpportunities();
+  // Also keep Live Market + Trending in sync when posting (even if user is on
+  // dashboard — they may switch to Live Market right after).
+  try { renderLiveFeedOpps(); } catch(_) {}
+  try { renderTrendingOpps(); } catch(_) {}
   updatePostedCount();
   closeModal('post-modal');
  ['opp-title','opp-desc','opp-budget','opp-location'].forEach(id => { const e = document.getElementById(id); if(e) e.value=''; });
@@ -9739,6 +9800,7 @@ async function nexarLoadHistory() {
 
   data.forEach(m => renderNexarMessage(m.role, m.content, /*animate=*/false));
   scrollNexarBottom(/*smooth=*/false);
+  requestAnimationFrame(() => { try { nexarUpdateFabs(); } catch(_) {} });
 }
 
 function renderNexarEmpty() {
@@ -9786,6 +9848,7 @@ function renderNexarMessage(role, content, animate = true) {
   wrap.appendChild(bubble);
   stream.appendChild(wrap);
   scrollNexarBottom();
+  requestAnimationFrame(() => { try { nexarUpdateFabs(); } catch(_) {} });
 }
 
 // Minimal safe formatter: escape HTML first, then lightweight markdown-ish.
@@ -9978,6 +10041,60 @@ window.nexarAutoGrow      = nexarAutoGrow;
 window.nexarQuickPrompt   = nexarQuickPrompt;
 window.nexarStartCheckout = nexarStartCheckout;
 window.showNexarProModal  = showNexarProModal;
+
+// -- NEXAR scroll FABs ----------------------------------------------------
+// Two floating buttons that appear when the chat stream overflows the visible
+// area. Tap to scroll to top / latest. Huge UX improvement on mobile where
+// scrolling long conversations was painful.
+function nexarScrollTo(where) {
+  const stream = document.getElementById('nexar-stream');
+  if (!stream) return;
+  stream.scrollTo({
+    top: where === 'top' ? 0 : stream.scrollHeight,
+    behavior: 'smooth',
+  });
+}
+
+function nexarUpdateFabs() {
+  const stream = document.getElementById('nexar-stream');
+  const fabs   = document.getElementById('nexar-fabs');
+  const topBtn = document.getElementById('nexar-fab-top');
+  const botBtn = document.getElementById('nexar-fab-bottom');
+  if (!stream || !fabs || !topBtn || !botBtn) return;
+
+  // Show FABs only when the stream overflows (enough messages to scroll)
+  const isScrollable = stream.scrollHeight > stream.clientHeight + 40;
+  if (!isScrollable) {
+    fabs.classList.remove('visible');
+    return;
+  }
+  fabs.classList.add('visible');
+
+  // Hide top-button when near top; hide bottom-button when near bottom
+  const nearTop    = stream.scrollTop < 100;
+  const nearBottom = (stream.scrollHeight - stream.scrollTop - stream.clientHeight) < 100;
+  topBtn.style.display = nearTop    ? 'none' : 'flex';
+  botBtn.style.display = nearBottom ? 'none' : 'flex';
+}
+
+// Attach scroll listener once the stream element exists
+(function initNexarFabScroll() {
+  const tryAttach = () => {
+    const stream = document.getElementById('nexar-stream');
+    if (!stream) { setTimeout(tryAttach, 500); return; }
+    stream.addEventListener('scroll', nexarUpdateFabs, { passive: true });
+    window.addEventListener('resize', nexarUpdateFabs, { passive: true });
+    nexarUpdateFabs();
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryAttach);
+  } else {
+    tryAttach();
+  }
+})();
+
+window.nexarScrollTo   = nexarScrollTo;
+window.nexarUpdateFabs = nexarUpdateFabs;
 
 </script>
 <!-- PROJECT FUND MODAL (founder only) -->
