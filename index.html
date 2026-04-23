@@ -9805,11 +9805,13 @@ async function nexarLoadHistory() {
   if (!sb || !currentUser) return;
 
   const isPaid = nexarState.tier === 'pro';
+  // Fetch DESC + reverse so we always get the MOST RECENT N messages,
+  // not the first N from all-time history.
   let q = sb.from('nexar_conversations')
     .select('role, content, created_at')
     .eq('user_id', currentUser.id)
     .in('role', ['user', 'assistant'])
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(isPaid ? 80 : 40);
 
   if (!isPaid) {
@@ -9825,7 +9827,8 @@ async function nexarLoadHistory() {
     return;
   }
 
-  data.forEach(m => renderNexarMessage(m.role, m.content, /*animate=*/false));
+  // Reverse so oldest renders first (top), newest at bottom (matches chat flow)
+  data.reverse().forEach(m => renderNexarMessage(m.role, m.content, /*animate=*/false));
   scrollNexarBottom(/*smooth=*/false);
   requestAnimationFrame(() => { try { nexarUpdateFabs(); } catch(_) {} });
 }
