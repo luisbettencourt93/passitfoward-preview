@@ -3765,21 +3765,15 @@ function sanitize(str) {
   d.appendChild(document.createTextNode(String(str || '')));
   return d.innerHTML;
 }
-// Safe for embedding user data inside inline HTML attributes (onclick, title, etc).
-// Handles every character that can break an inline attribute or JS string literal:
-// quotes, backslashes, newlines, control chars, and HTML-specials.
+// Safe for embedding user data inside HTML attribute values (e.g. data-*="..").
+// sanitize() alone is NOT enough because a " in the value closes the attribute.
 function attrSafe(str) {
   return String(str || '')
-    .replace(/\\/g, '\\\\')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/`/g, '&#96;')
-    .replace(/\r?\n/g, ' ')
-    .replace(/\r/g, ' ')
-    .replace(/\t/g, ' ');
+    .replace(/'/g, '&#39;');
 }
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -4530,8 +4524,8 @@ function renderLiveFeedOpps() {
         </div>
         <div class="opp-actions">
           <button onclick="expressInterest('${opp.id}')" class="interest-btn"><i class="fas fa-fire" style="font-size:0.72rem;margin-right:3px;"></i>${opp.interest}</button>
-          ${window._activeForgeOppIds?.has(String(opp.id)) ? `<span title="This opportunity is currently being fulfilled — no further deals can be forged" style="background:rgba(245,158,11,0.08);color:#f59e0b;border:1.5px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:default;">🔒 Deal in Progress</span>` : `<button onclick="showForgeModal(${opp.id}, '${attrSafe(opp.title)}', '${attrSafe(opp.poster)}')" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1.5px solid rgba(139,92,246,0.3);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔨 Forge Deal</button>`}
-          <button onclick="showDmModal('${attrSafe(opp.poster)}','${attrSafe(opp.title)}')" class="dm-btn"><i class="fas fa-paper-plane" style="font-size:0.75rem;margin-right:3px;"></i>DM</button>
+          ${window._activeForgeOppIds?.has(String(opp.id)) ? `<span title="This opportunity is currently being fulfilled — no further deals can be forged" style="background:rgba(245,158,11,0.08);color:#f59e0b;border:1.5px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:default;">🔒 Deal in Progress</span>` : `<button data-forge-id="${opp.id}" data-forge-title="${attrSafe(opp.title)}" data-forge-poster="${attrSafe(opp.poster)}" onclick="showForgeModal(this.dataset.forgeId, this.dataset.forgeTitle, this.dataset.forgePoster)" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1.5px solid rgba(139,92,246,0.3);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔨 Forge Deal</button>`}
+          <button data-dm-poster="${attrSafe(opp.poster)}" data-dm-title="${attrSafe(opp.title)}" onclick="showDmModal(this.dataset.dmPoster, this.dataset.dmTitle)" class="dm-btn"><i class="fas fa-paper-plane" style="font-size:0.75rem;margin-right:3px;"></i>DM</button>
           ${isMine ? `<button onclick="deleteOpportunity('${opp.id}')" class="delete-btn" title="Delete">🗑</button>` : ''}
         </div>
       </div>`;
@@ -4805,8 +4799,8 @@ const filtered = activeFilter === 'All' ? visible : visible.filter(o => o.catego
             <button onclick="expressInterest('${opp.id}')" class="interest-btn">
               <i class="fas fa-fire" style="font-size:0.72rem;margin-right:3px;"></i>${opp.interest}
             </button>
-            ${window._activeForgeOppIds?.has(String(opp.id)) ? `<span title="This opportunity is currently being fulfilled — no further deals can be forged" style="background:rgba(245,158,11,0.08);color:#f59e0b;border:1.5px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:default;">🔒 Deal in Progress</span>` : `<button onclick="showForgeModal(${opp.id}, '${attrSafe(opp.title)}', '${attrSafe(opp.poster)}')" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1.5px solid rgba(139,92,246,0.3);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔨 Forge Deal</button>`}
-            <button onclick="showDmModal('${attrSafe(opp.poster)}','${attrSafe(opp.title)}')" class="dm-btn">
+            ${window._activeForgeOppIds?.has(String(opp.id)) ? `<span title="This opportunity is currently being fulfilled — no further deals can be forged" style="background:rgba(245,158,11,0.08);color:#f59e0b;border:1.5px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:default;">🔒 Deal in Progress</span>` : `<button data-forge-id="${opp.id}" data-forge-title="${attrSafe(opp.title)}" data-forge-poster="${attrSafe(opp.poster)}" onclick="showForgeModal(this.dataset.forgeId, this.dataset.forgeTitle, this.dataset.forgePoster)" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1.5px solid rgba(139,92,246,0.3);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔨 Forge Deal</button>`}
+            <button data-dm-poster="${attrSafe(opp.poster)}" data-dm-title="${attrSafe(opp.title)}" onclick="showDmModal(this.dataset.dmPoster, this.dataset.dmTitle)" class="dm-btn">
               <i class="fas fa-paper-plane" style="font-size:0.75rem;margin-right:3px;"></i>DM
             </button>
 
