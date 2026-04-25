@@ -1731,7 +1731,193 @@
   .nexar-msg .nexar-bubble { max-width: 92%; font-size: 13.5px; }
   .nexar-pro-modal-content { padding: 24px 20px; }
 }
+/* ═══════════ NEXAR PIPELINE — LAYER 1 ═══════════ */
+.nexar-subtabs {
+  display: flex; gap: 4px;
+  margin: 18px 0 12px; padding: 4px;
+  background: rgba(13, 21, 38, 0.6);
+  border: 1px solid rgba(45, 79, 111, 0.4);
+  border-radius: 10px; width: fit-content;
+}
+.nexar-subtab {
+  background: transparent; border: none; color: #5a7a9a;
+  padding: 8px 18px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: 1.5px;
+  cursor: pointer; border-radius: 7px; transition: all 0.18s;
+}
+.nexar-subtab:hover { color: #cbd5e1; }
+.nexar-subtab.active {
+  background: rgba(45, 212, 160, 0.12); color: #2dd4a0;
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 160, 0.25);
+}
 
+.nexar-pipeline-shell { padding: 22px; flex-direction: column; }
+
+.nexar-pipeline-locked {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center; padding: 60px 24px; gap: 14px;
+}
+.np-lock-glyph {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: rgba(45, 212, 160, 0.08);
+  border: 1.5px solid rgba(45, 212, 160, 0.2);
+  display: flex; align-items: center; justify-content: center;
+  color: #2dd4a0; font-size: 22px;
+}
+.np-lock-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px; font-weight: 800; letter-spacing: 2px; color: #e8f0f8;
+}
+.np-lock-body { font-size: 13px; line-height: 1.6; color: #8a9bb0; max-width: 420px; }
+
+.nexar-pipeline-pro { display: flex; flex-direction: column; }
+
+.np-toolbar {
+  display: flex; align-items: center; gap: 12px;
+  flex-wrap: wrap; margin-bottom: 16px;
+}
+.np-chips { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
+.np-chip {
+  background: rgba(13, 21, 38, 0.6);
+  border: 1px solid rgba(45, 79, 111, 0.5);
+  color: #8a9bb0; padding: 6px 12px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+  border-radius: 7px; cursor: pointer; transition: all 0.15s;
+}
+.np-chip:hover { color: #cbd5e1; border-color: rgba(45, 79, 111, 0.9); }
+.np-chip.active {
+  background: rgba(45, 212, 160, 0.12);
+  border-color: rgba(45, 212, 160, 0.4);
+  color: #2dd4a0;
+}
+.np-add-btn {
+  background: #2dd4a0; color: #0a0f1e; border: none;
+  padding: 8px 14px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 800; letter-spacing: 1.4px;
+  border-radius: 8px; cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.12s;
+  white-space: nowrap;
+}
+.np-add-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(45, 212, 160, 0.3);
+}
+
+.np-form {
+  background: rgba(13, 21, 38, 0.6);
+  border: 1px solid rgba(45, 212, 160, 0.25);
+  border-radius: 12px; padding: 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  margin-bottom: 16px;
+}
+.np-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 540px) { .np-form-row { grid-template-columns: 1fr; } }
+.np-input {
+  background: #0a0f1e;
+  border: 1px solid rgba(45, 79, 111, 0.6);
+  border-radius: 8px; color: #e8f0f8;
+  padding: 10px 12px;
+  font-family: 'Inter', sans-serif; font-size: 13px;
+  outline: none; transition: border-color 0.15s;
+}
+.np-input:focus { border-color: rgba(45, 212, 160, 0.5); }
+.np-textarea { resize: vertical; min-height: 56px; }
+.np-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.np-btn {
+  padding: 8px 16px; border-radius: 8px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 1.2px;
+  cursor: pointer; border: none; transition: all 0.15s;
+}
+.np-btn.ghost {
+  background: transparent;
+  border: 1px solid rgba(45, 79, 111, 0.6); color: #8a9bb0;
+}
+.np-btn.ghost:hover { color: #cbd5e1; }
+.np-btn.primary { background: #2dd4a0; color: #0a0f1e; }
+.np-btn.primary:hover { transform: translateY(-1px); }
+
+.np-list {
+  display: flex; flex-direction: column; gap: 10px;
+  max-height: 600px; overflow-y: auto; scrollbar-width: thin;
+}
+.np-card {
+  background: rgba(13, 21, 38, 0.6);
+  border: 1px solid rgba(45, 79, 111, 0.4);
+  border-radius: 12px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  transition: border-color 0.15s;
+}
+.np-card:hover { border-color: rgba(45, 212, 160, 0.3); }
+.np-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.np-card-title-wrap { flex: 1; min-width: 0; }
+.np-card-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; font-weight: 700; color: #e8f0f8;
+  word-break: break-word;
+}
+.np-card-company { font-size: 12px; color: #8a9bb0; margin-top: 2px; }
+.np-status {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px; border-radius: 6px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 9px; font-weight: 800; letter-spacing: 1.4px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.np-status[data-status="Applied"]   { background: rgba(99, 130, 175, 0.15);  color: #a4b9d8; border: 1px solid rgba(99, 130, 175, 0.3); }
+.np-status[data-status="Responded"] { background: rgba(125, 96, 230, 0.15);  color: #b8a4f0; border: 1px solid rgba(125, 96, 230, 0.3); }
+.np-status[data-status="Interview"] { background: rgba(245, 158, 11, 0.12);  color: #f5c264; border: 1px solid rgba(245, 158, 11, 0.3); }
+.np-status[data-status="Offered"]   { background: rgba(45, 212, 160, 0.15);  color: #2dd4a0; border: 1px solid rgba(45, 212, 160, 0.4); }
+.np-status[data-status="Rejected"]  { background: rgba(239, 68, 68, 0.12);   color: #f0a4a4; border: 1px solid rgba(239, 68, 68, 0.3); }
+.np-card-notes {
+  font-size: 12px; line-height: 1.55; color: #8a9bb0;
+  white-space: pre-wrap; word-wrap: break-word;
+}
+.np-card-actions {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  margin-top: 4px; padding-top: 8px;
+  border-top: 1px solid rgba(45, 79, 111, 0.25);
+}
+.np-card-meta { font-size: 10px; color: #5a7a9a; letter-spacing: 0.5px; }
+.np-card-buttons { display: flex; gap: 6px; }
+.np-icon-btn {
+  background: transparent;
+  border: 1px solid rgba(45, 79, 111, 0.4);
+  color: #8a9bb0; width: 28px; height: 28px;
+  border-radius: 6px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; transition: all 0.15s;
+}
+.np-icon-btn:hover { color: #2dd4a0; border-color: rgba(45, 212, 160, 0.4); }
+.np-icon-btn.danger:hover { color: #f0a4a4; border-color: rgba(239, 68, 68, 0.4); }
+
+.np-empty {
+  text-align: center; padding: 50px 20px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px;
+}
+.np-empty-glyph {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: rgba(45, 79, 111, 0.2);
+  border: 1px dashed rgba(45, 79, 111, 0.5);
+  display: flex; align-items: center; justify-content: center;
+  color: #5a7a9a; font-size: 18px;
+}
+.np-empty-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; font-weight: 700; color: #cbd5e1;
+}
+.np-empty-body { font-size: 12px; color: #5a7a9a; }
+
+@media (max-width: 540px) {
+  .nexar-pipeline-shell { padding: 14px; }
+  .np-toolbar { flex-direction: column; align-items: stretch; }
+  .np-add-btn { width: 100%; }
+}
   </style>
 </head>
 <body>
@@ -3054,13 +3240,16 @@
       </div>
     </div>
 
-    <!-- CHAT SURFACE -->
-    <div class="nexar-shell">
-      <div class="nexar-stream" id="nexar-stream">
-        <!-- messages rendered here by renderNexarMessage() -->
-      </div>
+    <!-- SUBTAB BAR -->
+    <div class="nexar-subtabs">
+      <button class="nexar-subtab active" id="nexar-subtab-chat" onclick="nexarSwitchView('chat')">CHAT</button>
+      <button class="nexar-subtab" id="nexar-subtab-pipeline" onclick="nexarSwitchView('pipeline')">PIPELINE</button>
+    </div>
 
-      <!-- FABs: scroll-to-top / scroll-to-latest (mobile-friendly) -->
+    <!-- CHAT VIEW -->
+    <div class="nexar-shell" id="nexar-view-chat">
+      <div class="nexar-stream" id="nexar-stream"></div>
+
       <div class="nexar-fabs" id="nexar-fabs" aria-hidden="true">
         <button class="nexar-fab" id="nexar-fab-top" onclick="nexarScrollTo('top')" aria-label="Scroll to top" title="Scroll to top">
           <i class="fas fa-chevron-up"></i>
@@ -3070,7 +3259,6 @@
         </button>
       </div>
 
-      <!-- UPGRADE BANNER (shown when free user hits limit) -->
       <div class="nexar-upgrade-banner" id="nexar-upgrade-banner" style="display:none;">
         <div class="nexar-upgrade-title">DAILY LIMIT REACHED</div>
         <div class="nexar-upgrade-body">
@@ -3082,7 +3270,6 @@
         </button>
       </div>
 
-      <!-- INPUT BAR -->
       <div class="nexar-input-row">
         <textarea
           id="nexar-input"
@@ -3102,9 +3289,72 @@
         NEXAR is powered by Anthropic. Responses may contain errors — verify before acting on financial, legal, or contractual advice.
       </div>
     </div>
+
+    <!-- PIPELINE VIEW -->
+    <div class="nexar-shell nexar-pipeline-shell" id="nexar-view-pipeline" style="display:none;">
+
+      <!-- Pro gate (free users) -->
+      <div class="nexar-pipeline-locked" id="nexar-pipeline-locked" style="display:none;">
+        <div class="np-lock-glyph"><i class="fas fa-lock"></i></div>
+        <div class="np-lock-title">PIPELINE · PRO ONLY</div>
+        <div class="np-lock-body">
+          Track every application, response, interview and offer.
+          NEXAR reads your pipeline live and helps you move it forward.
+        </div>
+        <button class="nexar-upgrade-btn" onclick="nexarStartCheckout()">
+          Upgrade to Pro · £5 / month →
+        </button>
+      </div>
+
+      <!-- Pro UI -->
+      <div class="nexar-pipeline-pro" id="nexar-pipeline-pro" style="display:none;">
+
+        <div class="np-toolbar">
+          <div class="np-chips" id="np-chips">
+            <button class="np-chip active" data-status="all"       onclick="nexarPipelineFilter('all')">ALL</button>
+            <button class="np-chip"        data-status="Applied"   onclick="nexarPipelineFilter('Applied')">APPLIED</button>
+            <button class="np-chip"        data-status="Responded" onclick="nexarPipelineFilter('Responded')">RESPONDED</button>
+            <button class="np-chip"        data-status="Interview" onclick="nexarPipelineFilter('Interview')">INTERVIEW</button>
+            <button class="np-chip"        data-status="Offered"   onclick="nexarPipelineFilter('Offered')">OFFERED</button>
+            <button class="np-chip"        data-status="Rejected"  onclick="nexarPipelineFilter('Rejected')">REJECTED</button>
+          </div>
+          <button class="np-add-btn" onclick="nexarPipelineAddOpen()">+ ADD JOB</button>
+        </div>
+
+        <div class="np-form" id="np-form" style="display:none;">
+          <input type="hidden" id="np-form-id" value="">
+          <div class="np-form-row">
+            <input type="text" id="np-form-title"   class="np-input" placeholder="Job title (e.g. Senior Engineer)" maxlength="120">
+            <input type="text" id="np-form-company" class="np-input" placeholder="Company" maxlength="120">
+          </div>
+          <div class="np-form-row">
+            <select id="np-form-status" class="np-input">
+              <option value="Applied">Applied</option>
+              <option value="Responded">Responded</option>
+              <option value="Interview">Interview</option>
+              <option value="Offered">Offered</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+          </div>
+          <textarea id="np-form-notes" class="np-input np-textarea" rows="2" placeholder="Notes (optional)" maxlength="800"></textarea>
+          <div class="np-form-actions">
+            <button class="np-btn ghost" onclick="nexarPipelineAddCancel()">CANCEL</button>
+            <button class="np-btn primary" onclick="nexarPipelineSave()">SAVE</button>
+          </div>
+        </div>
+
+        <div class="np-list" id="np-list"></div>
+
+        <div class="np-empty" id="np-empty" style="display:none;">
+          <div class="np-empty-glyph"><i class="fas fa-briefcase"></i></div>
+          <div class="np-empty-title">No jobs in your pipeline yet</div>
+          <div class="np-empty-body">Click + ADD JOB to start tracking.</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
-
 
 <section class="member-section" id="messages" aria-label="Messages">
   <div style="max-width:860px;margin:0 auto;padding:0 5%;font-family:'Inter',sans-serif;">
@@ -10341,7 +10591,205 @@ window.nexarUpdateFabs = nexarUpdateFabs;
 <script>
 document.addEventListener('DOMContentLoaded',()=>{const o=new IntersectionObserver((e)=>{e.forEach(en=>{if(en.isIntersecting){en.target.classList.add('visible');o.unobserve(en.target)}})},{threshold:0.15});document.querySelectorAll('.lp-fade').forEach(el=>o.observe(el))});
 </script>
-<script src="pif-patch.js"></script>
+// ═══════════ NEXAR PIPELINE — LAYER 1 ═══════════
+let _pipelineCache = [];
+let _pipelineFilter = 'all';
+
+async function nexarSwitchView(view) {
+  const tabChat  = document.getElementById('nexar-subtab-chat');
+  const tabPipe  = document.getElementById('nexar-subtab-pipeline');
+  const viewChat = document.getElementById('nexar-view-chat');
+  const viewPipe = document.getElementById('nexar-view-pipeline');
+  if (!tabChat || !tabPipe || !viewChat || !viewPipe) return;
+
+  if (view === 'pipeline') {
+    tabChat.classList.remove('active');
+    tabPipe.classList.add('active');
+    viewChat.style.display = 'none';
+    viewPipe.style.display = 'flex';
+    await nexarPipelineRefresh();
+  } else {
+    tabPipe.classList.remove('active');
+    tabChat.classList.add('active');
+    viewPipe.style.display = 'none';
+    viewChat.style.display = 'flex';
+  }
+}
+
+async function nexarPipelineRefresh() {
+  const isPro = (typeof nexarState !== 'undefined') && nexarState.tier === 'pro';
+  const lockedEl = document.getElementById('nexar-pipeline-locked');
+  const proEl    = document.getElementById('nexar-pipeline-pro');
+  if (!lockedEl || !proEl) return;
+
+  if (!isPro) {
+    lockedEl.style.display = 'flex';
+    proEl.style.display = 'none';
+    return;
+  }
+  lockedEl.style.display = 'none';
+  proEl.style.display = 'flex';
+  await nexarPipelineLoad();
+  nexarPipelineRender();
+}
+
+async function nexarPipelineLoad() {
+  try {
+    if (!sb || !currentUser) { _pipelineCache = []; return; }
+    const { data, error } = await sb
+      .from('nexar_pipeline')
+      .select('id, title, company, status, notes, created_at, updated_at')
+      .eq('user_id', currentUser.id)
+      .order('updated_at', { ascending: false });
+    if (error) { console.error('[pipeline] load', error); _pipelineCache = []; return; }
+    _pipelineCache = data || [];
+  } catch (e) {
+    console.error('[pipeline] load fail', e);
+    _pipelineCache = [];
+  }
+}
+
+function nexarPipelineFilter(status) {
+  _pipelineFilter = status;
+  document.querySelectorAll('#np-chips .np-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.status === status);
+  });
+  nexarPipelineRender();
+}
+
+function nexarPipelineRelTime(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (!t) return '';
+  const d = (Date.now() - t) / 1000;
+  if (d < 60) return 'just now';
+  if (d < 3600) return Math.floor(d/60) + 'm ago';
+  if (d < 86400) return Math.floor(d/3600) + 'h ago';
+  if (d < 86400 * 7) return Math.floor(d/86400) + 'd ago';
+  return new Date(iso).toLocaleDateString();
+}
+
+function nexarPipelineRender() {
+  const list  = document.getElementById('np-list');
+  const empty = document.getElementById('np-empty');
+  if (!list || !empty) return;
+
+  const filtered = _pipelineFilter === 'all'
+    ? _pipelineCache
+    : _pipelineCache.filter(j => j.status === _pipelineFilter);
+
+  list.innerHTML = '';
+  if (!filtered.length) { empty.style.display = 'flex'; return; }
+  empty.style.display = 'none';
+
+  for (const job of filtered) {
+    const card = document.createElement('div'); card.className = 'np-card';
+
+    const head = document.createElement('div'); head.className = 'np-card-head';
+    const wrap = document.createElement('div'); wrap.className = 'np-card-title-wrap';
+    const t = document.createElement('div'); t.className = 'np-card-title'; t.textContent = job.title || '(no title)';
+    const c = document.createElement('div'); c.className = 'np-card-company'; c.textContent = job.company || '';
+    wrap.appendChild(t); wrap.appendChild(c);
+    const status = document.createElement('span'); status.className = 'np-status';
+    status.dataset.status = job.status; status.textContent = (job.status || '').toUpperCase();
+    head.appendChild(wrap); head.appendChild(status);
+    card.appendChild(head);
+
+    if (job.notes && job.notes.trim()) {
+      const n = document.createElement('div'); n.className = 'np-card-notes'; n.textContent = job.notes;
+      card.appendChild(n);
+    }
+
+    const actions = document.createElement('div'); actions.className = 'np-card-actions';
+    const meta = document.createElement('div'); meta.className = 'np-card-meta';
+    meta.textContent = nexarPipelineRelTime(job.updated_at || job.created_at);
+    const btns = document.createElement('div'); btns.className = 'np-card-buttons';
+    const eb = document.createElement('button'); eb.className = 'np-icon-btn'; eb.title = 'Edit';
+    eb.innerHTML = '<i class="fas fa-pen"></i>';
+    eb.onclick = () => nexarPipelineEditOpen(job.id);
+    const db = document.createElement('button'); db.className = 'np-icon-btn danger'; db.title = 'Delete';
+    db.innerHTML = '<i class="fas fa-trash"></i>';
+    db.onclick = () => nexarPipelineDelete(job.id);
+    btns.appendChild(eb); btns.appendChild(db);
+    actions.appendChild(meta); actions.appendChild(btns);
+    card.appendChild(actions);
+
+    list.appendChild(card);
+  }
+}
+
+function nexarPipelineAddOpen() {
+  const f = document.getElementById('np-form'); if (!f) return;
+  document.getElementById('np-form-id').value = '';
+  document.getElementById('np-form-title').value = '';
+  document.getElementById('np-form-company').value = '';
+  document.getElementById('np-form-status').value = 'Applied';
+  document.getElementById('np-form-notes').value = '';
+  f.style.display = 'flex';
+  setTimeout(() => document.getElementById('np-form-title').focus(), 50);
+}
+
+function nexarPipelineEditOpen(id) {
+  const job = _pipelineCache.find(j => j.id === id); if (!job) return;
+  const f = document.getElementById('np-form'); if (!f) return;
+  document.getElementById('np-form-id').value = job.id;
+  document.getElementById('np-form-title').value = job.title || '';
+  document.getElementById('np-form-company').value = job.company || '';
+  document.getElementById('np-form-status').value = job.status || 'Applied';
+  document.getElementById('np-form-notes').value = job.notes || '';
+  f.style.display = 'flex';
+  f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function nexarPipelineAddCancel() {
+  const f = document.getElementById('np-form'); if (f) f.style.display = 'none';
+}
+
+async function nexarPipelineSave() {
+  const id      = document.getElementById('np-form-id').value;
+  const title   = document.getElementById('np-form-title').value.trim();
+  const company = document.getElementById('np-form-company').value.trim();
+  const status  = document.getElementById('np-form-status').value;
+  const notes   = document.getElementById('np-form-notes').value.trim();
+  if (!title)   { showToast('Job title required'); return; }
+  if (!company) { showToast('Company required'); return; }
+  if (!sb || !currentUser) return;
+  const payload = { title, company, status, notes };
+  try {
+    if (id) {
+      const { error } = await sb.from('nexar_pipeline').update(payload).eq('id', id).eq('user_id', currentUser.id);
+      if (error) throw error;
+      showToast('Updated');
+    } else {
+      payload.user_id = currentUser.id;
+      payload.handle  = currentUser.handle || '';
+      const { error } = await sb.from('nexar_pipeline').insert(payload);
+      if (error) throw error;
+      showToast('Added');
+    }
+    nexarPipelineAddCancel();
+    await nexarPipelineLoad();
+    nexarPipelineRender();
+  } catch (e) {
+    console.error('[pipeline] save', e);
+    showToast('Save failed: ' + (e?.message || 'unknown'));
+  }
+}
+
+async function nexarPipelineDelete(id) {
+  if (!confirm('Delete this job from your pipeline?')) return;
+  try {
+    const { error } = await sb.from('nexar_pipeline').delete().eq('id', id).eq('user_id', currentUser.id);
+    if (error) throw error;
+    showToast('Deleted');
+    await nexarPipelineLoad();
+    nexarPipelineRender();
+  } catch (e) {
+    console.error('[pipeline] delete', e);
+    showToast('Delete failed');
+  }
+}
+ <script src="pif-patch.js"></script>
 </body>
 </html>
 
