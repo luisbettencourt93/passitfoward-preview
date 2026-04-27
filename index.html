@@ -10197,7 +10197,54 @@ function nexarOnKey(e) {
 }
 
 // -- SEND -------------------------------------------------------------
-async function nexarSend() {
+// ═══════════ NEXAR TOOL EVENT HANDLERS — LAYER 2 ═══════════
+function nexarHandleToolCall(payload) {
+  // Fired before tool executes — show subtle indicator
+  try {
+    const sub = document.getElementById('nexar-sub-line');
+    if (sub) {
+      const map = {
+        update_pipeline_status: 'UPDATING PIPELINE…',
+        add_pipeline_entry:     'ADDING TO PIPELINE…',
+      };
+      sub.textContent = map[payload?.name] || 'EXECUTING ACTION…';
+      sub.dataset.toolBusy = '1';
+    }
+  } catch (e) { console.warn('[nexar tool_call ui]', e); }
+}
+
+async function nexarHandleToolResult(payload) {
+  // Fired after tool executes — toast + refresh pipeline view
+  try {
+    const sub = document.getElementById('nexar-sub-line');
+    if (sub && sub.dataset.toolBusy) {
+      sub.textContent = 'AI OPERATOR · ONLINE';
+      delete sub.dataset.toolBusy;
+    }
+
+    if (!payload?.ok) {
+      showToast('Action failed: ' + (payload?.summary || 'unknown error'));
+      return;
+    }
+
+    // Build a short success toast based on tool
+    const e = payload.entry || {};
+    let msg = payload.summary || 'Done';
+    if (payload.name === 'update_pipeline_status' && e.title && e.status) {
+      msg = `✓ ${e.title} → ${e.status}`;
+    } else if (payload.name === 'add_pipeline_entry' && e.title && e.company) {
+      msg = `✓ Added ${e.title} @ ${e.company}`;
+    }
+    showToast(msg);
+
+    // Refresh pipeline cache + re-render if pipeline view exists
+    if (typeof nexarPipelineLoad === 'function') {
+      await nexarPipelineLoad();
+      if (typeof nexarPipelineRender === 'function') nexarPipelineRender();
+    }
+  } catch (e) { console.warn('[nexar tool_result ui]', e); }
+}
+  async function nexarSend() {
   if (nexarState.sending) return;
   const ta = document.getElementById('nexar-input');
   if (!ta) return;
@@ -10331,6 +10378,14 @@ async function nexarSend() {
             const nearBottom = (stream.scrollHeight - stream.scrollTop - stream.clientHeight) < 160;
             if (nearBottom) stream.scrollTop = stream.scrollHeight;
           }
+           else if (eventName === 'tool_call') {
+           try { nexarHandleToolCall(payload); }
+           catch (e) { console.warn('tool_call handler', e); }
+        }
+           else if (eventName === 'tool_result') {
+           try { await nexarHandleToolResult(payload); }
+           catch (e) { console.warn('tool_result handler', e); }
+       }
         } else if (eventName === 'done') {
           // Stream finished cleanly — refresh FAB visibility in case content overflows now
           try { nexarUpdateFabs(); } catch(_) {}
