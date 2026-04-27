@@ -1918,6 +1918,77 @@
   .np-toolbar { flex-direction: column; align-items: stretch; }
   .np-add-btn { width: 100%; }
 }
+  /* ═══════════ NEXAR CONFIRM CARD ═══════════ */
+.nexar-confirm-card {
+  background: rgba(13, 21, 38, 0.85);
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: nccFadeIn 0.25s ease-out;
+}
+@keyframes nccFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.nexar-confirm-card .ncc-head {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #f0a4a4;
+}
+.nexar-confirm-card .ncc-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #e8f0f8;
+  font-weight: 500;
+}
+.nexar-confirm-card .ncc-meta {
+  font-size: 11px;
+  color: #5a7a9a;
+  letter-spacing: 0.4px;
+}
+.nexar-confirm-card .ncc-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.nexar-confirm-card .ncc-btn {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+}
+.nexar-confirm-card .ncc-no {
+  background: transparent;
+  border: 1px solid rgba(45, 79, 111, 0.6);
+  color: #8a9bb0;
+}
+.nexar-confirm-card .ncc-no:hover { color: #cbd5e1; border-color: rgba(45, 79, 111, 0.9); }
+.nexar-confirm-card .ncc-yes {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: #f0a4a4;
+}
+.nexar-confirm-card .ncc-yes:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.22);
+}
+.nexar-confirm-card.ncc-resolved {
+  border-color: rgba(45, 79, 111, 0.4);
+}
+.nexar-confirm-card.ncc-resolved .ncc-head { color: #5a7a9a; }
   </style>
 </head>
 <body>
@@ -10198,7 +10269,131 @@ function nexarOnKey(e) {
 
 // -- SEND -------------------------------------------------------------
 // ═══════════ NEXAR TOOL EVENT HANDLERS — LAYER 2 ═══════════
-function nexarHandleToolCall(payload) {
+// ═══════════ NEXAR CONFIRM CARD — LAYER 2 SESSION C ═══════════
+function nexarRenderConfirmCard(payload) {
+  // payload: { action_id, preview, expires_at, action_type }
+  try {
+    const stream = document.getElementById('nexar-stream');
+    if (!stream) return;
+    if (!payload?.action_id) return;
+
+    const card = document.createElement('div');
+    card.className = 'nexar-confirm-card';
+    card.dataset.actionId = payload.action_id;
+    card.dataset.consumed = '0';
+
+    const head = document.createElement('div');
+    head.className = 'ncc-head';
+    head.textContent = 'CONFIRM ACTION';
+    card.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'ncc-body';
+    body.textContent = payload.preview || 'Confirm this action?';
+    card.appendChild(body);
+
+    const meta = document.createElement('div');
+    meta.className = 'ncc-meta';
+    meta.textContent = 'Server-enforced two-step. Expires in 10 minutes.';
+    card.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'ncc-actions';
+
+    const noBtn = document.createElement('button');
+    noBtn.className = 'ncc-btn ncc-no';
+    noBtn.textContent = 'CANCEL';
+    noBtn.onclick = () => nexarConfirmAction(payload.action_id, false, card);
+
+    const yesBtn = document.createElement('button');
+    yesBtn.className = 'ncc-btn ncc-yes';
+    yesBtn.textContent = 'CONFIRM DELETE';
+    yesBtn.onclick = () => nexarConfirmAction(payload.action_id, true, card);
+
+    actions.appendChild(noBtn);
+    actions.appendChild(yesBtn);
+    card.appendChild(actions);
+
+    stream.appendChild(card);
+    stream.scrollTop = stream.scrollHeight;
+  } catch (e) {
+    console.warn('[nexar confirm card]', e);
+  }
+}
+
+async function nexarConfirmAction(action_id, accept, card) {
+  if (!card || card.dataset.consumed === '1') return;
+  card.dataset.consumed = '1';
+  // Disable both buttons immediately to prevent double-click
+  const btns = card.querySelectorAll('.ncc-btn');
+  btns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+
+  try {
+    if (!sb) throw new Error('No supabase client');
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if (!token) throw new Error('Not authenticated');
+
+    const resp = await fetch(
+      'https://liujbjfjdycacmaujawu.supabase.co/functions/v1/nexar-confirm-action',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type':  'application/json',
+        },
+        body: JSON.stringify({ action_id, accept }),
+      }
+    );
+
+    const result = await resp.json().catch(() => ({}));
+
+    if (!resp.ok || !result.ok) {
+      const msg = result?.error || 'confirm_failed';
+      showToast('Action failed: ' + msg);
+      // Update card to show failure
+      const body = card.querySelector('.ncc-body');
+      if (body) body.textContent = `❌ Failed: ${msg}`;
+      const actions = card.querySelector('.ncc-actions');
+      if (actions) actions.style.display = 'none';
+      return;
+    }
+
+    // Success — update card to show outcome
+    const body = card.querySelector('.ncc-body');
+    const actions = card.querySelector('.ncc-actions');
+    const meta = card.querySelector('.ncc-meta');
+
+    if (result.action === 'cancelled') {
+      if (body) body.textContent = '⊘ Cancelled. No changes made.';
+      if (meta) meta.textContent = 'You declined the action.';
+      showToast('Cancelled');
+    } else if (result.action === 'deleted') {
+      const t = result.target;
+      if (body) body.textContent = `✓ Deleted: ${t?.title || 'entry'} @ ${t?.company || ''}`;
+      if (meta) meta.textContent = 'Action complete.';
+      showToast(`✓ Deleted ${t?.title || 'entry'}`);
+    } else if (result.action === 'already_gone') {
+      if (body) body.textContent = '⊘ Entry was already removed.';
+      showToast('Already removed');
+    }
+
+    if (actions) actions.style.display = 'none';
+    card.classList.add('ncc-resolved');
+
+    // Refresh the pipeline cache so the UI reflects deletion
+    if (typeof nexarPipelineLoad === 'function') {
+      await nexarPipelineLoad();
+      if (typeof nexarPipelineRender === 'function') nexarPipelineRender();
+    }
+  } catch (e) {
+    console.error('[nexarConfirmAction]', e);
+    showToast('Action failed: network error');
+    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    card.dataset.consumed = '0';
+  }
+}
+  function nexarHandleToolCall(payload) {
   // Fired before tool executes — show subtle indicator
   try {
     const sub = document.getElementById('nexar-sub-line');
@@ -10386,6 +10581,8 @@ async function nexarHandleToolResult(payload) {
            try { await nexarHandleToolResult(payload); }
            catch (e) { console.warn('tool_result handler', e); }
        }
+        } else if (eventName === 'confirm_required') {
+          try { nexarRenderConfirmCard(payload); } catch (e) { console.warn('confirm_required handler', e); }
         } else if (eventName === 'done') {
           // Stream finished cleanly — refresh FAB visibility in case content overflows now
           try { nexarUpdateFabs(); } catch(_) {}
