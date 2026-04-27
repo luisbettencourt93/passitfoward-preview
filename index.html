@@ -271,8 +271,8 @@
       .stats-hero-text h2 { font-size:1.2rem !important; word-break:break-all !important; }
       .stats-hero-text { min-width:0 !important; max-width:100% !important; overflow:hidden !important; }
 
-      /* === ADVERTISE === */
-      #advertise div[style*="grid-template-columns:repeat(4,1fr)"] { grid-template-columns:1fr 1fr !important; }
+      /* === partner === */
+      #partner div[style*="grid-template-columns:repeat(4,1fr)"] { grid-template-columns:1fr 1fr !important; }
 
       /* === ROADMAP === */
       /* Roadmap now vertical — no mobile overrides needed */
@@ -941,7 +941,7 @@
 .invite-code-status.used { background:rgba(100,116,139,0.1); color:#64748b; border:1px solid var(--border); }
 .copy-code-btn { background:none; border:1px solid var(--border); color:#64748b; padding:2px 8px; border-radius:6px; font-size:0.72rem; cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.2s; }
 .copy-code-btn:hover { border-color:var(--primary); color:var(--primary); }
-    /* == ADVERTISE == */
+    /* == partner == */
     .ad-pkg:hover { border-color:rgba(245,158,11,0.4) !important; transform:translateY(-3px); }
     .ad-pkg.selected { border-color:#f59e0b !important; background:rgba(245,158,11,0.04) !important; }
     .ad-card { background:var(--card-bg); border:1px solid rgba(245,158,11,0.2); border-radius:18px; padding:1.4rem 1.6rem; margin-bottom:0.8rem; transition:all 0.25s; border-left:3px solid #f59e0b; }
@@ -2005,7 +2005,7 @@
       <a onclick="switchTab('about');return false" id="nav-about">About Us</a>
       <a onclick="switchTab('whatwereabout');return false" id="nav-whatwereabout">What We're About</a>
       <a onclick="switchTab('forgedsystem');return false" id="nav-forged">Forged System</a>
-      <a onclick="switchTab('advertise-public');return false" id="nav-advertise">Advertise</a>
+      <a onclick="switchTab('partner-public');return false" id="nav-partner">partner</a>
       <a onclick="switchTab('dashboard');return false" class="member-link">Dashboard</a>
       <a onclick="switchTab('community');return false" class="member-link">Community Hub</a>
       <a onclick="switchTab('livefeed');return false" class="member-link" style="animation:lf-text-pulse 2s ease-in-out infinite;"><span style="display:inline-block;width:5px;height:5px;background:#ef4444;border-radius:50%;margin-right:4px;animation:lf-pulse 1.5s ease-in-out infinite;box-shadow:0 0 4px rgba(239,68,68,0.6);"></span>Live Market</a>
@@ -2021,7 +2021,7 @@
           <a onclick="switchTab('funds');closeNavMore();return false">Funds</a>
           <a onclick="switchTab('mystats');closeNavMore();return false">My Stats</a>
           <a onclick="switchTab('vision');closeNavMore();return false">Roadmap</a>
-          <a onclick="switchTab('advertise');closeNavMore();return false" style="color:#f59e0b;">Advertise</a>
+          <a onclick="switchTab('partner');closeNavMore();return false" style="color:#f59e0b;">partner</a>
         </div>
       </div>
       <!-- Mobile: show all links -->
@@ -2031,7 +2031,7 @@
       <a onclick="switchTab('funds');return false" class="member-link mobile-only-link" style="display:none;">Funds</a>
       <a onclick="switchTab('mystats');return false" class="member-link mobile-only-link" style="display:none;">My Stats</a>
       <a onclick="switchTab('vision');return false" class="member-link mobile-only-link" style="display:none;">Roadmap</a>
-      <a onclick="switchTab('advertise');return false" class="member-link mobile-only-link" style="display:none;color:#f59e0b;">Advertise</a>
+      <a onclick="switchTab('partner');return false" class="member-link mobile-only-link" style="display:none;color:#f59e0b;">partner</a>
       <button onclick="toggleMobileNav()" class="mobile-close-btn" aria-label="Close menu" style="display:none;margin-top:1rem;background:none;border:1px solid var(--border);color:#94a3b8;padding:0.6rem 2rem;border-radius:999px;font-size:0.9rem;cursor:pointer;font-family:'DM Sans',sans-serif;">✕ Close</button>
     </nav>
     <div class="header-right" id="auth-area">
@@ -2211,7 +2211,7 @@
       </div>
       <div>
         <div style="font:600 13px/1 'Inter',sans-serif;color:#e8f0f8;margin-bottom:16px;">Connect</div>
-        <div style="display:flex;flex-direction:column;gap:12px;"><a href="https://x.com/MrGentleman93" target="_blank" style="font:400 13px/1 'Inter',sans-serif;color:#5a7a9a;">Follow on X</a><span style="font:400 13px/1 'Inter',sans-serif;color:#5a7a9a;cursor:pointer;" onclick="switchTab('advertise')">Advertise</span><span style="font:400 13px/1 'Inter',sans-serif;color:#5a7a9a;cursor:pointer;" onclick="switchTab('funds')">Funds</span></div>
+        <div style="display:flex;flex-direction:column;gap:12px;"><a href="https://x.com/MrGentleman93" target="_blank" style="font:400 13px/1 'Inter',sans-serif;color:#5a7a9a;">Follow on X</a><span style="font:400 13px/1 'Inter',sans-serif;color:#5a7a9a;cursor:pointer;" onclick="switchTab('partner')">partner</span><span style="font:400 13px/1 'Inter',sans-serif;color:#5a7a9a;cursor:pointer;" onclick="switchTab('funds')">Funds</span></div>
       </div>
     </div>
     <div style="border-top:1px solid #2d4f6f;padding-top:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;font:400 12px/1 'Inter',sans-serif;color:#5a7a9a;">
@@ -2513,12 +2513,12 @@
   </div>
 </section>
 
-<!-- ADVERTISE (PUBLIC TAB) -->
-<section id="advertise-public" style="display:none;padding:5rem 5% 4rem;background:#0d1520;font-family:'Inter',sans-serif;">
+<!-- partner (PUBLIC TAB) -->
+<section id="partner-public" style="display:none;padding:5rem 5% 4rem;background:#0d1520;font-family:'Inter',sans-serif;">
   <div style="max-width:900px;margin:0 auto;">
 
     <div style="text-align:center;margin-bottom:60px;">
-      <span class="lp-section-tag" style="color:#f59e0b;">Advertise with Us</span>
+      <span class="lp-section-tag" style="color:#f59e0b;">partner with Us</span>
       <h2 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(32px,5vw,52px);font-weight:700;line-height:1.1;color:#e8f0f8;margin-bottom:16px;">Put your brand in front of <span style="color:#f59e0b;">real builders</span></h2>
       <p style="color:#5a7a9a;font-size:17px;max-width:560px;margin:0 auto;line-height:1.65;">No bots. No scrollers. Every person on this platform is a verified, XP-earning builder who makes real deals. Your ad reaches people who actually do things.</p>
     </div>
@@ -3473,13 +3473,13 @@
   </div>
 </section>
 
-<!-- ADVERTISE -->
-<section class="member-section" id="advertise">
+<!-- partner -->
+<section class="member-section" id="partner">
   <div style="max-width:900px;margin:0 auto;padding:0 5%;">
 
     <!-- HERO -->
     <div style="text-align:center;margin-bottom:2.5rem;">
-      <div style="font-size:0.72rem;color:#f59e0b;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:0.8rem;">ADVERTISE WITH US</div>
+      <div style="font-size:0.72rem;color:#f59e0b;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:0.8rem;">partner WITH US</div>
       <h2 style="font-family:'Syne',sans-serif;font-size:2.4rem;font-weight:800;color:white;margin-bottom:0.5rem;line-height:1.15;">Put your brand in front of<br><span style="color:var(--primary);">serious builders</span></h2>
       <p style="color:#64748b;font-size:0.95rem;max-width:520px;margin:0 auto;line-height:1.7;">Every member is hand-approved. Every interaction is real. No bots, no fake engagement — just a vetted community of builders, founders, and operators who actually buy.</p>
     </div>
@@ -4611,7 +4611,7 @@ if (fab) fab.style.display = isFounder() ? 'flex' : 'none';
   const aboutNav = document.getElementById('nav-about'); if(aboutNav) aboutNav.style.display = 'none';
   const forgedNav = document.getElementById('nav-forged'); if(forgedNav) forgedNav.style.display = 'none';
   const wwaNav = document.getElementById('nav-whatwereabout'); if(wwaNav) wwaNav.style.display = 'none';
-  const advNav = document.getElementById('nav-advertise'); if(advNav) advNav.style.display = 'none';
+  const advNav = document.getElementById('nav-partner'); if(advNav) advNav.style.display = 'none';
   const atf = document.getElementById('add-testimonial-form'); if (atf) atf.style.display = 'block';
   document.querySelectorAll('.member-link').forEach(l => {
     if(l.classList.contains('nav-more-wrap')) l.style.display = 'block';
@@ -4658,7 +4658,7 @@ if (fab) fab.style.display = isFounder() ? 'flex' : 'none';
 
 // -- TABS ----------------------------------------------------------
 function switchTab(tabId) {
-  const memberTabs = ['vision','testimonials','dashboard','funds','community','leaderboard','challenges','events','livefeed','directory','messages','mystats','advertise','featuredpartner','nexar'];
+  const memberTabs = ['vision','testimonials','dashboard','funds','community','leaderboard','challenges','events','livefeed','directory','messages','mystats','partner','featuredpartner','nexar'];
   if (!currentUser && memberTabs.includes(tabId)) {
     showToast("Members only — please login first");
     document.getElementById('login-modal').style.display = 'flex';
@@ -4676,7 +4676,7 @@ function switchTab(tabId) {
   if (active) active.classList.add('active');
   // Highlight More button when a dropdown tab is active
   const moreBtn = document.querySelector('.nav-more-btn');
-  const dropdownTabs = ['leaderboard','challenges','events','funds','mystats','vision','advertise'];
+  const dropdownTabs = ['leaderboard','challenges','events','funds','mystats','vision','partner'];
   if(moreBtn) moreBtn.style.color = dropdownTabs.includes(tabId) ? 'var(--primary)' : '';
   if (active) active.classList.add('active');
   document.querySelectorAll('.member-section').forEach(s => s.style.display = 'none');
@@ -4687,7 +4687,7 @@ function switchTab(tabId) {
   if(forgedSysSec) forgedSysSec.style.display = 'none';
   const wwaSec = document.getElementById('whatwereabout');
   if(wwaSec) wwaSec.style.display = 'none';
-  const advPubSec = document.getElementById('advertise-public');
+  const advPubSec = document.getElementById('partner-public');
   if(advPubSec) advPubSec.style.display = 'none';
   if (tabId === 'hero') {
     document.getElementById('hero').style.display = '';
@@ -4716,7 +4716,7 @@ function switchTab(tabId) {
     window.scrollTo({ top:0, behavior:'smooth' });
     return;
   }
-  if (tabId === 'advertise-public') {
+  if (tabId === 'partner-public') {
     document.getElementById('hero').style.display = 'none';
     document.getElementById('apply-card').style.display = 'none';
     if(advPubSec) advPubSec.style.display = 'block';
@@ -4742,7 +4742,7 @@ function switchTab(tabId) {
     if (tabId === 'challenges')    renderChallenges();
     if (tabId === 'messages')      renderDmSidebar();
     if (tabId === 'mystats')       renderMyStats();
-    if (tabId === 'advertise')     loadAdSubmissions();
+    if (tabId === 'partner')     loadAdSubmissions();
     if (tabId === 'featuredpartner') loadFeaturedPartner();
     if (tabId === 'nexar')           loadNexar();
   }
@@ -6744,7 +6744,7 @@ async function loadFeaturedPartner() {
           <div style="background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.15);border-radius:10px;padding:12px 20px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#2dd4a0;">100%</div><div style="font-size:10px;color:#5a7a9a;">Verified audience</div></div>
           <div style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:12px 20px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#f59e0b;">Full Page</div><div style="font-size:10px;color:#5a7a9a;">All yours</div></div>
         </div>
-        <div onclick="switchTab('advertise')" style="display:inline-flex;align-items:center;gap:8px;background:#ef4444;color:white;padding:14px 32px;border-radius:10px;font:700 15px/1 'Inter',sans-serif;cursor:pointer;">Become the Featured Partner →</div>
+        <div onclick="switchTab('partner')" style="display:inline-flex;align-items:center;gap:8px;background:#ef4444;color:white;padding:14px 32px;border-radius:10px;font:700 15px/1 'Inter',sans-serif;cursor:pointer;">Become the Featured Partner →</div>
       </div>`;
     return;
   }
@@ -8359,7 +8359,7 @@ async function initGlobe() {
 
   window.addEventListener('resize', () => { const nw=wrap.clientWidth,nh=wrap.clientHeight; cam.aspect=nw/nh; cam.updateProjectionMatrix(); ren.setSize(nw,nh); });
 }
-// -- ADVERTISE SYSTEM ---------------------------------------------
+// -- partner SYSTEM ---------------------------------------------
 let _selectedAdTier = '';
 const AD_MAX_SLOTS = 3;
 let _adSlotsUsed = 0;
@@ -8400,7 +8400,7 @@ function renderAdSlotIndicator() {
       <span style="color:${full?'#ef4444':'#10b981'};font-size:0.8rem;font-weight:700;">${full?'Fully booked':avail+' available'}</span>
     </div>`;
   // Disable/enable submit button
-  const btn = document.querySelector('#advertise button[onclick="submitAdEnquiry()"]');
+  const btn = document.querySelector('#partner button[onclick="submitAdEnquiry()"]');
   if(btn) {
     if(full) {
       btn.style.background = '#374151';
