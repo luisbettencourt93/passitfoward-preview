@@ -2151,19 +2151,43 @@
     white-space: nowrap !important;
   }
 }
-@media (max-width: 480px) {
+/* ============================================
+   MOBILE MENU FIX — keep menu above page
+   ============================================ */
+@media (max-width: 768px) {
   header,
   .header-inner {
     overflow: visible !important;
   }
 
-  #main-nav,
-  #main-nav.mobile-open,
-  .nav-more-dropdown,
-  .nav-more-dropdown.open {
-    overflow: visible !important;
-    z-index: 999999 !important;
+  #main-nav.mobile-open {
+    display: flex !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    background: #050a14 !important;
+    z-index: 2147483000 !important;
+    padding: 5rem 1.5rem 2rem !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
+
+  #main-nav.mobile-open::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: #050a14;
+    z-index: -1;
+  }
+
+  #main-nav.mobile-open a,
+  #main-nav.mobile-open .nav-more-wrap {
+    position: relative;
+    z-index: 2;
+  }
+
 }
  </style> 
 </head>
