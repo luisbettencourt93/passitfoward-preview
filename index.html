@@ -2151,7 +2151,21 @@
     white-space: nowrap !important;
   }
 }
-</style> 
+@media (max-width: 480px) {
+  header,
+  .header-inner {
+    overflow: visible !important;
+  }
+
+  #main-nav,
+  #main-nav.mobile-open,
+  .nav-more-dropdown,
+  .nav-more-dropdown.open {
+    overflow: visible !important;
+    z-index: 999999 !important;
+  }
+}
+ </style> 
 </head>
 <body>
 
