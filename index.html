@@ -10614,7 +10614,36 @@ function nexarRenderConfirmCard(payload) {
   }
 }
 
-async function nexarConfirmAction(action_id, accept, card) {
+function nexarEscapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
+function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
+  const stream = document.querySelector('#nexar-stream');
+  if (!stream) return;
+
+  const block = document.createElement('div');
+  block.className = 'nexar-draft-block';
+  block.dataset.matchId = matchId || '';
+
+  block.innerHTML = `
+    <div class="nexar-draft-label">Draft for ${nexarEscapeHtml(posterHandle || 'opportunity poster')}</div>
+    <pre class="nexar-draft-text">${nexarEscapeHtml(draftText)}</pre>
+    <div class="nexar-draft-actions">
+      <button type="button" onclick="navigator.clipboard.writeText(this.parentElement.previousElementSibling.textContent); showToast('Copied');">Copy</button>
+    </div>
+  `;
+
+  stream.appendChild(block);
+  stream.scrollTop = stream.scrollHeight;
+}
+  async function nexarConfirmAction(action_id, accept, card) {
   if (!card || card.dataset.consumed === '1') return;
   card.dataset.consumed = '1';
   // Disable both buttons immediately to prevent double-click
@@ -10715,6 +10744,30 @@ async function nexarHandleToolResult(payload) {
       sub.textContent = 'AI OPERATOR · ONLINE';
       delete sub.dataset.toolBusy;
     }
+    if (payload?.name === 'draft_opportunity_response') {
+  if (payload?.ok && payload?.draft) {
+    nexarRenderDraftBlock(payload.draft, payload.poster_handle, payload.match_id);
+  } else if (payload?.gold_required) {
+    // No-op: NEXAR will speak the Gold gate in its next text turn
+  }
+  return;
+}
+
+if (payload?.name === 'update_match_status') {
+  if (payload?.ok) {
+    const verb = {
+      viewed: 'noted',
+      saved: 'saved',
+      dismissed: 'dismissed',
+      applied: 'marked applied'
+    }[payload.status] || 'updated';
+
+    showToast(`Match ${verb}`);
+  } else if (payload?.gold_required) {
+    // No-op: NEXAR will speak the Gold gate
+  }
+  return;
+}
 
     if (!payload?.ok) {
       showToast('Action failed: ' + (payload?.summary || 'unknown error'));
