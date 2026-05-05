@@ -1989,91 +1989,180 @@
   border-color: rgba(45, 79, 111, 0.4);
 }
 .nexar-confirm-card.ncc-resolved .ncc-head { color: #5a7a9a; }
-  /* ============================================
-   MOBILE OVERFLOW FIX (≤480px)
-   Targets diagnostic offenders: header-right,
-   user-area, header-logout, lb-tabs, lb-tab,
-   lb-podium, lb-board, lb-score
+/* ============================================
+   FINAL MOBILE OVERFLOW FIX (≤480px)
+   Put this LAST before </style>
    ============================================ */
 @media (max-width: 480px) {
-  /* Layer 1: global overflow guard */
-  html, body {
-    overflow-x: hidden;
-    max-width: 100vw;
-  }
-  *, *::before, *::after {
-    box-sizing: border-box;
+
+  html,
+  body {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
   }
 
-  /* Layer 2: header */
-  .header-right {
-    max-width: 100%;
-    overflow: hidden;
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box !important;
   }
+
+  /* Main member section wrapper */
+  .member-section {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .member-section > div,
+  .member-section .section-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Header overflow fix */
+  header {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    overflow-x: hidden !important;
+  }
+
+  .header-inner {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    gap: 4px !important;
+    overflow: hidden !important;
+  }
+
+  .logo {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 150px !important;
+    font-size: 0.78rem !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .header-right,
+  #auth-area,
   #user-area {
-    max-width: 100%;
-    min-width: 0;
+    flex: 0 0 auto !important;
+    min-width: 0 !important;
+    max-width: 145px !important;
+    gap: 4px !important;
+    overflow: hidden !important;
   }
+
   .header-logout {
-    flex-shrink: 0;
+    padding: 0.18rem 0.35rem !important;
+    font-size: 0.6rem !important;
+    white-space: nowrap !important;
   }
 
-  /* Layer 3: leaderboard tabs */
+  /* Leaderboard tabs */
   .lb-tabs {
-    max-width: 100%;
-    padding-left: 8px;
-    padding-right: 8px;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    padding: 0 !important;
+    margin: 0 0 14px 0 !important;
+    overflow-x: hidden !important;
+    flex-wrap: wrap !important;
   }
+
   .lb-tab {
-    max-width: 100%;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 6px 8px !important;
+    text-align: center !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
 
-  /* Layer 4: podium — the big fix */
+  /* Leaderboard podium */
   #lb-podium {
-    display: flex;
-    gap: 6px;
-    padding: 0 8px;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-  #lb-podium > * {
-    flex: 1 1 0;
-    min-width: 0;          /* CRITICAL — allows shrink below content */
-    max-width: 33.333%;
-    overflow: hidden;
-  }
-  #lb-podium * {
-    max-width: 100%;
-  }
-  /* Truncate long usernames in podium cards */
-  #lb-podium [class*="handle"],
-  #lb-podium [class*="name"],
-  #lb-podium [class*="user"] {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    padding: 0 !important;
+    margin: 0 0 18px 0 !important;
+    overflow: hidden !important;
   }
 
-  /* Layer 5: board (bottom rankings list) */
-  #lb-board {
-    max-width: 100%;
-    padding: 0 8px;
-    box-sizing: border-box;
+  #lb-podium > div {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
   }
+
+  #lb-podium div,
+  #lb-podium span,
+  #lb-podium strong {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  #lb-podium > div > div:first-child {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 10px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Bottom leaderboard board */
+  #lb-board,
+  .lb-board {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
   .lb-row {
-    max-width: 100%;
-    min-width: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
   }
+
+  .lb-row > * {
+    min-width: 0 !important;
+  }
+
   .lb-score {
-    flex-shrink: 0;
+    flex-shrink: 0 !important;
+    max-width: 58px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
 }
-  </style>
+</style>
 </head>
 <body>
 
