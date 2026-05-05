@@ -1989,6 +1989,90 @@
   border-color: rgba(45, 79, 111, 0.4);
 }
 .nexar-confirm-card.ncc-resolved .ncc-head { color: #5a7a9a; }
+  /* ============================================
+   MOBILE OVERFLOW FIX (≤480px)
+   Targets diagnostic offenders: header-right,
+   user-area, header-logout, lb-tabs, lb-tab,
+   lb-podium, lb-board, lb-score
+   ============================================ */
+@media (max-width: 480px) {
+  /* Layer 1: global overflow guard */
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* Layer 2: header */
+  .header-right {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  #user-area {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .header-logout {
+    flex-shrink: 0;
+  }
+
+  /* Layer 3: leaderboard tabs */
+  .lb-tabs {
+    max-width: 100%;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .lb-tab {
+    max-width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Layer 4: podium — the big fix */
+  #lb-podium {
+    display: flex;
+    gap: 6px;
+    padding: 0 8px;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  #lb-podium > * {
+    flex: 1 1 0;
+    min-width: 0;          /* CRITICAL — allows shrink below content */
+    max-width: 33.333%;
+    overflow: hidden;
+  }
+  #lb-podium * {
+    max-width: 100%;
+  }
+  /* Truncate long usernames in podium cards */
+  #lb-podium [class*="handle"],
+  #lb-podium [class*="name"],
+  #lb-podium [class*="user"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* Layer 5: board (bottom rankings list) */
+  #lb-board {
+    max-width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
+  }
+  .lb-row {
+    max-width: 100%;
+    min-width: 0;
+  }
+  .lb-score {
+    flex-shrink: 0;
+  }
+}
   </style>
 </head>
 <body>
