@@ -10261,19 +10261,49 @@ async function loadApplications() {
 
 async function sendInviteToApplicant(xHandle) {
   if (!sb) return;
-  // Get an unused code
-  const { data, error } = await sb.from('invite_codes').select('code').is('used_by', null).limit(1).single();
+
+  const cleanHandle = (xHandle || '').trim();
+
+  // Get the next code that is unused AND not already sent/reserved
+  const { data, error } = await sb
+    .from('invite_codes')
+    .select('code')
+    .is('used_by', null)
+    .is('sent_at', null)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .single();
+
   if (error || !data) {
-    showToast("⚠️ No unused codes available — generate more first!");
+    showToast("⚠️ No available codes — generate more first!");
     return;
   }
+
   const code = data.code;
-  // Copy to clipboard
+
+  // Mark as sent/reserved so the next applicant gets a different code
+  const { error: reserveErr } = await sb
+    .from('invite_codes')
+    .update({
+      sent_to: cleanHandle,
+      sent_at: new Date().toISOString()
+    })
+    .eq('code', code)
+    .is('used_by', null)
+    .is('sent_at', null);
+
+  if (reserveErr) {
+    showToast("❌ Could not reserve invite code. Try again.");
+    console.error('Invite reserve error:', reserveErr);
+    return;
+  }
+
   await navigator.clipboard.writeText(code);
-  // Open X DM
+
   const msg = `Hey! Your Pass It Forward application has been accepted 🎉 Here's your invite code: ${code} → passitfoward.xyz`;
   window.open(`https://twitter.com/messages/compose?recipient_id=&text=${encodeURIComponent(msg)}`, '_blank');
-  showToast(`✅ Code ${code} copied! X DM opened for ${xHandle}`);
+
+  showToast(`✅ Code ${code} copied and reserved for ${cleanHandle}`);
 }
 
 async function deleteApplication(id, btn) {
