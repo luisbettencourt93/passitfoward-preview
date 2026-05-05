@@ -1989,9 +1989,10 @@
   border-color: rgba(45, 79, 111, 0.4);
 }
 .nexar-confirm-card.ncc-resolved .ncc-head { color: #5a7a9a; }
- /* ============================================
-   FINAL MOBILE OVERFLOW FIX (≤480px)
-   Put this LAST before </style>
+ 
+  /* ============================================
+   FINAL MOBILE OVERFLOW FIX
+   Keep this block last in the main CSS
    ============================================ */
 @media (max-width: 480px) {
 
@@ -2008,7 +2009,6 @@
     box-sizing: border-box !important;
   }
 
-  /* Main member section wrapper */
   .member-section {
     width: 100% !important;
     max-width: 100% !important;
@@ -2028,7 +2028,6 @@
     overflow-x: hidden !important;
   }
 
-  /* Header overflow fix */
   header {
     width: 100% !important;
     max-width: 100% !important;
@@ -2072,7 +2071,6 @@
     white-space: nowrap !important;
   }
 
-  /* Leaderboard tabs */
   .lb-tabs {
     width: 100% !important;
     max-width: 100% !important;
@@ -2096,7 +2094,6 @@
     white-space: nowrap !important;
   }
 
-  /* Leaderboard podium */
   #lb-podium {
     width: 100% !important;
     max-width: 100% !important;
@@ -2133,7 +2130,6 @@
     margin-right: auto !important;
   }
 
-  /* Bottom leaderboard board */
   #lb-board,
   .lb-board {
     width: 100% !important;
@@ -2161,8 +2157,8 @@
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
   }
-}   
-</style>
+}
+  /style>
 </head>
 <body>
 
