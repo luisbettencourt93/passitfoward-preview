@@ -7337,9 +7337,15 @@ function getWeeklyProg(){return JSON.parse(localStorage.getItem('pf_wk_'+(curren
 function saveWeeklyProg(p){localStorage.setItem('pf_wk_'+(currentUser?.handle||'x')+'_'+getWeekKey(),JSON.stringify(p));}
 function bumpWeekly(key,amount){
   if(!currentUser)return;const p=getWeeklyProg();const was={};
-  CHALLENGES.forEach(c=>{was[c.id]=(p[c.key]||0)>=c.target;});
+  const challenges = getChallenges();
+  challenges.forEach(c=>{was[c.id]=(p[c.key]||0)>=c.target;});
   p[key]=(p[key]||0)+(amount||1);saveWeeklyProg(p);
-  CHALLENGES.forEach(c=>{if(!was[c.id]&&(p[c.key]||0)>=c.target){addXp(c.xp,'goal','Challenge: '+c.title);showToast('🎯 Challenge complete! +'+c.xp+' XP');}});
+  challenges.forEach(c=>{
+  if(!was[c.id] && (p[c.key]||0) >= c.target){
+    addXp(c.xp,'goal','Challenge: '+c.title);
+    showToast('🎯 Challenge complete! +'+c.xp+' XP');
+  }
+});
   renderChallenges();
   saveWeeklyProgToSupabase(); // sync to Supabase for cross-device
 }
