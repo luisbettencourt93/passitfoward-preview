@@ -11170,6 +11170,14 @@ async function nexarRenderLatestDraftFromDb() {
 }
 
 async function nexarHandleToolResult(payload) {
+console.log('[tool_result]', {
+  name: payload?.name,
+  ok: payload?.ok,
+  has_draft: !!payload?.draft,
+  has_match_id: !!payload?.match_id,
+  gold_required: payload?.gold_required,
+  full_payload: payload
+});
   // Fired after tool executes — toast + refresh pipeline view
   try {
     let toolResult =
