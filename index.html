@@ -10771,6 +10771,27 @@ function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
 async function nexarHandleToolResult(payload) {
   // Fired after tool executes — toast + refresh pipeline view
   try {
+    const toolName =
+  payload?.name ||
+  payload?.tool_name ||
+  payload?.toolName ||
+  payload?.tool ||
+  payload?.result?.name ||
+  payload?.result?.tool_name ||
+  payload?.result?.toolName ||
+  payload?.result?.tool;
+
+const toolResult =
+  payload?.result ||
+  payload?.output ||
+  payload?.data ||
+  payload;
+
+payload = {
+  ...payload,
+  ...(toolResult || {}),
+  name: toolName || payload?.name
+};
     if (payload?.name === 'dismiss_reminder') {
   if (payload?.ok) {
     showToast('Reminder dismissed');
