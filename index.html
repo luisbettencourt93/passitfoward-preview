@@ -7057,6 +7057,15 @@ function renderProfile(){
 }
 function showProfileModal(){
   const p=JSON.parse(localStorage.getItem('pf_profile_'+currentUser.handle)||'{}');
+  const displayNameEl = document.getElementById('edit-display-name');
+if (displayNameEl) {
+  displayNameEl.value = currentUser.display_name || p.display_name || '';
+}
+
+const lockedXIdentityEl = document.getElementById('locked-x-identity');
+if (lockedXIdentityEl) {
+  lockedXIdentityEl.value = currentUser.handle || '';
+}
   document.getElementById('edit-bio').value=p.bio||'';
   document.getElementById('edit-x-url').value=p.xUrl||'';
   const cityEl=document.getElementById('edit-city');if(cityEl)cityEl.value=p.city||'';
