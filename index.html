@@ -4272,6 +4272,35 @@
   NEXAR uses your <strong>skills</strong>, <strong>city</strong>, and <strong>bio</strong> 
   to match you to opportunities posted by other builders. Add at least 3 skills to enable matching.
   </p>
+   <label style="display:block;margin-bottom:6px;color:#c0d0c8;font-size:13px;font-weight:600;">Display Name</label>
+<input
+  id="edit-display-name"
+  type="text"
+  maxlength="40"
+  placeholder="Example: Luis B"
+  class="form-input"
+  style="margin-bottom:0.4rem;"
+>
+
+<p style="font-size:12px;color:#8fa59a;margin-top:0;margin-bottom:12px;">
+  This is the name shown on your profile. It can be changed anytime.
+</p>
+
+<label style="display:block;margin-bottom:6px;color:#c0d0c8;font-size:13px;font-weight:600;">X Identity</label>
+<input
+  id="locked-x-identity"
+  type="text"
+  disabled
+  readonly
+  placeholder="@yourhandle"
+  class="form-input"
+  style="margin-bottom:0.4rem;opacity:0.75;cursor:not-allowed;"
+>
+
+<p style="font-size:12px;color:#8fa59a;margin-top:0;margin-bottom:14px;">
+  Locked for trust. Your X identity protects deal history, XP, strikes and accountability.
+  Contact founder/admin if your X handle needs updating.
+</p>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;">
       <div id="edit-avatar-preview" style="width:56px;height:56px;border-radius:50%;background:rgba(45,212,160,0.12);border:2px solid rgba(45,212,160,0.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#2dd4a0;overflow:hidden;flex-shrink:0;"><i class="fas fa-user"></i></div>
       <div style="flex:1;"><input type="url" id="edit-avatar-url" aria-label="Avatar URL" placeholder="Profile picture URL (from X, LinkedIn, or any image link)" class="form-input" style="margin:0;" oninput="updateAvatarPreview(this.value)"><div style="font-size:0.65rem;color:#4b5563;margin-top:3px;">Tip: Right-click your X profile pic → Copy image address</div></div>
