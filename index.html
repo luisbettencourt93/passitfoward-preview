@@ -2284,6 +2284,116 @@
     word-break: break-word !important;
   }
 }
+/* =====================================================
+   PROFILE COMPLETION BANNER (Layer 4 Track 1)
+   ===================================================== */
+.profile-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: linear-gradient(90deg, rgba(0, 255, 136, 0.08), rgba(0, 255, 136, 0.04));
+  border-bottom: 1px solid rgba(0, 255, 136, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.profile-banner-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 8px 16px;
+  box-sizing: border-box;
+}
+.profile-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.profile-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.profile-banner-label {
+  font-weight: 600;
+  color: #00ff88;
+  font-size: 14px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.profile-banner-message {
+  color: #c0d0c8;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.profile-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.profile-banner-cta {
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.5);
+  color: #00ff88;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.profile-banner-cta:hover {
+  background: rgba(0, 255, 136, 0.25);
+}
+.profile-banner-close {
+  background: transparent;
+  border: none;
+  color: #6b7c75;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.profile-banner-close:hover {
+  color: #c0d0c8;
+}
+.profile-banner-progress {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  margin-top: 6px;
+  border-radius: 1px;
+  overflow: hidden;
+}
+.profile-banner-fill {
+  height: 100%;
+  background: #00ff88;
+  transition: width 0.4s ease;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .profile-banner-inner { padding: 6px 10px; }
+  .profile-banner-content { gap: 8px; }
+  .profile-banner-message {
+    font-size: 12px;
+  }
+  .profile-banner-label { font-size: 13px; }
+  .profile-banner-cta {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+  /* On very narrow screens, hide the long message and just show the CTA */
+  @media (max-width: 380px) {
+    .profile-banner-message { display: none; }
+  }
+}
  </style> 
 </head>
 <body>
