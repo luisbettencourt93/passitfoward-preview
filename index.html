@@ -10663,7 +10663,21 @@ function nexarEscapeHtml(s) {
 }
 
 function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
-  const stream = document.querySelector('#nexar-stream');
+  const streams = Array.from(document.querySelectorAll('#nexar-stream'));
+
+  const stream =
+    streams.find(el => {
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    }) || streams[0];
+
   if (!stream) return;
 
   const block = document.createElement('div');
