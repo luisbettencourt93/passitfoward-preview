@@ -10803,7 +10803,7 @@ payload = {
       sub.textContent = 'AI OPERATOR · ONLINE';
       delete sub.dataset.toolBusy;
     }
-    if (payload?.name === 'draft_opportunity_response') {
+    if (payload?.name === 'draft_opportunity_response' || payload?.draft) {
   if (payload?.ok && payload?.draft) {
     nexarRenderDraftBlock(payload.draft, payload.poster_handle, payload.match_id);
   } else if (payload?.gold_required) {
