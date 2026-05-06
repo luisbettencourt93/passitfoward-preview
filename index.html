@@ -4254,6 +4254,10 @@
   <div class="modal-content" style="max-width:540px;">
     <h2>Edit Profile</h2>
     <p>Help others know what you bring to the table.</p>
+   <p class="profile-modal-intro">
+  NEXAR uses your <strong>skills</strong>, <strong>city</strong>, and <strong>bio</strong> 
+  to match you to opportunities posted by other builders. Add at least 3 skills to enable matching.
+  </p>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;">
       <div id="edit-avatar-preview" style="width:56px;height:56px;border-radius:50%;background:rgba(45,212,160,0.12);border:2px solid rgba(45,212,160,0.25);display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#2dd4a0;overflow:hidden;flex-shrink:0;"><i class="fas fa-user"></i></div>
       <div style="flex:1;"><input type="url" id="edit-avatar-url" aria-label="Avatar URL" placeholder="Profile picture URL (from X, LinkedIn, or any image link)" class="form-input" style="margin:0;" oninput="updateAvatarPreview(this.value)"><div style="font-size:0.65rem;color:#4b5563;margin-top:3px;">Tip: Right-click your X profile pic → Copy image address</div></div>
@@ -7203,6 +7207,7 @@ document.addEventListener('DOMContentLoaded', () => {
   renderProfile();
   updateAvatars();
   showToast("Profile saved to database!");
+  pifRefreshProfileBanner();  
 }
 // -- TASKS ----------------------------------------------------------
 function updateAvatars() {
