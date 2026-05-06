@@ -11417,51 +11417,36 @@ if (payload?.name === 'update_match_status') {
   }
 
 } else if (eventName === 'tool_call') {
-  try {
-    nexarHandleToolCall(payload);
-  } catch (e) {
-    console.warn('tool_call handler', e);
-  }
+  try { nexarHandleToolCall(payload); }
+  catch (e) { console.warn('tool_call handler', e); }
 
 } else if (eventName === 'tool_result') {
-  try {
-    await nexarHandleToolResult(payload);
-  } catch (e) {
-    console.warn('tool_result handler', e);
-  }
+  try { await nexarHandleToolResult(payload); }
+  catch (e) { console.warn('tool_result handler', e); }
 
 } else if (eventName === 'confirm_required') {
-  try {
-    nexarRenderConfirmCard(payload);
-  } catch (e) {
-    console.warn('confirm_required handler', e);
-  }
+  try { nexarRenderConfirmCard(payload); }
+  catch (e) { console.warn('confirm_required handler', e); }
 
 } else if (eventName === 'done') {
   // Stream finished cleanly - refresh FAB visibility in case content overflows now
-  try {
-    nexarUpdateFabs();
-  } catch (_) {}
-
-  try {
-    await nexarRenderLatestDraftFromDb();
-  } catch (_) {}
+  try { nexarUpdateFabs(); } catch (_) {}
+  try { await nexarRenderLatestDraftFromDb(); } catch (_) {}
 
 } else if (eventName === 'error') {
   const bubble = ensureBubble();
-
   if (bubble) {
     bubble.innerHTML = nexarFormat(fullText + `\n\n⚠ STREAM ERROR — ${payload.error || 'unknown'}`);
   } else {
     renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}. Try again.`);
   }
 }
-    // Safety: if stream ended with no content, show a friendly error
-    if (!fullText) {
-      hideNexarTyping();
-      renderNexarMessage('assistant', `⚠ SYSTEM ERROR — empty response. Try again.`);
-    }
 
+// Safety: if stream ended with no content, show a friendly error
+if (!fullText) {
+  hideNexarTyping();
+  renderNexarMessage('assistant', '⚠ SYSTEM ERROR — empty response. Try again.');
+}
   } catch (e) {
     hideNexarTyping();
     if (assistantBubble) {
