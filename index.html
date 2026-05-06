@@ -11256,7 +11256,28 @@ if (payload?.name === 'update_match_status') {
   }
   return;
 }
-
+ if (payload?.name === 'update_user_skills') {
+  if (payload?.ok && Array.isArray(payload?.skills)) {
+    // Update local state
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      currentUser.skills = payload.skills;
+    }
+    // Refresh the profile completion banner if the function exists
+    if (typeof pifRefreshProfileBanner === 'function') {
+      try { pifRefreshProfileBanner(); } catch (_) {}
+    }
+    // Update the dashboard avatar/profile if rendered
+    if (typeof renderProfile === 'function') {
+      try { renderProfile(); } catch (_) {}
+    }
+    showToast(`Saved ${payload.skills.length} skills`);
+  } else if (payload?.error === 'too_few_skills') {
+    showToast('Need at least 3 valid skills');
+  } else if (!payload?.ok) {
+    showToast('Skills save failed: ' + (payload?.summary || 'unknown error'));
+  }
+  return;
+}
     if (!payload?.ok) {
       showToast('Action failed: ' + (payload?.summary || 'unknown error'));
       return;
