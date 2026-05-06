@@ -2358,6 +2358,27 @@
   </div>
 </header>
 
+
+<!-- Profile completion banner (Layer 4 Track 1) -->
+<div id="profile-completion-banner" class="profile-banner" style="display: none;">
+  <div class="profile-banner-inner">
+    <div class="profile-banner-content">
+      <div class="profile-banner-text">
+        <span class="profile-banner-label">Profile <span id="pcb-pct">0</span>%</span>
+        <span class="profile-banner-message" id="pcb-message">Complete your profile so NEXAR can match you to opportunities.</span>
+      </div>
+      <div class="profile-banner-actions">
+        <button class="profile-banner-cta" onclick="pifOpenProfileForCompletion()">Complete profile</button>
+        <button class="profile-banner-close" onclick="pifDismissProfileBanner()" aria-label="Dismiss">×</button>
+      </div>
+    </div>
+    <div class="profile-banner-progress">
+      <div class="profile-banner-fill" id="pcb-fill" style="width: 0%;"></div>
+    </div>
+  </div>
+</div>
+
+
 <!-- HERO -->
 <section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#0d1520;">
   <div class="lp-orb lp-orb-teal" style="width:600px;height:600px;top:-100px;left:-200px;"></div>
@@ -6894,7 +6915,44 @@ function showProfileModal(){
 function addSkill(){const i=document.getElementById('skill-input');const v=i.value.trim();if(!v||pendingSkills.includes(v)||pendingSkills.length>=8){if(pendingSkills.length>=8)showToast("Max 8 skills");return;}pendingSkills.push(v);i.value='';renderSkillsPreview();}
 function renderSkillsPreview(){document.getElementById('skills-preview').innerHTML=pendingSkills.map((s,i)=>`<span class="skill-tag" onclick="removeSkill(${i})" title="Click to remove">${sanitize(s)} ✕</span>`).join('');}
 function removeSkill(i){pendingSkills.splice(i,1);renderSkillsPreview();}
-async function saveProfile() {
+// =====================================================
+// PROFILE COMPLETION CHECK (Layer 4 Track 1)
+// =====================================================
+function pifProfileCompleteness(profile) {
+  if (!profile) return { score: 0, missing: ['skills', 'bio', 'city'], complete: false };
+  
+  const skills = Array.isArray(profile.skills) ? profile.skills : [];
+  const skillsOk = skills.filter(s => typeof s === 'string' && s.trim().length > 0).length >= 3;
+  
+  const bio = typeof profile.bio === 'string' ? profile.bio.trim() : '';
+  const bioOk = bio.length >= 30;
+  
+  const city = typeof profile.city === 'string' ? profile.city.trim() : '';
+  // 'Select your city' or empty doesn't count
+  const cityOk = city.length > 0 
+    && city.toLowerCase() !== 'select your city'
+    && city.toLowerCase() !== 'select';
+  
+  let score = 0;
+  if (skillsOk) score += 40;
+  if (bioOk) score += 30;
+  if (cityOk) score += 30;
+  
+  const missing = [];
+  if (!skillsOk) missing.push('skills');
+  if (!bioOk) missing.push('bio');
+  if (!cityOk) missing.push('city');
+  
+  return {
+    score,
+    missing,
+    complete: score === 100,
+    skillsOk,
+    bioOk,
+    cityOk
+  };
+}
+  async function saveProfile() {
   const bio = document.getElementById('edit-bio').value.trim();
   const xUrl = document.getElementById('edit-x-url').value.trim();
   const city = document.getElementById('edit-city')?.value || '';
