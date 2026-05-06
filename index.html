@@ -7140,12 +7140,20 @@ function pifDismissProfileBanner() {
 function pifOpenProfileForCompletion() {
   const c = pifProfileCompleteness(currentUser);
   
-  if (typeof openProfileModal === 'function') {
-    openProfileModal();
+  if (typeof editProfile === 'function') {
+  editProfile();
+} else if (typeof openProfileModal === 'function') {
+  openProfileModal();
+} else {
+  const editBtn = Array.from(document.querySelectorAll('button, a'))
+    .find(el => (el.textContent || '').trim().toLowerCase().includes('edit profile'));
+
+  if (editBtn) {
+    editBtn.click();
   } else {
-    const modal = document.getElementById('profile-modal');
-    if (modal) modal.style.display = 'flex';
+    console.warn('Could not find existing Edit Profile opener.');
   }
+}
   
   setTimeout(() => {
     pifFocusMissingField(c.missing[0]);
