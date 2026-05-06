@@ -10698,7 +10698,7 @@ function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
   
 async function nexarRenderLatestDraftFromDb() {
   try {
-    if (!window.sb) return;
+    if (typeof sb === 'undefined') return;
 
     const { data, error } = await sb
       .from('nexar_matches')
