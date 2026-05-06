@@ -3049,7 +3049,12 @@
   <div style="max-width:1280px;margin:0 auto;padding:0 5%;font-family:'Inter',sans-serif;">
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <div><span style="font-size:20px;font-weight:700;color:white;font-family:'Space Grotesk',sans-serif;">Welcome back, </span><span id="profile-name" style="font-size:20px;font-weight:700;color:#2dd4a0;font-family:'Space Grotesk',sans-serif;"></span></div>
+      <div>
+  <div style="font-size:20px;font-weight:700;color:white;font-family:'Space Grotesk',sans-serif;">
+    Welcome back, <span id="profile-display-name" style="color:#2dd4a0;"></span>
+  </div>
+  <div id="profile-name" style="font-size:15px;font-weight:700;color:#2dd4a0;font-family:'Space Grotesk',sans-serif;margin-top:4px;"></div>
+</div>
       <div style="display:flex;gap:8px;">
         <button onclick="showProfileModal()" style="background:rgba(255,255,255,0.04);color:#5a7a9a;border:1px solid #2d4f6f;padding:8px 16px;border-radius:8px;font:600 13px/1 'Inter',sans-serif;cursor:pointer;"><i class="fas fa-pen" style="font-size:10px;margin-right:5px;"></i>Edit Profile</button>
         <button onclick="showPostModal()" style="background:#2dd4a0;color:#0d1520;border:none;padding:8px 18px;border-radius:8px;font:600 13px/1 'Inter',sans-serif;cursor:pointer;">+ Post opportunity</button>
@@ -5073,8 +5078,17 @@ if (fib) fib.style.display = isFounder() ? 'flex' : 'none';
 if (fab) fab.style.display = isFounder() ? 'flex' : 'none';
   document.getElementById('login-btn').style.display = 'none';
   document.getElementById('user-area').style.display = 'flex';
-  const dn = document.getElementById('display-name'); if (dn) dn.textContent = currentUser.handle;
-  const pn = document.getElementById('profile-name'); if (pn) pn.textContent = currentUser.handle;
+ const displayName = (currentUser.display_name || '').trim();
+const xIdentity = currentUser.handle || '';
+
+const dn = document.getElementById('display-name');
+if (dn) dn.textContent = displayName || xIdentity;
+
+const pdn = document.getElementById('profile-display-name');
+if (pdn) pdn.textContent = displayName || xIdentity;
+
+const pn = document.getElementById('profile-name');
+if (pn) pn.textContent = xIdentity;
   // Hide ALL landing page elements when logged in
   document.getElementById('hero').style.display = 'none';
   document.getElementById('apply-card').style.display = 'none';
