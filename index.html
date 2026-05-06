@@ -11472,8 +11472,8 @@ if (payload?.name === 'update_match_status') {
   } else {
     renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}. Try again.`);
   }
-}
 
+}
     // Safety: if stream ended with no content, show a friendly error
     if (!fullText) {
       hideNexarTyping();
