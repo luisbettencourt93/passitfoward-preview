@@ -11402,77 +11402,59 @@ if (payload?.name === 'update_match_status') {
             }
           }
         } else if (eventName === 'delta') {
-  const chunk = payload?.text || '';
+  // Append text chunk to bubble
+  const bubble = ensureBubble();
+  if (!bubble) continue;
 
-  // If draft tool just succeeded, suppress the model's duplicate draft text.
-  // The real draft is shown by the green Copy card.
-  if (window.__nexarSuppressDraftAssistantText) {
-    window.__nexarSuppressedDraftAssistantText =
-      (window.__nexarSuppressedDraftAssistantText || '') + chunk;
-  } else {
-    // Append text chunk to bubble
-    const bubble = ensureBubble();
-    if (!bubble) continue;
+  fullText += payload.text || '';
+  bubble.innerHTML = nexarFormat(fullText);
 
-    fullText += chunk;
-    bubble.innerHTML = nexarFormat(fullText);
-
-    // Gently keep view scrolled to latest as text streams in
-    const stream = document.getElementById('nexar-stream');
-    if (stream) {
-      const nearBottom = (stream.scrollHeight - stream.scrollTop - stream.clientHeight) < 160;
-      if (nearBottom) stream.scrollTop = stream.scrollHeight;
-    }
+  // Gently keep view scrolled to latest as text streams in
+  const stream = document.getElementById('nexar-stream');
+  if (stream) {
+    const nearBottom = (stream.scrollHeight - stream.scrollTop - stream.clientHeight) < 160;
+    if (nearBottom) stream.scrollTop = stream.scrollHeight;
   }
 
 } else if (eventName === 'tool_call') {
-  try { nexarHandleToolCall(payload); }
-  catch (e) { console.warn('tool_call handler', e); }
+  try {
+    nexarHandleToolCall(payload);
+  } catch (e) {
+    console.warn('tool_call handler', e);
+  }
 
 } else if (eventName === 'tool_result') {
-  try { await nexarHandleToolResult(payload); }
-  catch (e) { console.warn('tool_result handler', e); }
+  try {
+    await nexarHandleToolResult(payload);
+  } catch (e) {
+    console.warn('tool_result handler', e);
+  }
 
 } else if (eventName === 'confirm_required') {
-  try { nexarRenderConfirmCard(payload); }
-  catch (e) { console.warn('confirm_required handler', e); }
+  try {
+    nexarRenderConfirmCard(payload);
+  } catch (e) {
+    console.warn('confirm_required handler', e);
+  }
 
 } else if (eventName === 'done') {
   // Stream finished cleanly - refresh FAB visibility in case content overflows now
-  try { nexarUpdateFabs(); } catch (_) {}
+  try {
+    nexarUpdateFabs();
+  } catch (_) {}
 
-  if (window.__nexarSuppressDraftAssistantText) {
-    // Render the green Copy card from DB fallback
-    try { await nexarRenderLatestDraftFromDb(); } catch (_) {}
-
-    const hidden = (window.__nexarSuppressedDraftAssistantText || '').trim();
-
-    const looksLikeDuplicateDraft =
-      hidden.length > 120 ||
-      /NEXAR EXECUTED|NEW DRAFT|DRAFT COUNT|Tool-generated|Ready to mark as applied|^>\s/im.test(hidden);
-
-    const bubble = ensureBubble();
-
-    if (bubble) {
-      fullText = 'Drafted. Hit Copy above — want me to tailor the tone?';
-      bubble.innerHTML = nexarFormat(fullText);
-    }
-
-    window.__nexarSuppressDraftAssistantText = false;
-    window.__nexarDraftToolSucceeded = false;
-    window.__nexarSuppressedDraftAssistantText = '';
-  } else {
-    try { await nexarRenderLatestDraftFromDb(); } catch (_) {}
-  }
+  try {
+    await nexarRenderLatestDraftFromDb();
+  } catch (_) {}
 
 } else if (eventName === 'error') {
   const bubble = ensureBubble();
+
   if (bubble) {
     bubble.innerHTML = nexarFormat(fullText + `\n\n⚠ STREAM ERROR — ${payload.error || 'unknown'}`);
   } else {
     renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}. Try again.`);
   }
-
 }
     // Safety: if stream ended with no content, show a friendly error
     if (!fullText) {
