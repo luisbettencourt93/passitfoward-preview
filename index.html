@@ -10695,6 +10695,35 @@ function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
   stream.appendChild(block);
   stream.scrollTop = stream.scrollHeight;
 }
+  
+async function nexarRenderLatestDraftFromDb() {
+  try {
+    if (!window.sb) return;
+
+    const { data, error } = await sb
+      .from('nexar_matches')
+      .select('id, draft_text, opportunity_id, status')
+      .eq('status', 'drafted')
+      .not('draft_text', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data?.draft_text) return;
+
+    const renderKey = `${data.id}:${data.draft_text.slice(0, 80)}`;
+    if (window.__nexarLastDraftRenderKey === renderKey) return;
+    window.__nexarLastDraftRenderKey = renderKey;
+
+    nexarRenderDraftBlock(
+      data.draft_text,
+      '@similoluwaoshoisreal',
+      data.id
+    );
+  } catch (e) {
+    console.warn('[nexar latest draft render]', e);
+  }
+}
   async function nexarConfirmAction(action_id, accept, card) {
   if (!card || card.dataset.consumed === '1') return;
   card.dataset.consumed = '1';
@@ -11018,8 +11047,10 @@ if (payload?.name === 'update_match_status') {
         } else if (eventName === 'confirm_required') {
           try { nexarRenderConfirmCard(payload); } catch (e) { console.warn('confirm_required handler', e); }
         } else if (eventName === 'done') {
-          // Stream finished cleanly — refresh FAB visibility in case content overflows now
-          try { nexarUpdateFabs(); } catch(_) {}
+         // Stream finished cleanly – refresh FAB visibility in case content overflows now
+           try { nexarUpdateFabs(); } catch(_) {}
+            try { await nexarRenderLatestDraftFromDb(); } catch(_) {}
+        } else if (eventName === 'error') {
         } else if (eventName === 'error') {
           const bubble = ensureBubble();
           if (bubble) {
