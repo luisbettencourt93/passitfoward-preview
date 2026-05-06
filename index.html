@@ -5091,7 +5091,7 @@ const pdn = document.getElementById('profile-display-name');
 if (pdn) pdn.textContent = displayName || xIdentity;
 
 const pn = document.getElementById('profile-name');
-if (pn) pn.textContent = xIdentity ? `X Identity: ${xIdentity}` : '';
+if (pn) pn.textContent = xIdentity;
   // Hide ALL landing page elements when logged in
   document.getElementById('hero').style.display = 'none';
   document.getElementById('apply-card').style.display = 'none';
@@ -11867,4 +11867,3 @@ async function nexarPipelineDelete(id) {
  <script src="pif-patch.js"></script>
 </body>
 </html>
-
