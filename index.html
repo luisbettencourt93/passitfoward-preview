@@ -7232,15 +7232,17 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(pifRenderProfileBanner, 1000);
 });
   async function saveProfile() {
+  const displayName = document.getElementById('edit-display-name')?.value.trim() || '';
   const bio = document.getElementById('edit-bio').value.trim();
   const xUrl = document.getElementById('edit-x-url').value.trim();
   const city = document.getElementById('edit-city')?.value || '';
   const stripeLink = document.getElementById('edit-stripe-link')?.value.trim() || '';
   const usdtAddress = document.getElementById('edit-usdt-address')?.value.trim() || '';
   const avatarUrl = document.getElementById('edit-avatar-url')?.value.trim() || '';
-  localStorage.setItem('pf_profile_' + currentUser.handle, JSON.stringify({ bio, skills: pendingSkills, xUrl, city, stripeLink, usdtAddress, avatarUrl }));
+  localStorage.setItem('pf_profile_' + currentUser.handle, JSON.stringify({ display_name: displayName, bio, skills: pendingSkills, xUrl, city, stripeLink, usdtAddress, avatarUrl }));
   if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
     const { error } = await sb.from('profiles').update({
+      display_name: displayName,
       bio,
       skills: pendingSkills,
       x_url: xUrl,
@@ -7256,6 +7258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   // Update currentUser object so dashboard picks it up immediately
+  currentUser.display_name = displayName;
   currentUser.bio = bio;
   currentUser.skills = pendingSkills;
   currentUser.x_url = xUrl;
