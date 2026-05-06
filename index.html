@@ -7062,6 +7062,111 @@ function pifProfileCompleteness(profile) {
     cityOk
   };
 }
+  // =====================================================
+// PROFILE BANNER INJECTION + LIFECYCLE (Layer 4 Track 1)
+// =====================================================
+
+function pifShouldShowProfileBanner() {
+  // Don't show for logged-out users
+  if (!currentUser || !currentUser.handle) return false;
+  
+  // Don't show if dismissed this session
+  if (sessionStorage.getItem('pf_profile_banner_dismissed') === '1') return false;
+  
+  // Show only if profile is incomplete
+  const c = pifProfileCompleteness(currentUser);
+  return !c.complete;
+}
+
+function pifRenderProfileBanner() {
+  const banner = document.getElementById('profile-completion-banner');
+  if (!banner) return;
+  
+  if (!pifShouldShowProfileBanner()) {
+    banner.style.display = 'none';
+    return;
+  }
+  
+  const c = pifProfileCompleteness(currentUser);
+  
+  const pctEl = document.getElementById('pcb-pct');
+  const fillEl = document.getElementById('pcb-fill');
+  const msgEl = document.getElementById('pcb-message');
+  
+  if (pctEl) pctEl.textContent = c.score;
+  if (fillEl) fillEl.style.width = c.score + '%';
+  
+  if (msgEl) {
+    if (c.missing.length === 3) {
+      msgEl.textContent = 'NEXAR uses your skills, city, and bio to match you to opportunities. 30 seconds to set up.';
+    } else if (c.missing.includes('skills')) {
+      msgEl.textContent = 'Add 3+ skills so NEXAR can match you to opportunities.';
+    } else if (c.missing.includes('bio') && c.missing.includes('city')) {
+      msgEl.textContent = 'Add a bio and city to strengthen your matches.';
+    } else if (c.missing.includes('bio')) {
+      msgEl.textContent = 'Add a short bio to strengthen your profile.';
+    } else if (c.missing.includes('city')) {
+      msgEl.textContent = 'Pick your city to strengthen your matches.';
+    }
+  }
+  
+  banner.style.display = 'block';
+}
+
+function pifDismissProfileBanner() {
+  sessionStorage.setItem('pf_profile_banner_dismissed', '1');
+  const banner = document.getElementById('profile-completion-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function pifOpenProfileForCompletion() {
+  const c = pifProfileCompleteness(currentUser);
+  
+  if (typeof openProfileModal === 'function') {
+    openProfileModal();
+  } else {
+    const modal = document.getElementById('profile-modal');
+    if (modal) modal.style.display = 'flex';
+  }
+  
+  setTimeout(() => {
+    pifFocusMissingField(c.missing[0]);
+  }, 300);
+}
+
+function pifFocusMissingField(field) {
+  if (!field) return;
+  
+  // Your real profile modal field IDs
+  const fieldSelectors = {
+    skills: '#skill-input',
+    bio: '#edit-bio',
+    city: '#edit-city'
+  };
+  
+  const selector = fieldSelectors[field];
+  if (!selector) return;
+  
+  const el = document.querySelector(selector);
+  if (!el) return;
+  
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => {
+    try { el.focus(); } catch(_) {}
+  }, 400);
+}
+
+function pifRefreshProfileBanner() {
+  const c = pifProfileCompleteness(currentUser);
+  if (c.complete) {
+    sessionStorage.removeItem('pf_profile_banner_dismissed');
+  }
+  pifRenderProfileBanner();
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(pifRenderProfileBanner, 1000);
+});
   async function saveProfile() {
   const bio = document.getElementById('edit-bio').value.trim();
   const xUrl = document.getElementById('edit-x-url').value.trim();
