@@ -11281,8 +11281,10 @@ if (payload?.name === 'update_match_status') {
 }
   async function nexarSend() {
   if (nexarState.sending) return;
+
   const ta = document.getElementById('nexar-input');
   if (!ta) return;
+
   const msg = ta.value.trim();
   if (!msg) return;
 
@@ -11295,30 +11297,38 @@ if (payload?.name === 'update_match_status') {
   renderNexarMessage('user', msg);
   ta.value = '';
   nexarAutoGrow(ta);
+
   nexarState.sending = true;
-  document.getElementById('nexar-send-btn').disabled = true;
+
+  const sendBtn = document.getElementById('nexar-send-btn');
+  if (sendBtn) sendBtn.disabled = true;
+
   showNexarTyping();
 
-  // We'll build the assistant bubble lazily — don't create it until first
-  // token arrives, so the typing indicator stays visible during pre-token wait.
   let assistantBubble = null;
   let fullText = '';
 
   const ensureBubble = () => {
     if (assistantBubble) return assistantBubble;
+
     hideNexarTyping();
+
     const stream = document.getElementById('nexar-stream');
     if (!stream) return null;
-    // Remove empty state if present
+
     const empty = stream.querySelector('.nexar-empty');
     if (empty) empty.remove();
+
     const wrap = document.createElement('div');
     wrap.className = 'nexar-msg assistant';
+
     const bubble = document.createElement('div');
     bubble.className = 'nexar-bubble';
     bubble.innerHTML = '';
+
     wrap.appendChild(bubble);
     stream.appendChild(wrap);
+
     assistantBubble = bubble;
     return bubble;
   };
@@ -11326,6 +11336,7 @@ if (payload?.name === 'update_match_status') {
   try {
     const { data: sess } = await sb.auth.getSession();
     const token = sess?.session?.access_token;
+
     if (!token) throw new Error('no_session');
 
     const resp = await fetch(NEXAR_CHAT_URL, {
@@ -11338,7 +11349,7 @@ if (payload?.name === 'update_match_status') {
       body: JSON.stringify({ message: msg }),
     });
 
-    // Rate-limit response (JSON, not stream)
+    // Rate-limit response
     if (resp.status === 429) {
       hideNexarTyping();
       nexarState.remainingToday = 0;
@@ -11347,23 +11358,27 @@ if (payload?.name === 'update_match_status') {
       return;
     }
 
-    // Non-streaming error response (still JSON)
+    // Non-streaming error response
     const contentType = resp.headers.get('content-type') || '';
+
     if (!resp.ok || !contentType.includes('text/event-stream')) {
       hideNexarTyping();
+
       let errMsg = 'unexpected';
+
       try {
         const data = await resp.json();
         errMsg = data.error || errMsg;
         console.error('nexar-chat failed', resp.status, data);
-      } catch(_) {
+      } catch (_) {
         console.error('nexar-chat failed', resp.status);
       }
+
       renderNexarMessage('assistant', `⚠ SYSTEM ERROR — ${errMsg}. Try again.`);
       return;
     }
 
-    // SSE stream — parse event-by-event
+    // SSE stream
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -11371,9 +11386,9 @@ if (payload?.name === 'update_match_status') {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+
       buffer += decoder.decode(value, { stream: true });
 
-      // Events are separated by \n\n
       let sep;
       while ((sep = buffer.indexOf('\n\n')) !== -1) {
         const rawEvent = buffer.slice(0, sep);
@@ -11381,92 +11396,121 @@ if (payload?.name === 'update_match_status') {
 
         let eventName = 'message';
         let dataStr = '';
+
         for (const line of rawEvent.split('\n')) {
-          if (line.startsWith('event:')) eventName = line.slice(6).trim();
-          else if (line.startsWith('data:')) dataStr = line.slice(5).trim();
+          if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            dataStr = line.slice(5).trim();
+          }
         }
+
         if (!dataStr) continue;
 
         let payload;
-        try { payload = JSON.parse(dataStr); } catch { continue; }
+        try {
+          payload = JSON.parse(dataStr);
+        } catch (_) {
+          continue;
+        }
 
         if (eventName === 'meta') {
-          // Update tier/usage UI before text starts streaming
           if (typeof payload.remaining_today === 'number') {
             nexarState.remainingToday = payload.remaining_today;
+
             const usageText = document.getElementById('nexar-usage-text');
             if (usageText) usageText.textContent = `${payload.remaining_today} / 5 LEFT TODAY`;
+
             if (payload.remaining_today === 0) {
               const banner = document.getElementById('nexar-upgrade-banner');
               if (banner) banner.style.display = 'block';
             }
           }
+
         } else if (eventName === 'delta') {
-  // Append text chunk to bubble
-  const bubble = ensureBubble();
-  if (!bubble) continue;
+          const bubble = ensureBubble();
+          if (!bubble) continue;
 
-  fullText += payload.text || '';
-  bubble.innerHTML = nexarFormat(fullText);
+          fullText += payload.text || '';
+          bubble.innerHTML = nexarFormat(fullText);
 
-  // Gently keep view scrolled to latest as text streams in
-  const stream = document.getElementById('nexar-stream');
-  if (stream) {
-    const nearBottom = (stream.scrollHeight - stream.scrollTop - stream.clientHeight) < 160;
-    if (nearBottom) stream.scrollTop = stream.scrollHeight;
-  }
+          const stream = document.getElementById('nexar-stream');
+          if (stream) {
+            const nearBottom = (stream.scrollHeight - stream.scrollTop - stream.clientHeight) < 160;
+            if (nearBottom) stream.scrollTop = stream.scrollHeight;
+          }
 
-} else if (eventName === 'tool_call') {
-  try { nexarHandleToolCall(payload); }
-  catch (e) { console.warn('tool_call handler', e); }
+        } else if (eventName === 'tool_call') {
+          try {
+            nexarHandleToolCall(payload);
+          } catch (e) {
+            console.warn('tool_call handler', e);
+          }
 
-} else if (eventName === 'tool_result') {
-  try { await nexarHandleToolResult(payload); }
-  catch (e) { console.warn('tool_result handler', e); }
+        } else if (eventName === 'tool_result') {
+          try {
+            await nexarHandleToolResult(payload);
+          } catch (e) {
+            console.warn('tool_result handler', e);
+          }
 
-} else if (eventName === 'confirm_required') {
-  try { nexarRenderConfirmCard(payload); }
-  catch (e) { console.warn('confirm_required handler', e); }
+        } else if (eventName === 'confirm_required') {
+          try {
+            nexarRenderConfirmCard(payload);
+          } catch (e) {
+            console.warn('confirm_required handler', e);
+          }
 
-} else if (eventName === 'done') {
-  // Stream finished cleanly - refresh FAB visibility in case content overflows now
-  try { nexarUpdateFabs(); } catch (_) {}
-  try { await nexarRenderLatestDraftFromDb(); } catch (_) {}
+        } else if (eventName === 'done') {
+          try {
+            nexarUpdateFabs();
+          } catch (_) {}
 
-} else if (eventName === 'error') {
-  const bubble = ensureBubble();
-  if (bubble) {
-    bubble.innerHTML = nexarFormat(fullText + `\n\n⚠ STREAM ERROR — ${payload.error || 'unknown'}`);
-  } else {
-    renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}. Try again.`);
-  }
-}
+          try {
+            await nexarRenderLatestDraftFromDb();
+          } catch (_) {}
 
-// Safety: if stream ended with no content, show a friendly error
-if (!fullText) {
-  hideNexarTyping();
-  renderNexarMessage('assistant', '⚠ SYSTEM ERROR — empty response. Try again.');
-}
+        } else if (eventName === 'error') {
+          const bubble = ensureBubble();
+
+          if (bubble) {
+            bubble.innerHTML = nexarFormat(fullText + `\n\n⚠ STREAM ERROR — ${payload.error || 'unknown'}`);
+          } else {
+            renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}. Try again.`);
+          }
+        }
+      }
+    }
+
+    // Safety: if stream ended with no content, show a friendly error
+    if (!fullText) {
+      hideNexarTyping();
+      renderNexarMessage('assistant', '⚠ SYSTEM ERROR — empty response. Try again.');
+    }
+
   } catch (e) {
     hideNexarTyping();
+
     if (assistantBubble) {
       assistantBubble.innerHTML = nexarFormat(fullText + `\n\n⚠ CONNECTION LOST — ${String(e.message || e)}`);
     } else {
       renderNexarMessage('assistant', `⚠ CONNECTION ERROR — ${String(e.message || e)}. Try again.`);
     }
+
     console.error('nexar send failed', e);
+
   } finally {
     nexarState.sending = false;
+
     const btn = document.getElementById('nexar-send-btn');
     if (btn) btn.disabled = false;
-    // Final scroll + FAB update once stream settles
+
     requestAnimationFrame(() => {
-      try { scrollNexarBottom(); } catch(_) {}
-      try { nexarUpdateFabs(); } catch(_) {}
+      try { scrollNexarBottom(); } catch (_) {}
+      try { nexarUpdateFabs(); } catch (_) {}
     });
   }
 }
-
 // -- PRO UPGRADE FLOW -------------------------------------------------
 function showNexarProModal() {
   const m = document.getElementById('nexar-pro-modal');
