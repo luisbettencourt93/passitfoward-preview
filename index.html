@@ -5188,6 +5188,9 @@ if (pdn) pdn.textContent = displayName || xIdentity;
 
 const pn = document.getElementById('profile-name');
 if (pn) pn.textContent = xIdentity;
+// Load public display names for member-facing UI
+ pifRememberProfileName(currentUser);
+ pifLoadProfileNames();
   // Hide ALL landing page elements when logged in
   document.getElementById('hero').style.display = 'none';
   document.getElementById('apply-card').style.display = 'none';
