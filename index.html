@@ -4589,6 +4589,102 @@ var currentUser = null; // { id, email, handle }
 let activeFilter = 'All';
 let activeCommCat = 'All';
 let pendingSkills = [];
+// ===== Track 1.2 — Public Display Name cache/helpers =====
+// UI only: display_name is shown publicly, handle remains the trusted identity.
+
+const pifProfileNamesCache = new Map();
+
+function pifNormalizeHandleKey(handle) {
+  return String(handle || "")
+    .trim()
+    .replace(/^@+/, "")
+    .toLowerCase();
+}
+
+function pifCleanDisplayName(name) {
+  return String(name || "").trim();
+}
+
+function pifEscapeHTML(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function pifRememberProfileName(profile) {
+  if (!profile || !profile.handle) return;
+
+  const key = pifNormalizeHandleKey(profile.handle);
+  if (!key) return;
+
+  pifProfileNamesCache.set(key, {
+    handle: String(profile.handle || "").trim(),
+    display_name: pifCleanDisplayName(profile.display_name)
+  });
+}
+
+function pifGetPublicDisplayName(profileOrHandle) {
+  const handle =
+    typeof profileOrHandle === "string"
+      ? profileOrHandle
+      : profileOrHandle?.handle;
+
+  const directDisplayName =
+    typeof profileOrHandle === "object"
+      ? pifCleanDisplayName(profileOrHandle?.display_name)
+      : "";
+
+  if (directDisplayName) return directDisplayName;
+
+  const key = pifNormalizeHandleKey(handle);
+  const cached = key ? pifProfileNamesCache.get(key) : null;
+
+  if (cached?.display_name) return cached.display_name;
+
+  return String(handle || "").replace(/^@+/, "").trim();
+}
+
+function pifGetLockedXIdentity(profileOrHandle) {
+  const handle =
+    typeof profileOrHandle === "string"
+      ? profileOrHandle
+      : profileOrHandle?.handle;
+
+  const clean = String(handle || "").replace(/^@+/, "").trim();
+  return clean ? `@${clean}` : "";
+}
+
+function pifRenderPublicNameBlock(profileOrHandle) {
+  const displayName = pifGetPublicDisplayName(profileOrHandle);
+  const lockedIdentity = pifGetLockedXIdentity(profileOrHandle);
+
+  return `
+    <div class="pif-public-name-block">
+      <div class="pif-public-display-name">${pifEscapeHTML(displayName)}</div>
+      <div class="pif-public-locked-identity">${pifEscapeHTML(lockedIdentity)}</div>
+    </div>
+  `;
+}
+
+async function pifLoadProfileNames() {
+  try {
+    if (!sb) return;
+
+    const { data, error } = await sb
+      .from("profiles")
+      .select("handle, display_name")
+      .limit(1000);
+
+    if (error || !Array.isArray(data)) return;
+
+    data.forEach(pifRememberProfileName);
+  } catch (err) {
+    console.warn("Profile names cache failed:", err);
+  }
+}
 let postToX = false;
 let selectedFundAmount = 0;
 let _stripeWindow = null;
