@@ -8216,7 +8216,7 @@ function renderDirectory(){
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
         <div class="dir-av" style="background:${tier.bg};border-color:${tier.border};color:${tier.color};overflow:visible;">${avInner}${onlineDot}</div>
         <div style="flex:1;min-width:0;">
-          <div class="dir-name">${sanitize(m.handle)}${isMe?' <span style="color:#5a7a9a;font-size:10px;font-weight:400;">(you)</span>':''}</div>
+          <div class="dir-name">${pifRenderPublicNameBlock(m)}${isMe?`<span style="color:#5a7a9a;font-size:10px;font-weight:400;">(you)</span>`:''}</div>
           <div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">
             <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${tier.bg};color:${tier.color};border:1px solid ${tier.border};font-weight:700;">${tier.emoji} ${m.xp.toLocaleString()} XP</span>
             <span style="font-size:10px;color:${isOnline?'#2dd4a0':'#5a7a9a'};">${isOnline?'● Online':'Last seen '+lastSeen}</span>
