@@ -7375,6 +7375,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   // Update currentUser object so dashboard picks it up immediately
   currentUser.display_name = displayName;
+  pifRememberProfileName(currentUser);
   currentUser.bio = bio;
   currentUser.skills = pendingSkills;
   currentUser.x_url = xUrl;
