@@ -7421,6 +7421,8 @@ document.addEventListener('DOMContentLoaded', () => {
   currentUser.city = city;
   currentUser.stripe_link = stripeLink;
   currentUser.usdt_address = usdtAddress;
+    // Track 1.3 — refresh dashboard nudge in case user just added/removed Stripe or USDT
+  try { renderDashboardPaymentNudge(); } catch(_) {}
   currentUser.avatar_url = avatarUrl;
   closeModal('profile-modal');
   renderProfile();
@@ -8779,7 +8781,8 @@ function renderDashboardPaymentNudge() {
       if(currentUser.stripe_link && currentUser.stripe_link.startsWith('http')) { stripeLink.href = currentUser.stripe_link; }
       else { stripeLink.href = STRIPE_PAYMENT_LINK || 'https://dashboard.stripe.com'; }
     }
-    
+        // Track 1.3 — render the payment nudge / italic text after stats load
+    try { renderDashboardPaymentNudge(); } catch(e) { console.warn('[paymentNudge]', e); }
     // Render earnings feed
     const feedEl = document.getElementById('dash-earnings-feed');
     if(feedEl) {
