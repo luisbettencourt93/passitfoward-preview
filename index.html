@@ -6052,8 +6052,11 @@ function renderCommunity() {
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <button onclick='viewMemberProfile(${JSON.stringify(p.handle)})' style="background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;">
-            ${pifRenderPublicNameBlock(p.handle)}
-            </button>
+           <div style="display:flex;flex-direction:column;align-items:flex-start;line-height:1.1;">
+           <span style="color:#e8f0f8;font-weight:700;">${sanitize(pifGetPublicDisplayName(p.handle))}</span>
+          <span style="color:#10b981;font-size:0.9em;">${sanitize(pifGetLockedXIdentity(p.handle))}</span>
+          </div>
+          </button>
             ${p.category&&p.category!=='General'?`<span class="opp-category" style="font-size:0.7rem;">${sanitize(p.category)}</span>`:''}
             <span style="color:#4b5563;font-size:0.72rem;">${sanitize(p.time||'')}</span>
           </div>
