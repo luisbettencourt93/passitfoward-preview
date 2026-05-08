@@ -8058,7 +8058,19 @@ function renderLeaderboard(){
   }
   // MVP
   const mvp=[...data].sort((a,b)=>b.posts-a.posts)[0];
-  const mvpEl=document.getElementById('lb-mvp');if(mvpEl)mvpEl.textContent=(mvp&&mvp.posts>0)?mvp.handle:'—';
+  const mvpEl = document.getElementById('lb-mvp');
+  if (mvpEl) {
+  if (mvp && mvp.posts > 0) {
+    mvpEl.innerHTML = `
+      <button onclick='viewMemberProfile(${JSON.stringify(mvp.handle)})' style="background:none;border:0;padding:0;margin:0;text-align:center;cursor:pointer;line-height:1.1;">
+        <div style="color:#e8f0f8;font-weight:800;font-size:0.95rem;">${sanitize(pifGetPublicDisplayName(mvp.handle))}</div>
+        <div style="color:#2dd4a0;font-size:0.75rem;font-weight:600;margin-top:3px;">${sanitize(pifGetLockedXIdentity(mvp.handle))}</div>
+      </button>
+    `;
+  } else {
+    mvpEl.textContent = '-';
+  }
+}
   // Stats
   const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
   set('lb-stat-members',data.length);set('lb-stat-opps',data.reduce((s,m)=>s+m.opps,0));
