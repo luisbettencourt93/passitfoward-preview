@@ -6144,7 +6144,7 @@ setInterval(async ()=>{
 function replyToPost(handle) {
   const inp = document.getElementById('comm-post-text') || document.getElementById('comm-post-input');
   if (!inp) return;
-  inp.value = `${handle} `;
+  inp.value = `↪ ${pifGetLockedXIdentity(handle)} `;
   inp.focus();
   inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
