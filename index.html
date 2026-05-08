@@ -6051,7 +6051,9 @@ function renderCommunity() {
         <div class="comm-post-avatar">${sanitize(p.handle).replace('@','').substring(0,2).toUpperCase()}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <span onclick="viewMemberProfile('${sanitize(p.handle)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(p.handle)}</span>
+            <button onclick='viewMemberProfile(${JSON.stringify(p.handle)})' style="background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;">
+            ${pifRenderPublicNameBlock(p.handle)}
+            </button>
             ${p.category&&p.category!=='General'?`<span class="opp-category" style="font-size:0.7rem;">${sanitize(p.category)}</span>`:''}
             <span style="color:#4b5563;font-size:0.72rem;">${sanitize(p.time||'')}</span>
           </div>
