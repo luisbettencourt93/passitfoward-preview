@@ -6637,7 +6637,11 @@ function renderMemberRaises() {
           <div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:center;">
             <span class="raise-stage-badge">${sanitize(r.stage)}</span>
             ${r.target?`<span style="color:#64748b;font-size:0.78rem;">Target: ${formatMoney(r.target)}</span>`:''}
-            <span style="color:#4b5563;font-size:0.75rem;">by ${sanitize(r.poster)}</span>
+            <span style="color:#4b5563;font-size:0.75rem;">by</span>
+             <button onclick='viewMemberProfile(${JSON.stringify(r.poster)})' style="background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;line-height:1.1;">
+              <div style="color:#e8f0f8;font-size:0.78rem;font-weight:700;">${sanitize(pifGetPublicDisplayName(r.poster))}</div>
+              <div style="color:#2dd4a0;font-size:0.7rem;font-weight:600;">${sanitize(pifGetLockedXIdentity(r.poster))}</div>
+            </button>
           </div>
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-shrink:0;">
