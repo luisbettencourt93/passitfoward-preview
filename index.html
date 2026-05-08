@@ -512,7 +512,11 @@
     .skills-tags-preview { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1rem; min-height: 28px; }
     .skills-tags-preview .skill-tag { cursor: pointer; }
     .skills-tags-preview .skill-tag:hover { border-color: #ef4444; color: #ef4444; }
-
+    .intent-chip { background: rgba(255,255,255,0.04); border: 1px solid #2d4f6f; color: #94a3b8; padding: 6px 12px; border-radius: 20px; font: 600 11px/1 'Inter', sans-serif; cursor: pointer; transition: all 0.15s; user-select: none; }
+    .intent-chip:hover { border-color: rgba(45,212,160,0.4); color: #c0d0c8; }
+    .intent-chip.active { background: rgba(45,212,160,0.12); border-color: rgba(45,212,160,0.5); color: #2dd4a0; }
+    .intent-chip.disabled { opacity: 0.45; cursor: not-allowed; }
+    .intent-chip.disabled:hover { border-color: #2d4f6f; color: #94a3b8; }
     footer { background: #060a14; border-top: 1px solid var(--border); color: #334155; padding: 3rem 5% 2rem; text-align: center; font-size: 0.88rem; }
 
     /* FUNDS */
