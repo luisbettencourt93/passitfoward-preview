@@ -8025,7 +8025,10 @@ function renderLeaderboard(){
       const glow = idx===0 ? 'box-shadow:0 0 20px rgba(245,158,11,0.15);' : '';
       return `<div style="text-align:center;width:${s.card};">
         <div style="width:${s.w}px;height:${s.w}px;border-radius:50%;background:${avColors[idx]};border:${idx===0?'3px':'2px'} solid ${avBorders[idx]};display:flex;align-items:center;justify-content:center;font-size:${s.f}px;font-weight:700;color:${avTextColors[idx]};margin:0 auto 6px;${glow}overflow:hidden;">${ini}</div>
-        <div style="font-size:${idx===0?'14':'13'}px;font-weight:700;color:#e8f0f8;">${sanitize(m.handle)}</div>
+        <div style="font-size:${idx===0?'14':'13'}px;font-weight:700;color:#e8f0f8;line-height:1.1;overflow:hidden;text-overflow:ellipsis;">
+        <div>${sanitize(pifGetPublicDisplayName(m.handle))}</div>
+        <div style="font-size:${idx===0?'11':'10'}px;color:${avTextColors[idx]};font-weight:600;margin-top:2px;">${sanitize(pifGetLockedXIdentity(m.handle))}</div>
+        </div>
         <div style="font-size:12px;color:${avTextColors[idx]};font-weight:600;">${fmt(m,activeLbTab)} ${labels[activeLbTab]}</div>
         <div style="background:linear-gradient(135deg,${avColors[idx]},rgba(17,30,46,0.8));border:1px solid ${avBorders[idx]};border-radius:10px;padding:${s.pt} 10px 12px;margin-top:6px;text-align:center;"><div style="font-size:${s.medal}px;">${medals[idx]||''}</div><div style="font-size:10px;color:${avTextColors[idx]};font-weight:700;margin-top:2px;">#${idx+1}</div></div>
       </div>`;
@@ -8043,7 +8046,12 @@ function renderLeaderboard(){
       return `<div class="lb-row" ${isMe?'style="background:rgba(45,212,160,0.04);"':''}>
         <div class="lb-rank n">${idx+1}</div>
         <div class="lb-av" style="background:${avColors[cIdx]};color:${avTextColors[cIdx]};border-color:${avBorders[cIdx]};">${ini}</div>
-        <div class="lb-info"><span onclick="viewMemberProfile('${sanitize(m.handle)}')" style="color:#2dd4a0;cursor:pointer;font-weight:600;font-size:0.84rem;">${sanitize(m.handle)}</span></div>
+        <div class="lb-info">
+       <button onclick='viewMemberProfile(${JSON.stringify(m.handle)})' style="background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer;line-height:1.1;">
+       <div style="color:#e8f0f8;font-weight:700;font-size:0.84rem;">${sanitize(pifGetPublicDisplayName(m.handle))}</div>
+    <div style="color:#2dd4a0;font-size:0.72rem;font-weight:600;">${sanitize(pifGetLockedXIdentity(m.handle))}</div>
+  </button>
+</div>
         <div class="lb-score">${fmt(m,activeLbTab)} <span style="font-size:0.7rem;color:#5a7a9a;font-weight:400;">${labels[activeLbTab]}</span></div>
       </div>`;
     }).join('');
