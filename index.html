@@ -7254,6 +7254,49 @@ if (lockedXIdentityEl) {
 function addSkill(){const i=document.getElementById('skill-input');const v=i.value.trim();if(!v||pendingSkills.includes(v)||pendingSkills.length>=8){if(pendingSkills.length>=8)showToast("Max 8 skills");return;}pendingSkills.push(v);i.value='';renderSkillsPreview();}
 function renderSkillsPreview(){document.getElementById('skills-preview').innerHTML=pendingSkills.map((s,i)=>`<span class="skill-tag" onclick="removeSkill(${i})" title="Click to remove">${sanitize(s)} ✕</span>`).join('');}
 function removeSkill(i){pendingSkills.splice(i,1);renderSkillsPreview();}
+
+// =====================================================
+// Track 1.3A — Intent picker state + handlers
+// Cap: 1-3 selected. Modifies pendingIntents in place.
+// =====================================================
+let pendingIntents = [];
+
+const VALID_INTENTS = [
+  'Find paid work',
+  'Offer my skills',
+  'Grow my project',
+  'Find collaborators',
+  'Get funding',
+  'Hire someone'
+];
+
+function toggleIntent(value) {
+  if (!VALID_INTENTS.includes(value)) return;
+  const idx = pendingIntents.indexOf(value);
+  if (idx >= 0) {
+    pendingIntents.splice(idx, 1);
+  } else {
+    if (pendingIntents.length >= 3) {
+      showToast('Max 3 intents — deselect one first');
+      return;
+    }
+    pendingIntents.push(value);
+  }
+  renderIntentsPicker();
+}
+
+function renderIntentsPicker() {
+  const container = document.getElementById('intents-options');
+  if (!container) return;
+  const buttons = container.querySelectorAll('button[data-intent]');
+  const atCap = pendingIntents.length >= 3;
+  buttons.forEach(btn => {
+    const value = btn.getAttribute('data-intent');
+    const isActive = pendingIntents.includes(value);
+    btn.classList.toggle('active', isActive);
+    btn.classList.toggle('disabled', !isActive && atCap);
+  });
+}
 // =====================================================
 // PROFILE COMPLETION CHECK (Layer 4 Track 1)
 // =====================================================
