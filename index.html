@@ -9455,7 +9455,15 @@ async function viewMemberProfile(handle) {
       <button onclick="closeModal('member-profile-modal');switchTab('messages');setTimeout(()=>openThread('${handle}'),300);" style="font-size:11px;padding:8px;border-radius:8px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);color:#2dd4a0;cursor:pointer;font-weight:600;">Message</button>
       ${!banned ? `<button onclick="closeModal('member-profile-modal');showForgeModal(null,'','${sanitize(handle)}');" style="font-size:11px;padding:8px;border-radius:8px;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.2);color:#a78bfa;cursor:pointer;font-weight:600;">Forge</button>` : ''}
     </div>
-
+    ${(profile?.stripe_link || profile?.usdt_address) ? `
+  <button onclick='showPaymentInfo(${JSON.stringify(handle)})' style="width:100%;margin-bottom:14px;background:rgba(45,212,160,0.10);border:1px solid rgba(45,212,160,0.25);color:#2dd4a0;border-radius:10px;padding:11px;font-size:12px;font-weight:800;cursor:pointer;">
+    💸 Support this member
+  </button>
+` : `
+  <button onclick="showToast('This member has not set up payment methods yet.')" style="width:100%;margin-bottom:14px;background:rgba(255,255,255,0.04);border:1px solid #2d4f6f;color:#5a7a9a;border-radius:10px;padding:11px;font-size:12px;font-weight:700;cursor:pointer;">
+    Support not set up yet
+  </button>
+`}
     <!-- 4 STAT CARDS -->
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;">
       <div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;"><div style="font-size:16px;font-weight:700;color:${tier.color};">${xp.toLocaleString()}</div><div style="font-size:9px;color:#5a7a9a;">XP</div></div>
