@@ -3117,7 +3117,7 @@
           <div id="dash-usdt-btn" onclick="if(currentUser&&currentUser.usdt_address){navigator.clipboard.writeText(currentUser.usdt_address);showToast('USDT address copied!');}else{showToast('Add your USDT address in Edit Profile');}" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:#5a7a9a;cursor:pointer;">💰 USDT</div>
           <div onclick="showMyForgedDeals()" style="flex:1;background:rgba(255,255,255,0.04);border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;font-size:12px;color:#5a7a9a;cursor:pointer;">📋 Deals</div>
         </div>
-        <p style="color:#3d5a7a;font-size:10px;margin-top:10px;text-align:center;font-style:italic;">Payments flow directly between members via Stripe or USDT</p>
+        <div id="dash-payment-nudge" style="margin-top:10px;"></div>
       </div>
 
       <!-- STATS GRID -->
