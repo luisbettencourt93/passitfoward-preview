@@ -8229,6 +8229,7 @@ function renderDirectory(){
       <div style="display:flex;gap:6px;margin-top:auto;">
         ${xHandle?`<a href="${sanitize(m.xUrl)}" target="_blank" style="flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;background:rgba(29,155,240,0.08);border:1px solid rgba(29,155,240,0.2);color:#1d9bf0;text-decoration:none;font-weight:600;">View X</a><a href="https://twitter.com/intent/follow?screen_name=${sanitize(xHandle)}" target="_blank" style="flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;background:rgba(29,155,240,0.04);border:1px solid rgba(29,155,240,0.12);color:#1d9bf0;text-decoration:none;font-weight:600;">+ Follow</a>`:`<span style="flex:1;text-align:center;font-size:10px;padding:6px;color:#3d5a7a;">No X linked</span>`}
         ${!isMe?`<button class="dir-dm-btn" onclick="openDmWith('${m.handle.replace(/'/g,"\\'")}')">Message</button>`:''}
+        ${!isMe?`<button class="dir-dm-btn" onclick='showPaymentInfo(${JSON.stringify(m.handle)})'>Support</button>`:''}
       </div>
     </div>`;
   }).join('');}
