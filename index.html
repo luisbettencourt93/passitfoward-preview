@@ -7558,7 +7558,16 @@ document.addEventListener('DOMContentLoaded', () => {
   async function saveProfile() {
   const displayName = document.getElementById('edit-display-name')?.value.trim() || '';
   const bio = document.getElementById('edit-bio').value.trim();
-  const xUrl = document.getElementById('edit-x-url').value.trim();
+  const xUrlRaw = document.getElementById('edit-x-url').value.trim();
+// Track 1.3B — normalize X URL before save
+// null = invalid → store empty string (display fallback to "No X linked")
+// valid object → store canonical https://x.com/{username}
+const _xResult = pifNormalizeXUrl(xUrlRaw);
+const xUrl = _xResult ? _xResult.url : '';
+// Warn user if they typed something that didn't normalize cleanly
+if (xUrlRaw && !_xResult) {
+  showToast('X username invalid — link not saved');
+}
   const city = document.getElementById('edit-city')?.value || '';
   const stripeLink = document.getElementById('edit-stripe-link')?.value.trim() || '';
   const usdtAddress = document.getElementById('edit-usdt-address')?.value.trim() || '';
