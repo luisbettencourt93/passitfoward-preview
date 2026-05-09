@@ -8455,7 +8455,10 @@ function renderDirectory(){
     const tier=_dirTier(m.xp);
     const isOnline=m.last_seen&&(Date.now()-new Date(m.last_seen).getTime()<180000);
     const lastSeen=_dirTimeAgo(m.last_seen);
-    const xHandle=m.xUrl?m.xUrl.replace(/https?:\/\/(x\.com|twitter\.com)\//,'').replace(/\//g,''):'';
+    // Track 1.3B — safe X URL handling via helper
+   const xNorm=m.xUrl?pifNormalizeXUrl(m.xUrl):null;
+   const xHandle=xNorm?xNorm.username:'';
+   const xSafeUrl=xNorm?xNorm.url:'';
     const avInner=m.avatar_url&&m.avatar_url.startsWith('http')?`<img alt="" src="${sanitize(m.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.textContent='${ini}'">`:`${ini}`;
     const onlineDot=isOnline?`<div style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#2dd4a0;border-radius:50%;border:2px solid #111e2e;animation:dir-online-pulse 2s ease-in-out infinite;z-index:1;"></div>`:'';
     return`<div class="dir-card">
@@ -8474,7 +8477,7 @@ function renderDirectory(){
       <div class="dir-bio" style="margin-bottom:8px;">${m.bio?sanitize(m.bio):'<span style="color:#3d5a7a;">No bio yet.</span>'}</div>
       <div class="dir-tags">${(m.skills||[]).map((s,i)=>`<span class="dir-tag" style="background:${tagColors[i%tagColors.length]},0.06);border-color:${tagColors[i%tagColors.length]},0.12);color:${tagTextColors[i%tagTextColors.length]};">${sanitize(s)}</span>`).join('')}</div>
       <div style="display:flex;gap:6px;margin-top:auto;">
-        ${xHandle?`<a href="${sanitize(m.xUrl)}" target="_blank" style="flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;background:rgba(29,155,240,0.08);border:1px solid rgba(29,155,240,0.2);color:#1d9bf0;text-decoration:none;font-weight:600;">View X</a><a href="https://twitter.com/intent/follow?screen_name=${sanitize(xHandle)}" target="_blank" style="flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;background:rgba(29,155,240,0.04);border:1px solid rgba(29,155,240,0.12);color:#1d9bf0;text-decoration:none;font-weight:600;">+ Follow</a>`:`<span style="flex:1;text-align:center;font-size:10px;padding:6px;color:#3d5a7a;">No X linked</span>`}
+        ${xHandle?`<a href="${sanitize(xSafeUrl)}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;background:rgba(29,155,240,0.08);border:1px solid rgba(29,155,240,0.2);color:#1d9bf0;text-decoration:none;font-weight:600;">View X</a><a href="https://twitter.com/intent/follow?screen_name=${sanitize(xHandle)}" target="_blank" rel="noopener noreferrer" style="flex:1;text-align:center;font-size:11px;padding:6px;border-radius:6px;background:rgba(29,155,240,0.04);border:1px solid rgba(29,155,240,0.12);color:#1d9bf0;text-decoration:none;font-weight:600;">+ Follow</a>`:`<span style="flex:1;text-align:center;font-size:10px;padding:6px;color:#3d5a7a;">No X linked</span>`}
         ${!isMe?`<button class="dir-dm-btn" onclick="openDmWith('${m.handle.replace(/'/g,"\\'")}')">Message</button>`:''}
         ${!isMe?`<button class="dir-dm-btn" onclick='showPaymentInfo(${JSON.stringify(m.handle)})'>Support</button>`:''}
       </div>
