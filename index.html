@@ -4382,7 +4382,10 @@
   </div>
 </div>
 
-<input type="text" id="edit-x-url" aria-label="X profile URL" placeholder="X profile URL (https://x.com/yourname)" class="form-input" style="margin-bottom:0.8rem;">
+<div style="margin-bottom:0.8rem;">
+  <input type="text" id="edit-x-url" aria-label="X username or profile URL" placeholder="X username (e.g. MrGentleman93)" class="form-input" oninput="updateXUrlPreview(this.value)" style="margin-bottom:6px;">
+  <div id="edit-x-url-preview" style="font-size:11px;color:#5a7a9a;line-height:1.4;min-height:14px;"></div>
+</div>
     <select id="edit-city" aria-label="Your city" class="form-input form-select" style="margin-bottom:1.2rem;">
       <option value="">Select your city (shown on globe)</option>
       <option value="London, UK">London, UK</option>
@@ -4792,7 +4795,28 @@ function attrSafe(str) {
 // Returns: { url, username } if valid, null if invalid/unsafe.
 // Twitter username rules: 1-15 chars, alphanumeric + underscore only.
 // =====================================================
-function pifNormalizeXUrl(input) {
+// Live preview shown under the X URL input in Edit Profile.
+// Empty input → no message. Valid input → green tick + canonical URL.
+// Invalid input → red warning, link won't render until corrected.
+function updateXUrlPreview(value) {
+  const el = document.getElementById('edit-x-url-preview');
+  if (!el) return;
+  const raw = String(value || '').trim();
+  if (!raw) {
+    el.textContent = '';
+    el.style.color = '#5a7a9a';
+    return;
+  }
+  const result = pifNormalizeXUrl(raw);
+  if (result) {
+    el.textContent = '✓ Will save as ' + result.url;
+    el.style.color = '#2dd4a0';
+  } else {
+    el.textContent = '⚠ Invalid X username — won\'t be linked. Use only letters, numbers, underscores (max 15 chars).';
+    el.style.color = '#ef4444';
+  }
+}
+  function pifNormalizeXUrl(input) {
   if (!input) return null;
   let raw = String(input).trim();
   if (!raw) return null;
