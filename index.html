@@ -7249,7 +7249,21 @@ if (lockedXIdentityEl) {
   const avUrl=p.avatarUrl||currentUser.avatar_url||'';
   if(avPrev&&avUrl&&avUrl.startsWith('http')){avPrev.innerHTML='<img alt="" src="'+avUrl+'" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML=\'<i class=fas fa-user></i>\'">';}
   pendingSkills=[...(p.skills||[])];renderSkillsPreview();
-  document.getElementById('profile-modal').style.display='flex';
+
+// Track 1.3A — load existing intents into the picker
+// Priority: live currentUser.intents (Supabase truth) > localStorage > empty
+const existingIntents = (Array.isArray(currentUser?.intents) && currentUser.intents.length)
+  ? currentUser.intents
+  : (Array.isArray(p.intents) ? p.intents : []);
+
+pendingIntents = existingIntents
+  .filter(v => typeof v === 'string' && VALID_INTENTS.includes(v))
+  .filter((v, i, arr) => arr.indexOf(v) === i)
+  .slice(0, 3);
+
+renderIntentsPicker();
+
+document.getElementById('profile-modal').style.display='flex';
 }
 function addSkill(){const i=document.getElementById('skill-input');const v=i.value.trim();if(!v||pendingSkills.includes(v)||pendingSkills.length>=8){if(pendingSkills.length>=8)showToast("Max 8 skills");return;}pendingSkills.push(v);i.value='';renderSkillsPreview();}
 function renderSkillsPreview(){document.getElementById('skills-preview').innerHTML=pendingSkills.map((s,i)=>`<span class="skill-tag" onclick="removeSkill(${i})" title="Click to remove">${sanitize(s)} ✕</span>`).join('');}
