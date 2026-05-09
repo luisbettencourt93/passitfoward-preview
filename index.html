@@ -2121,14 +2121,29 @@
   }
 
   .header-right,
-  #auth-area,
-  #user-area {
-    flex: 0 0 auto !important;
-    min-width: 0 !important;
-    max-width: 145px !important;
-    gap: 4px !important;
-    overflow: hidden !important;
-  }
+#auth-area,
+#user-area {
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+  max-width: 145px !important;
+  gap: 4px !important;
+  overflow: visible !important;
+}
+
+/* Bug 3 — keep notif panel visible above mobile header */
+.notif-wrap {
+  position: static !important;
+}
+.notif-panel {
+  position: fixed !important;
+  top: 60px !important;
+  right: 8px !important;
+  left: auto !important;
+  width: calc(100vw - 16px) !important;
+  max-width: 360px !important;
+  max-height: calc(100vh - 80px) !important;
+  z-index: 9999 !important;
+}
 
   .header-logout {
     padding: 0.18rem 0.35rem !important;
