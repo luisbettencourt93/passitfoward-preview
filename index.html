@@ -7455,12 +7455,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const stripeLink = document.getElementById('edit-stripe-link')?.value.trim() || '';
   const usdtAddress = document.getElementById('edit-usdt-address')?.value.trim() || '';
   const avatarUrl = document.getElementById('edit-avatar-url')?.value.trim() || '';
-  localStorage.setItem('pf_profile_' + currentUser.handle, JSON.stringify({ display_name: displayName, bio, skills: pendingSkills, xUrl, city, stripeLink, usdtAddress, avatarUrl }));
+    // Track 1.3A — sanitize intents against the canonical list, cap at 3
+  const intentsToSave = (Array.isArray(pendingIntents) ? pendingIntents : [])
+    .filter(v => typeof v === 'string' && VALID_INTENTS.includes(v))
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .slice(0, 3);
+  localStorage.setItem('pf_profile_' + currentUser.handle, JSON.stringify({ display_name: displayName, bio, skills: pendingSkills, intents: intentsToSave, xUrl, city, stripeLink, usdtAddress, avatarUrl }));
   if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
     const { error } = await sb.from('profiles').update({
       display_name: displayName,
       bio,
       skills: pendingSkills,
+      intents: intentsToSave,
       x_url: xUrl,
       city: city,
       stripe_link: stripeLink,
@@ -7478,6 +7484,7 @@ document.addEventListener('DOMContentLoaded', () => {
   pifRememberProfileName(currentUser);
   currentUser.bio = bio;
   currentUser.skills = pendingSkills;
+  currentUser.intents = intentsToSave;
   currentUser.x_url = xUrl;
   currentUser.city = city;
   currentUser.stripe_link = stripeLink;
