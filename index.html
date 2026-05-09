@@ -4786,7 +4786,62 @@ function attrSafe(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+// =====================================================
+// Track 1.3B — X URL normalization helper
+// Accepts: username, @username, x.com/u, twitter.com/u, full URLs, ?s=21 params.
+// Returns: { url, username } if valid, null if invalid/unsafe.
+// Twitter username rules: 1-15 chars, alphanumeric + underscore only.
+// =====================================================
+function pifNormalizeXUrl(input) {
+  if (!input) return null;
+  let raw = String(input).trim();
+  if (!raw) return null;
 
+  // Reject anything containing dangerous schemes immediately
+  const lower = raw.toLowerCase();
+  if (lower.startsWith('javascript:') ||
+      lower.startsWith('data:') ||
+      lower.startsWith('vbscript:') ||
+      lower.startsWith('file:')) {
+    return null;
+  }
+
+  let username = null;
+
+  // Try parsing as a URL if it looks like one
+  if (lower.includes('://') || lower.startsWith('x.com') || lower.startsWith('twitter.com') ||
+      lower.startsWith('www.x.com') || lower.startsWith('www.twitter.com')) {
+    // Add protocol if missing so URL() parses correctly
+    let urlStr = raw;
+    if (!/^https?:\/\//i.test(urlStr)) {
+      urlStr = 'https://' + urlStr;
+    }
+    try {
+      const u = new URL(urlStr);
+      const host = u.hostname.toLowerCase().replace(/^www\./, '');
+      if (host !== 'x.com' && host !== 'twitter.com') return null;
+      // Path is /username or /username/status/... — first segment only
+      const segments = u.pathname.split('/').filter(Boolean);
+      if (segments.length === 0) return null;
+      username = segments[0];
+    } catch (_) {
+      return null;
+    }
+  } else {
+    // Treat as bare username — strip leading @ if present
+    username = raw.replace(/^@/, '');
+  }
+
+  if (!username) return null;
+
+  // Twitter username rules: 1-15 chars, [A-Za-z0-9_]
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(username)) return null;
+
+  return {
+    url: 'https://x.com/' + username,
+    username: username
+  };
+}
 // Safely update the avatar preview next to the Edit Profile avatar URL input.
 // Builds DOM via element APIs — no innerHTML with user input.
 function updateAvatarPreview(url) {
