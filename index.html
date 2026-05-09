@@ -9709,8 +9709,10 @@ async function viewMemberProfile(handle) {
   // Avatar
   const avInner = avatarUrl && avatarUrl.startsWith('http') ? `<img alt="" src="${sanitize(avatarUrl)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.textContent='${initials}'">` : initials;
 
-  // X handle
-  const xHandle = xUrl ? xUrl.replace(/https?:\/\/(x\.com|twitter\.com)\//,'').replace(/\//g,'') : '';
+  // X handle — Track 1.3B safe normalization via helper
+ const xNorm = xUrl ? pifNormalizeXUrl(xUrl) : null;
+ const xHandle = xNorm ? xNorm.username : '';
+ const xSafeUrl = xNorm ? xNorm.url : '';
 
   // Skill tag colors
   const tagColors = ['rgba(45,212,160','rgba(96,165,250','rgba(167,139,250','rgba(249,115,22','rgba(236,72,153','rgba(245,158,11'];
@@ -9747,8 +9749,8 @@ async function viewMemberProfile(handle) {
 
     <!-- 4 ACTION BUTTONS -->
     <div style="display:grid;grid-template-columns:${xHandle?'1fr 1fr 1fr 1fr':'1fr 1fr'};gap:6px;margin-bottom:14px;">
-      ${xHandle ? `<a href="${sanitize(xUrl)}" target="_blank" style="text-align:center;font-size:11px;padding:8px;border-radius:8px;background:rgba(29,155,240,0.08);border:1px solid rgba(29,155,240,0.2);color:#1d9bf0;text-decoration:none;font-weight:600;">View X</a>` : ''}
-      ${xHandle ? `<a href="https://twitter.com/intent/follow?screen_name=${sanitize(xHandle)}" target="_blank" style="text-align:center;font-size:11px;padding:8px;border-radius:8px;background:rgba(29,155,240,0.04);border:1px solid rgba(29,155,240,0.12);color:#1d9bf0;text-decoration:none;font-weight:600;">+ Follow</a>` : ''}
+     ${xHandle ? `<a href="${sanitize(xSafeUrl)}" target="_blank" rel="noopener noreferrer" style="text-align:center;font-size:11px;padding:8px;border-radius:8px;background:rgba(29,155,240,0.08);border:1px solid rgba(29,155,240,0.2);color:#1d9bf0;text-decoration:none;font-weight:600;">View X</a>` : ''}
+     ${xHandle ? `<a href="https://twitter.com/intent/follow?screen_name=${sanitize(xHandle)}" target="_blank" rel="noopener noreferrer" style="text-align:center;font-size:11px;padding:8px;border-radius:8px;background:rgba(29,155,240,0.04);border:1px solid rgba(29,155,240,0.12);color:#1d9bf0;text-decoration:none;font-weight:600;">+ Follow</a>` : ''}
       <button onclick="closeModal('member-profile-modal');switchTab('messages');setTimeout(()=>openThread('${handle}'),300);" style="font-size:11px;padding:8px;border-radius:8px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);color:#2dd4a0;cursor:pointer;font-weight:600;">Message</button>
       ${!banned ? `<button onclick="closeModal('member-profile-modal');showForgeModal(null,'','${sanitize(handle)}');" style="font-size:11px;padding:8px;border-radius:8px;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.2);color:#a78bfa;cursor:pointer;font-weight:600;">Forge</button>` : ''}
     </div>
