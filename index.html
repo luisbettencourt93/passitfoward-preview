@@ -8356,7 +8356,7 @@ function renderDirectory(){
     const avInner=m.avatar_url&&m.avatar_url.startsWith('http')?`<img alt="" src="${sanitize(m.avatar_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.textContent='${ini}'">`:`${ini}`;
     const onlineDot=isOnline?`<div style="position:absolute;bottom:-1px;right:-1px;width:10px;height:10px;background:#2dd4a0;border-radius:50%;border:2px solid #111e2e;animation:dir-online-pulse 2s ease-in-out infinite;z-index:1;"></div>`:'';
     return`<div class="dir-card">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+     <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;${isMe?'':'cursor:pointer;'}" ${isMe?'':`onclick="viewMemberProfile('${m.handle.replace(/'/g,"\\'")}')" title="View profile"`}>
         <div class="dir-av" style="background:${tier.bg};border-color:${tier.border};color:${tier.color};overflow:visible;">${avInner}${onlineDot}</div>
         <div style="flex:1;min-width:0;">
           <div class="dir-name">${pifRenderPublicNameBlock(m)}${isMe?`<span style="color:#5a7a9a;font-size:10px;font-weight:400;">(you)</span>`:''}</div>
