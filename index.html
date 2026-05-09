@@ -8309,10 +8309,10 @@ async function loadAndRenderDirectory(){
   let members=[];
   if(sb){
     const{data}=await sb.from('profiles').select('*').order('created_at',{ascending:true});
-    if(data) members=data.map(p=>({handle:p.handle,bio:p.bio||'',skills:p.skills||[],xUrl:p.x_url||'',xp:p.xp||0,city:p.city||'',avatar_url:p.avatar_url||'',last_seen:p.last_seen||''}));
+   if(data) members=data.map(p=>({handle:p.handle,bio:p.bio||'',skills:p.skills||[],intents:Array.isArray(p.intents)?p.intents:[],xUrl:p.x_url||'',xp:p.xp||0,city:p.city||'',avatar_url:p.avatar_url||'',last_seen:p.last_seen||''}));
   } else if(currentUser){
     const myP=JSON.parse(localStorage.getItem('pf_profile_'+currentUser.handle)||'{}');
-    members=[{handle:currentUser.handle,bio:myP.bio||'',skills:myP.skills||[],xUrl:myP.xUrl||'',xp:0,city:'',avatar_url:myP.avatarUrl||'',last_seen:new Date().toISOString()}];
+    members=[{handle:currentUser.handle,bio:myP.bio||'',skills:myP.skills||[],intents:Array.isArray(myP.intents)?myP.intents:[],xUrl:myP.xUrl||'',xp:0,city:'',avatar_url:myP.avatarUrl||'',last_seen:new Date().toISOString()}];
   }
   window._dirMembers = members;
   renderDirectory();
@@ -8367,6 +8367,7 @@ function renderDirectory(){
         </div>
       </div>
       ${m.city?`<div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;display:flex;align-items:center;gap:4px;"><i class="fas fa-map-marker-alt" style="color:#2dd4a0;"></i> ${sanitize(m.city)}</div>`:''}
+      ${(m.intents&&m.intents.length)?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;"><span style="font-size:9px;color:#5a7a9a;text-transform:uppercase;letter-spacing:0.5px;font-weight:600;align-self:center;">Looking for:</span>${m.intents.slice(0,3).map(it=>`<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);color:#60a5fa;font-weight:600;">${sanitize(it)}</span>`).join('')}</div>`:''}
       <div class="dir-bio" style="margin-bottom:8px;">${m.bio?sanitize(m.bio):'<span style="color:#3d5a7a;">No bio yet.</span>'}</div>
       <div class="dir-tags">${(m.skills||[]).map((s,i)=>`<span class="dir-tag" style="background:${tagColors[i%tagColors.length]},0.06);border-color:${tagColors[i%tagColors.length]},0.12);color:${tagTextColors[i%tagTextColors.length]};">${sanitize(s)}</span>`).join('')}</div>
       <div style="display:flex;gap:6px;margin-top:auto;">
