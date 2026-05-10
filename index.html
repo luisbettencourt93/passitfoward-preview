@@ -3625,25 +3625,29 @@
 
     <!-- STEP 2: After Stripe (no receipt needed) -->
     <div id="fund-step-2" style="display:none;text-align:center;">
-      <div style="font-size:3rem;margin-bottom:1rem;">✅</div>
-      <h2 style="font-size:1.5rem;margin-bottom:0.7rem;">Payment Sent!</h2>
-      <p style="color:#5a7a9a;font-size:0.88rem;margin-bottom:1rem;">The founder will verify your payment in Stripe and record your contribution. You'll get a notification once it's confirmed.</p>
-      <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:1rem;margin:1rem 0;text-align:left;">
-        <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
-          <span style="color:#64748b;">Amount</span>
-          <span style="color:white;font-weight:700;" id="fund-confirm-amount">—</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-top:6px;">
-          <span style="color:#64748b;">Member</span>
-          <span style="color:white;font-weight:700;" id="fund-confirm-handle">—</span>
-        </div>
-      </div>
-      <p style="color:#4b5563;font-size:0.75rem;margin-bottom:1rem;"><i class="fas fa-info-circle" style="margin-right:4px;"></i>Usually verified within 24 hours. Check your notifications.</p>
-      <button onclick="reopenStripe()" style="width:100%;padding:0.7rem;background:none;border:1px solid var(--border);color:#94a3b8;border-radius:999px;cursor:pointer;font-size:0.85rem;margin-bottom:0.5rem;">
-        <i class="fab fa-stripe" style="margin-right:5px;"></i> Reopen Stripe Tab
-      </button>
-      <button onclick="cancelFundStep2()" class="modal-cancel">Done</button>
+    <div style="font-size:3rem;margin-bottom:1rem;">🔵</div>
+    <h2 style="font-size:1.5rem;margin-bottom:0.7rem;">Stripe checkout opened</h2>
+    <p style="color:#5a7a9a;font-size:0.88rem;margin-bottom:1rem;">Complete your payment in the Stripe tab. If you already paid, the founder will verify and record your contribution.</p>
+    <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:12px;padding:1rem;margin:1rem 0;text-align:left;">
+    <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+      <span style="color:#64748b;">Amount selected</span>
+      <span style="color:white;font-weight:700;" id="fund-confirm-amount">—</span>
     </div>
+    <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-top:6px;">
+      <span style="color:#64748b;">Member</span>
+      <span style="color:white;font-weight:700;" id="fund-confirm-handle">—</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-top:6px;">
+      <span style="color:#64748b;">Status</span>
+      <span style="color:#60a5fa;font-weight:700;">Pending verification</span>
+    </div>
+  </div>
+  <p style="color:#4b5563;font-size:0.75rem;margin-bottom:1rem;"><i class="fas fa-info-circle" style="margin-right:4px;"></i>Verified contributions usually appear within 24 hours after payment. You'll get a notification once recorded.</p>
+  <button onclick="reopenStripe()" style="width:100%;padding:0.7rem;background:none;border:1px solid var(--border);color:#94a3b8;border-radius:999px;cursor:pointer;font-size:0.85rem;margin-bottom:0.5rem;">
+    <i class="fab fa-stripe" style="margin-right:5px;"></i> Reopen Stripe Tab
+  </button>
+  <button onclick="cancelFundStep2()" class="modal-cancel">Close</button>
+</div>
 
   </div>
 </div>
