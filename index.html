@@ -7794,10 +7794,12 @@ if (xUrlRaw && !_xResult) {
   try { renderDashboardPaymentNudge(); } catch(_) {}
   currentUser.avatar_url = avatarUrl;
   closeModal('profile-modal');
-  renderProfile();
-  updateAvatars();
-  showToast("Profile saved to database!");
-  pifRefreshProfileBanner();  
+renderProfile();
+updateAvatars();
+showToast("Profile saved to database!");
+pifRefreshProfileBanner();
+// Track 1.3C — refresh avatar banner so it reflects new avatar state immediately
+try { pifRefreshAvatarBanner(); } catch(_) {}
 }
 // -- TASKS ----------------------------------------------------------
 function updateAvatars() {
