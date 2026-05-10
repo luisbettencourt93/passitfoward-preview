@@ -5623,7 +5623,7 @@ async function loadLiveFeed(opts) {
   }
   renderLiveFeedOpps();
   renderTrendingOpps();
-  await renderLiveFeedForges();
+  await renderLiveFeedForges({ silent });
   await loadDealBoard();
   updateLfStats();
   loadLfTicker();
@@ -5771,7 +5771,7 @@ function renderLiveFeedOpps() {
       ca: o.created_at
     }))
   });
- const liveFeedIsLoading = feed.textContent && feed.textContent.includes('Loading opportunities');
+ const liveFeedIsLoading = feed.querySelector('.fa-spinner');
 
 if (window._lfOppsFingerprint === fingerprint && !liveFeedIsLoading) {
   // Nothing changed — keep current DOM, update count badge, exit.
@@ -5823,10 +5823,26 @@ window._lfOppsFingerprint = fingerprint;
   if (oc) oc.textContent = opportunities.length;
 }
 
-async function renderLiveFeedForges() {
+async function renderLiveFeedForges(opts) {
+  const silent = opts && opts.silent === true;
   const el = document.getElementById('livefeed-forges'); if (!el) return;
-  if (!sb) { el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">Not available</div>'; return; }
-  el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin" style="color:var(--primary);"></i></div>';
+
+  // DOM-state guard — if the panel is currently showing a loading spinner,
+  // force a real render regardless of fingerprint. Same pattern as Edit B's repair.
+  const isLoading = el.querySelector('.fa-spinner');
+
+  if (!sb) {
+    if (window._lfForgesFingerprint !== 'unavailable' || isLoading) {
+      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">Not available</div>';
+      window._lfForgesFingerprint = 'unavailable';
+    }
+    return;
+  }
+
+  // Only show spinner on manual calls, not silent auto-refresh
+  if (!silent) {
+    el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin" style="color:var(--primary);"></i></div>';
+  }
 
   // Only show active/pending deals, or settled ones completed within last 4 hours
   const { data: deals } = await sb.from('forged_deals')
@@ -5835,8 +5851,14 @@ async function renderLiveFeedForges() {
     .order('created_at', { ascending: false })
     .limit(30);
 
+  // Re-check DOM state after the await — could have changed during the network call
+  const stillLoading = el.querySelector('.fa-spinner');
+
   if (!deals?.length) {
-    el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No active forged deals right now.</div>';
+    if (window._lfForgesFingerprint !== 'empty' || stillLoading) {
+      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No active forged deals right now.</div>';
+      window._lfForgesFingerprint = 'empty';
+    }
     return;
   }
 
@@ -5851,9 +5873,29 @@ async function renderLiveFeedForges() {
   });
 
   if (!visible.length) {
-    el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No active forged deals right now.</div>';
+    if (window._lfForgesFingerprint !== 'empty' || stillLoading) {
+      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No active forged deals right now.</div>';
+      window._lfForgesFingerprint = 'empty';
+    }
     return;
   }
+
+  // Track polish — change-aware re-render. Build fingerprint of all data
+  // that affects the rendered output. Skip DOM update if unchanged.
+  const fingerprint = JSON.stringify(visible.map(d => ({
+    id: d.id,
+    t: d.title,
+    s: d.status,
+    o: d.outcome,
+    a: d.amount,
+    i: d.initiator_handle,
+    r: d.receiver_handle,
+    xp: d.initiator_xp_stake,
+    c: d.created_at,
+    co: d.completed_at
+  })));
+  if (window._lfForgesFingerprint === fingerprint && !stillLoading) return;
+  window._lfForgesFingerprint = fingerprint;
 
   el.innerHTML = visible.map(d => {
     let statusColor, statusLabel;
