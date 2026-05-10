@@ -2457,6 +2457,109 @@
   color: #00ff88;
   font-weight: 600;
 }
+/* =====================================================
+   Track 1.3C — Avatar prompt banner
+   Subordinate to profile completion banner.
+   Lighter color, softer presence, no progress bar.
+   ===================================================== */
+.avatar-banner {
+  position: sticky;
+  top: 56px; /* sits below the completion banner when both visible */
+  z-index: 49; /* one below the completion banner */
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.05), rgba(96, 165, 250, 0.02));
+  border-bottom: 1px solid rgba(96, 165, 250, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.avatar-banner-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 6px 16px;
+  box-sizing: border-box;
+}
+
+.avatar-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.avatar-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.avatar-banner-icon {
+  color: #60a5fa;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.avatar-banner-message {
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.avatar-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.avatar-banner-cta {
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  color: #60a5fa;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font: 600 12px/1 'Inter', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.avatar-banner-cta:hover {
+  background: rgba(96, 165, 250, 0.18);
+}
+
+.avatar-banner-close {
+  background: transparent;
+  border: none;
+  color: #5a7a9a;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.avatar-banner-close:hover {
+  color: #94a3b8;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .avatar-banner-inner { padding: 5px 10px; }
+  .avatar-banner-content { gap: 8px; }
+  .avatar-banner-message { font-size: 12px; }
+  .avatar-banner-cta {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+  /* On very narrow screens, hide the message and just show icon + CTA */
+  @media (max-width: 380px) {
+    .avatar-banner-message { display: none; }
+  }
+}
  </style> 
 </head>
 <body>
