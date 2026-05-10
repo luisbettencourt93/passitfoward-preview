@@ -5771,13 +5771,15 @@ function renderLiveFeedOpps() {
       ca: o.created_at
     }))
   });
-  if (window._lfOppsFingerprint === fingerprint) {
-    // Nothing changed — keep current DOM, update count badge, exit.
-    const oc = document.getElementById('opp-count');
-    if (oc) oc.textContent = opportunities.length;
-    return;
-  }
-  window._lfOppsFingerprint = fingerprint;
+ const liveFeedIsLoading = feed.textContent && feed.textContent.includes('Loading opportunities');
+
+if (window._lfOppsFingerprint === fingerprint && !liveFeedIsLoading) {
+  // Nothing changed — keep current DOM, update count badge, exit.
+  const oc = document.getElementById('opp-count');
+  if (oc) oc.textContent = opportunities.length;
+  return;
+}
+window._lfOppsFingerprint = fingerprint;
 
   if (!filtered.length) {
     feed.innerHTML = `<div style="padding:2.5rem;text-align:center;color:#4b5563;font-size:0.95rem;">No opportunities${activeFilter!=='All'?' in '+activeFilter:''} yet. Be the first!</div>`;
