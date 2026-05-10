@@ -7442,6 +7442,20 @@ function pifProfileCompleteness(profile) {
     cityOk
   };
 }
+// =====================================================
+// Track 1.3C — Avatar prompt detection
+// Returns true when the user has no real avatar set.
+// "Real" = avatar_url is non-empty AND looks like a valid http(s) URL.
+// Empty + invalid both fall back to initials display, both count as missing.
+// =====================================================
+function pifIsAvatarMissing(profile) {
+  if (!profile) return false; // No profile → no prompt (logged out, etc.)
+  const url = typeof profile.avatar_url === 'string' ? profile.avatar_url.trim() : '';
+  if (!url) return true;
+  // Same validation pattern as updateAvatarPreview — must be http(s)
+  if (!/^https?:\/\/.+/i.test(url)) return true;
+  return false;
+}
   // =====================================================
 // PROFILE BANNER INJECTION + LIFECYCLE (Layer 4 Track 1)
 // =====================================================
