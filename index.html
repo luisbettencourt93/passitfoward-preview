@@ -5746,13 +5746,49 @@ function renderLiveFeedOpps() {
     const myCity = currentUser.city.toLowerCase().trim();
     filtered = filtered.filter(o => o.location && o.location.toLowerCase().trim().includes(myCity));
   }
+
+  // Track polish — change-aware re-render.
+  // Build a fingerprint of what we're about to render. If it matches the last
+  // render, skip DOM updates entirely. Prevents card blink and scroll reset
+  // during the silent 15-second auto-refresh when nothing actually changed.
+  const activeForgeKey = window._activeForgeOppIds ? Array.from(window._activeForgeOppIds).sort().join('|') : '';
+  const fingerprint = JSON.stringify({
+    filter: activeFilter,
+    loc: !!window._lfLocationFilter,
+    city: currentUser?.city || '',
+    forge: activeForgeKey,
+    items: filtered.map(o => ({
+      id: o.id,
+      t: o.title,
+      d: o.desc,
+      c: o.category,
+      i: o.interest,
+      p: o.poster,
+      pid: o.poster_id,
+      b: o.budget,
+      ty: o.type,
+      l: o.location,
+      ca: o.created_at
+    }))
+  });
+  if (window._lfOppsFingerprint === fingerprint) {
+    // Nothing changed — keep current DOM, update count badge, exit.
+    const oc = document.getElementById('opp-count');
+    if (oc) oc.textContent = opportunities.length;
+    return;
+  }
+  window._lfOppsFingerprint = fingerprint;
+
   if (!filtered.length) {
     feed.innerHTML = `<div style="padding:2.5rem;text-align:center;color:#4b5563;font-size:0.95rem;">No opportunities${activeFilter!=='All'?' in '+activeFilter:''} yet. Be the first!</div>`;
+    const oc = document.getElementById('opp-count');
+    if (oc) oc.textContent = opportunities.length;
     return;
   }
   feed.innerHTML = '';
   const fiveMinAgo = Date.now() - (5 * 60 * 1000);
   filtered.forEach(opp => {
+  
     const isMine = currentUser && (opp.poster === currentUser.handle || String(opp.poster_id) === String(currentUser.id));
     const isNew = opp.created_at && new Date(opp.created_at).getTime() > fiveMinAgo;
     const ago = opp.created_at ? timeAgo(opp.created_at) : '';
