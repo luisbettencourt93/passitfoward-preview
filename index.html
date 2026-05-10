@@ -7676,7 +7676,55 @@ function pifFocusMissingField(field) {
     try { el.focus(); } catch(_) {}
   }, 400);
 }
+// =====================================================
+// Track 1.3C — Avatar prompt banner lifecycle
+// Independent of profile completion banner. Same dismiss/render pattern.
+// =====================================================
 
+function pifShouldShowAvatarBanner() {
+  // No prompt for logged-out users
+  if (!currentUser || !currentUser.handle) return false;
+  // Respect per-session dismissal
+  if (sessionStorage.getItem('pf_avatar_banner_dismissed') === '1') return false;
+  // Only show if avatar is missing/invalid
+  return pifIsAvatarMissing(currentUser);
+}
+
+function pifRenderAvatarBanner() {
+  const banner = document.getElementById('avatar-prompt-banner');
+  if (!banner) return;
+  banner.style.display = pifShouldShowAvatarBanner() ? 'block' : 'none';
+}
+
+function pifDismissAvatarBanner() {
+  sessionStorage.setItem('pf_avatar_banner_dismissed', '1');
+  const banner = document.getElementById('avatar-prompt-banner');
+  if (banner) banner.style.display = 'none';
+}
+
+function pifOpenProfileForAvatar() {
+  // Open the existing profile modal
+  if (typeof openProfileModal === 'function') {
+    openProfileModal();
+  } else if (typeof showProfileModal === 'function') {
+    showProfileModal();
+  }
+  // Scroll/focus the avatar field after modal opens
+  setTimeout(() => {
+    const el = document.getElementById('edit-avatar-url');
+    if (!el) return;
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) {}
+    setTimeout(() => { try { el.focus(); } catch(_) {} }, 400);
+  }, 300);
+}
+
+function pifRefreshAvatarBanner() {
+  // If avatar is now valid, clear dismissal so it doesn't ghost-suppress next session
+  if (currentUser && !pifIsAvatarMissing(currentUser)) {
+    sessionStorage.removeItem('pf_avatar_banner_dismissed');
+  }
+  pifRenderAvatarBanner();
+}
 function pifRefreshProfileBanner() {
   const c = pifProfileCompleteness(currentUser);
   if (c.complete) {
@@ -7686,7 +7734,10 @@ function pifRefreshProfileBanner() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(pifRenderProfileBanner, 1000);
+  setTimeout(() => {
+    pifRenderProfileBanner();
+    pifRenderAvatarBanner();
+  }, 1000);
 });
   async function saveProfile() {
   const displayName = document.getElementById('edit-display-name')?.value.trim() || '';
