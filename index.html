@@ -2550,7 +2550,23 @@
     </div>
   </div>
 </div>
-
+<!-- Track 1.3C — Avatar prompt banner (separate from profile completion) -->
+<div id="avatar-prompt-banner" class="avatar-banner" style="display: none;">
+  <div class="avatar-banner-inner">
+    <div class="avatar-banner-content">
+      <div class="avatar-banner-text">
+        <span class="avatar-banner-icon" aria-hidden="true">
+          <i class="fas fa-user-circle"></i>
+        </span>
+        <span class="avatar-banner-message">Set a profile picture so members can put a face to your name.</span>
+      </div>
+      <div class="avatar-banner-actions">
+        <button class="avatar-banner-cta" onclick="pifOpenProfileForAvatar()">Add avatar</button>
+        <button class="avatar-banner-close" onclick="pifDismissAvatarBanner()" aria-label="Dismiss">×</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- HERO -->
 <section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#0d1520;">
