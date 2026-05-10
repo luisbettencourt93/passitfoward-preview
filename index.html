@@ -5073,10 +5073,10 @@ async function updateLfStats() {
   }
 }
 
-// Auto-refresh live feed every 20 seconds
+// Auto-refresh live feed every 15 seconds (silent — no spinner flash)
 setInterval(async ()=>{
   if(document.getElementById('livefeed')?.style.display !== 'none' && currentUser) {
-    await loadLiveFeed();
+    await loadLiveFeed({ silent: true });
     const upd = document.getElementById('lf-last-update');
     if(upd) upd.textContent = 'Updated just now';
   }
@@ -5599,9 +5599,12 @@ function switchTab(tabId) {
 }
 
 // -- LIVE FEED (opportunities + forged deals) ----------------------
-async function loadLiveFeed() {
+async function loadLiveFeed(opts) {
+  const silent = opts && opts.silent === true;
   renderLiveFeedFilters();
-  setLoading('livefeed-opps', 'Loading opportunities…');
+  // Track polish — skip the loading spinner during silent (auto-refresh) calls.
+  // Manual calls (tab switch, post-publish, click) keep the spinner so users get visual feedback.
+  if (!silent) setLoading('livefeed-opps', 'Loading opportunities…');
   if (sb) {
     const { data, error } = await sb.from('opportunities').select('*').order('created_at', { ascending: false });
     if (!error && data) {
