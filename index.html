@@ -2,9 +2,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pass It Forward | Opportunity Infrastructure</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pass It Forward | Opportunity Infrastructure</title>
 <meta name="description" content="Pass It Forward is a global opportunity infrastructure platform where people build trust, show skills, support each other, forge deals, and create real income through community.">
 <meta name="keywords" content="Pass It Forward, opportunity infrastructure, skills marketplace, global community, member support, forge deals, XP reputation, remote work, NEXAR AI">
 <meta name="author" content="Pass It Forward">
@@ -57,7 +57,6 @@
     .lp-orb { position:absolute; border-radius:9999px; pointer-events:none; filter:blur(120px); opacity:0.25; }
     .lp-orb-teal { background:#2dd4a0; }
     .lp-orb-orange { background:#f97316; }
-    .lp-orb-cyan { background:#22d3ee; opacity:0.18; }
     .lp-grid-pattern { position:absolute; inset:0; background-image:linear-gradient(rgba(232,240,248,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(232,240,248,0.04) 1px,transparent 1px); background-size:60px 60px; pointer-events:none; }
     .lp-live-badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(45,212,160,0.3); background:rgba(45,212,160,0.12); color:#2dd4a0; font:700 11px/1 'Inter',sans-serif; letter-spacing:0.12em; text-transform:uppercase; padding:7px 14px; border-radius:9999px; margin-bottom:28px; }
     .lp-live-dot { width:7px; height:7px; border-radius:9999px; background:#2dd4a0; animation:lp-pulse 1.6s ease-in-out infinite; }
@@ -78,102 +77,6 @@
     .lp-tier.t-gold { border-color:rgba(250,204,21,0.3); background:rgba(250,204,21,0.05); }
     .lp-popular { position:absolute; top:12px; right:12px; font:700 9px/1 'Inter',sans-serif; letter-spacing:0.1em; text-transform:uppercase; background:#f97316; color:#0d1520; padding:3px 8px; border-radius:9999px; }
     .lp-trust { border-top:1px solid #2d4f6f; border-bottom:1px solid #2d4f6f; background:#111e2e; padding:18px 24px; }
-
- /* Hero text column — keeps headline/subhead/CTAs contained over Earth */
-.hero-text-column { width:100%; max-width:820px; margin:0 auto; text-align:center; display:block; }
-#hero .lp-fade { display:block !important; text-align:center !important; }
-
-#hero .hero-metric-row {
-  width:100% !important;
-  max-width:880px !important;
-  margin:0 auto !important;
-  clear:both !important;
-}
-@media (max-width: 720px) {
-  .hero-text-column { max-width: 100%; }
-}
-
-/* Mobile hero — Earth sizing + readability adjustments */
-@media (max-width: 720px) {
-  #hero {
-    background-size: cover, 130% auto !important;
-    background-position: center, center 30% !important;
-    padding-top: 64px !important;
-    padding-bottom: 32px !important;
-  }
-}
-
-@media (max-width: 480px) {
-  #hero {
-    background-size: cover, 160% auto !important;
-    background-position: center, center 22% !important;
-  }
-}
-  /* Hero metric cards */
-.hero-metric-card {
-  background: linear-gradient(180deg, rgba(17,30,46,0.6), rgba(13,21,32,0.7));
-  border: 1px solid rgba(45,212,160,0.18);
-  border-radius: 14px;
-  padding: 18px 16px 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  transition: border-color 0.2s, transform 0.2s, background 0.2s;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-}
-
-.hero-metric-card:hover {
-  border-color: rgba(45,212,160,0.4);
-  transform: translateY(-2px);
-}
-
-.hero-metric-icon {
-  color: #2dd4a0;
-  opacity: 0.85;
-  margin-bottom: 8px;
-  display: inline-flex;
-}
-
-.hero-metric-value {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: clamp(24px, 3.4vw, 36px);
-  font-weight: 700;
-  color: #2dd4a0;
-  line-height: 1.1;
-  display: block;
-}
-
-.hero-metric-label {
-  font-size: 10px;
-  color: #5a7a9a;
-  margin-top: 6px;
-  display: block;
-  font-family: 'Inter', sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 1.4px;
-  font-weight: 600;
-}
-
-@media (max-width: 720px) {
-  .hero-metric-row {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 10px !important;
-    max-width: 100% !important;
-  }
-
-  .hero-metric-card {
-    padding: 14px 10px 12px;
-  }
-}
-
-@media (max-width: 380px) {
-  .hero-metric-icon svg {
-    width: 16px;
-    height: 16px;
-  }
-}
     .lp-story { background:#0d1520; border:1px solid #2d4f6f; border-radius:18px; padding:22px; transition:border-color 0.2s; }
     .lp-story:hover { border-color:rgba(45,212,160,0.3); }
     .lp-fade { opacity:0; transform:translateY(28px); transition:opacity 0.65s ease,transform 0.65s ease; }
@@ -2769,55 +2672,27 @@
 </div>
 
 <!-- HERO -->
-<section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background-color:#0d1520;background-image:radial-gradient(ellipse at 50% 45%, rgba(13,21,32,0.35) 0%, rgba(13,21,32,0.78) 65%, #0d1520 100%), url('https://passitfoward.xyz/img/earth-hero.webp');background-size:cover, 78% auto;background-position:center, center 58%;background-repeat:no-repeat, no-repeat;">  <div class="lp-orb lp-orb-teal" style="width:600px;height:600px;top:-100px;left:-200px;"></div>
-<div class="lp-orb lp-orb-cyan" style="width:520px;height:520px;bottom:-120px;left:25%;"></div>
-<div class="lp-orb lp-orb-orange" style="width:380px;height:380px;top:20%;right:-80px;"></div>
-<div class="lp-grid-pattern"></div>
+<section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#0d1520;">
+  <div class="lp-orb lp-orb-teal" style="width:600px;height:600px;top:-100px;left:-200px;"></div>
+  <div class="lp-orb lp-orb-orange" style="width:380px;height:380px;top:20%;right:-80px;"></div>
+  <div class="lp-grid-pattern"></div>
   <div style="position:relative;z-index:2;width:100%;padding:80px 24px;max-width:1200px;margin:0 auto;text-align:center;" class="lp-fade">
     <div class="lp-live-badge"><span class="lp-live-dot"></span>Now Live — Join the Movement</div>
-<div class="hero-text-column">
-  <h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(38px,5.5vw,68px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span><br>Execute <span style="color:#22d3ee;">faster.</span></h1>
-  <p style="font-size:clamp(15px,1.6vw,18px);color:#94a3b8;max-width:520px;margin:0 auto 32px;line-height:1.6;font-family:'Inter',sans-serif;text-shadow:0 1px 2px rgba(0,0,0,0.5);">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
-  <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px;">
-    <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" class="lp-btn">Request access →</button>
-    <button onclick="switchTab('about')" class="lp-btn-outline">How It Works</button>
-  </div>
-</div>
-    
-  </div>
-
-      <div style="margin-bottom:40px;">
+    <h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(42px,7vw,84px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span> Execute faster.</h1>
+    <p style="font-size:clamp(16px,2vw,19px);color:#5a7a9a;max-width:600px;margin:0 auto 36px;line-height:1.65;font-family:'Inter',sans-serif;">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px;">
+      <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" class="lp-btn">Request access →</button>
+      <button onclick="switchTab('about')" class="lp-btn-outline">How It Works</button>
+    </div>
+    <div style="margin-bottom:40px;">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:20px;"><span class="lp-live-dot"></span><span style="font:700 11px/1 'Inter',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:#2dd4a0;">GLOBAL NETWORK METRICS</span></div>
-      <div class="hero-metric-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:880px;margin:0 auto;">
-        <div class="hero-metric-card">
-          <span class="hero-metric-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </span>
-          <span id="hero-stat-members" class="hero-metric-value">—</span>
-          <span class="hero-metric-label">Members</span>
-        </div>
-        <div class="hero-metric-card">
-          <span class="hero-metric-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-          </span>
-          <span id="hero-stat-deals" class="hero-metric-value">—</span>
-          <span class="hero-metric-label">Deals Forged</span>
-        </div>
-        <div class="hero-metric-card">
-          <span class="hero-metric-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          </span>
-          <span id="hero-stat-xp" class="hero-metric-value">—</span>
-          <span class="hero-metric-label">XP Earned</span>
-        </div>
-        <div class="hero-metric-card">
-          <span class="hero-metric-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-          </span>
-          <span id="hero-stat-opps" class="hero-metric-value">—</span>
-          <span class="hero-metric-label">Live Opportunities</span>
-        </div>
+      <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:48px;">
+        <div style="text-align:center;"><span id="hero-stat-members" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Members</span></div>
+        <div style="text-align:center;"><span id="hero-stat-deals" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Deals Forged</span></div>
+        <div style="text-align:center;"><span id="hero-stat-xp" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">XP Earned</span></div>
+        <div style="text-align:center;"><span style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">48hrs</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Avg Response</span></div>
       </div>
+    </div>
     <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:10px;">
       <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Self-made growth</span>
       <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Real opportunities</span>
@@ -9246,10 +9121,6 @@ async function loadHeroStats() {
     const totalXp = (profiles||[]).reduce((s,p) => s + (p.xp||0), 0);
     const el3 = document.getElementById('hero-stat-xp');
     if(el3) el3.textContent = totalXp >= 1000 ? Math.floor(totalXp/1000) + 'k+' : totalXp + '+';
-    // Live opportunities
-   const { count: oppCount } = await sb.from('opportunities').select('*',{count:'exact',head:true});
-   const el4 = document.getElementById('hero-stat-opps');
-   if(el4) el4.textContent = (oppCount||0) + '+';
   } catch(e) { console.warn('Hero stats:', e.message); }
 }
 
