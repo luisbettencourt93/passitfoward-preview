@@ -80,8 +80,15 @@
     .lp-trust { border-top:1px solid #2d4f6f; border-bottom:1px solid #2d4f6f; background:#111e2e; padding:18px 24px; }
 
  /* Hero text column — keeps headline/subhead/CTAs contained over Earth */
-.hero-text-column { max-width: 720px; margin: 0 auto; }
+.hero-text-column { width:100%; max-width:820px; margin:0 auto; text-align:center; display:block; }
+#hero .lp-fade { display:block !important; text-align:center !important; }
 
+#hero .hero-metric-row {
+  width:100% !important;
+  max-width:880px !important;
+  margin:0 auto !important;
+  clear:both !important;
+}
 @media (max-width: 720px) {
   .hero-text-column { max-width: 100%; }
 }
