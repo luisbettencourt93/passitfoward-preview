@@ -9121,6 +9121,10 @@ async function loadHeroStats() {
     const totalXp = (profiles||[]).reduce((s,p) => s + (p.xp||0), 0);
     const el3 = document.getElementById('hero-stat-xp');
     if(el3) el3.textContent = totalXp >= 1000 ? Math.floor(totalXp/1000) + 'k+' : totalXp + '+';
+    // Live opportunities
+   const { count: oppCount } = await sb.from('opportunities').select('*',{count:'exact',head:true});
+   const el4 = document.getElementById('hero-stat-opps');
+   if(el4) el4.textContent = (oppCount||0) + '+';
   } catch(e) { console.warn('Hero stats:', e.message); }
 }
 
