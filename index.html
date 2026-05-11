@@ -79,7 +79,30 @@
     .lp-popular { position:absolute; top:12px; right:12px; font:700 9px/1 'Inter',sans-serif; letter-spacing:0.1em; text-transform:uppercase; background:#f97316; color:#0d1520; padding:3px 8px; border-radius:9999px; }
     .lp-trust { border-top:1px solid #2d4f6f; border-bottom:1px solid #2d4f6f; background:#111e2e; padding:18px 24px; }
 
-/* Hero metric cards */
+ /* Hero text column — keeps headline/subhead/CTAs contained over Earth */
+.hero-text-column { max-width: 720px; margin: 0 auto; }
+
+@media (max-width: 720px) {
+  .hero-text-column { max-width: 100%; }
+}
+
+/* Mobile hero — Earth sizing + readability adjustments */
+@media (max-width: 720px) {
+  #hero {
+    background-size: cover, 130% auto !important;
+    background-position: center, center 30% !important;
+    padding-top: 64px !important;
+    padding-bottom: 32px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #hero {
+    background-size: cover, 160% auto !important;
+    background-position: center, center 22% !important;
+  }
+}
+  /* Hero metric cards */
 .hero-metric-card {
   background: linear-gradient(180deg, rgba(17,30,46,0.6), rgba(13,21,32,0.7));
   border: 1px solid rgba(45,212,160,0.18);
@@ -2745,12 +2768,18 @@
 <div class="lp-grid-pattern"></div>
   <div style="position:relative;z-index:2;width:100%;padding:80px 24px;max-width:1200px;margin:0 auto;text-align:center;" class="lp-fade">
     <div class="lp-live-badge"><span class="lp-live-dot"></span>Now Live — Join the Movement</div>
-<h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(42px,7vw,84px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span> Execute <span style="color:#22d3ee;">faster.</span></h1>    <p style="font-size:clamp(16px,2vw,19px);color:#5a7a9a;max-width:600px;margin:0 auto 36px;line-height:1.65;font-family:'Inter',sans-serif;">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
-    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px;">
-      <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" class="lp-btn">Request access →</button>
-      <button onclick="switchTab('about')" class="lp-btn-outline">How It Works</button>
-    </div>
-    <div style="margin-bottom:40px;">
+<div class="hero-text-column">
+  <h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(38px,5.5vw,68px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span><br>Execute <span style="color:#22d3ee;">faster.</span></h1>
+  <p style="font-size:clamp(15px,1.6vw,18px);color:#94a3b8;max-width:520px;margin:0 auto 32px;line-height:1.6;font-family:'Inter',sans-serif;text-shadow:0 1px 2px rgba(0,0,0,0.5);">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
+  <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px;">
+    <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" class="lp-btn">Request access →</button>
+    <button onclick="switchTab('about')" class="lp-btn-outline">How It Works</button>
+  </div>
+</div>
+    
+  </div>
+
+      <div style="margin-bottom:40px;">
       <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:20px;"><span class="lp-live-dot"></span><span style="font:700 11px/1 'Inter',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:#2dd4a0;">GLOBAL NETWORK METRICS</span></div>
       <div class="hero-metric-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:880px;margin:0 auto;">
         <div class="hero-metric-card">
