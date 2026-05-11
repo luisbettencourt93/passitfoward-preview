@@ -57,6 +57,7 @@
     .lp-orb { position:absolute; border-radius:9999px; pointer-events:none; filter:blur(120px); opacity:0.25; }
     .lp-orb-teal { background:#2dd4a0; }
     .lp-orb-orange { background:#f97316; }
+    .lp-orb-cyan { background:#22d3ee; opacity:0.18; }
     .lp-grid-pattern { position:absolute; inset:0; background-image:linear-gradient(rgba(232,240,248,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(232,240,248,0.04) 1px,transparent 1px); background-size:60px 60px; pointer-events:none; }
     .lp-live-badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(45,212,160,0.3); background:rgba(45,212,160,0.12); color:#2dd4a0; font:700 11px/1 'Inter',sans-serif; letter-spacing:0.12em; text-transform:uppercase; padding:7px 14px; border-radius:9999px; margin-bottom:28px; }
     .lp-live-dot { width:7px; height:7px; border-radius:9999px; background:#2dd4a0; animation:lp-pulse 1.6s ease-in-out infinite; }
@@ -2740,12 +2741,12 @@
 <!-- HERO -->
 <section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#0d1520;">
   <div class="lp-orb lp-orb-teal" style="width:600px;height:600px;top:-100px;left:-200px;"></div>
-  <div class="lp-orb lp-orb-orange" style="width:380px;height:380px;top:20%;right:-80px;"></div>
-  <div class="lp-grid-pattern"></div>
+<div class="lp-orb lp-orb-cyan" style="width:520px;height:520px;bottom:-120px;left:25%;"></div>
+<div class="lp-orb lp-orb-orange" style="width:380px;height:380px;top:20%;right:-80px;"></div>
+<div class="lp-grid-pattern"></div>
   <div style="position:relative;z-index:2;width:100%;padding:80px 24px;max-width:1200px;margin:0 auto;text-align:center;" class="lp-fade">
     <div class="lp-live-badge"><span class="lp-live-dot"></span>Now Live — Join the Movement</div>
-    <h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(42px,7vw,84px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span> Execute faster.</h1>
-    <p style="font-size:clamp(16px,2vw,19px);color:#5a7a9a;max-width:600px;margin:0 auto 36px;line-height:1.65;font-family:'Inter',sans-serif;">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
+<h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(42px,7vw,84px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span> Execute <span style="color:#22d3ee;">faster.</span></h1>    <p style="font-size:clamp(16px,2vw,19px);color:#5a7a9a;max-width:600px;margin:0 auto 36px;line-height:1.65;font-family:'Inter',sans-serif;">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
     <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px;">
       <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" class="lp-btn">Request access →</button>
       <button onclick="switchTab('about')" class="lp-btn-outline">How It Works</button>
