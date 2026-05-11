@@ -2690,7 +2690,7 @@
         <div style="text-align:center;"><span id="hero-stat-members" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Members</span></div>
         <div style="text-align:center;"><span id="hero-stat-deals" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Deals Forged</span></div>
         <div style="text-align:center;"><span id="hero-stat-xp" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">XP Earned</span></div>
-        <div style="text-align:center;"><span style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">48hrs</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Avg Response</span></div>
+        <div style="text-align:center;"><span id="hero-stat-opps" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Live Opportunities</span></div>
       </div>
     </div>
     <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:10px;">
@@ -9121,7 +9121,14 @@ async function loadHeroStats() {
     const totalXp = (profiles||[]).reduce((s,p) => s + (p.xp||0), 0);
     const el3 = document.getElementById('hero-stat-xp');
     if(el3) el3.textContent = totalXp >= 1000 ? Math.floor(totalXp/1000) + 'k+' : totalXp + '+';
+
+    // Live opportunities (real count from existing table)
+    const { count: oppCount } = await sb.from('opportunities').select('*',{count:'exact',head:true});
+    const el4 = document.getElementById('hero-stat-opps');
+    if(el4) el4.textContent = (oppCount||0) + '+';
   } catch(e) { console.warn('Hero stats:', e.message); }
+}
+
 }
 
 // -- LANDING PAGE TESTIMONIALS (live from Supabase) --------------
