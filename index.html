@@ -4504,7 +4504,29 @@
     <button type="button" data-intent="Hire someone" onclick="toggleIntent('Hire someone')" class="intent-chip">👥 Hire someone</button>
   </div>
 </div>
-
+<!-- Phase 2 V1 — Work Examples (trust layer) -->
+<div style="margin-bottom:0.8rem;">
+  <label style="display:block;font-size:12px;color:#7a8fa7;font-weight:600;margin-bottom:6px;">Work examples <span style="color:#5a7a9a;font-weight:400;">(up to 3)</span></label>
+  <div id="work-examples-preview" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+  <div id="work-example-form" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px;display:none;">
+    <input type="text" id="we-title" maxlength="60" placeholder="Title (e.g. Landing page for X)" class="form-input" style="margin-bottom:6px;font-size:13px;">
+    <input type="url" id="we-link" maxlength="500" placeholder="Link (https://...)" class="form-input" style="margin-bottom:6px;font-size:13px;">
+    <select id="we-category" class="form-input form-select" style="margin-bottom:6px;font-size:13px;">
+      <option value="Design">Design</option>
+      <option value="Development">Development</option>
+      <option value="Marketing">Marketing</option>
+      <option value="Writing">Writing</option>
+      <option value="Consulting">Consulting</option>
+      <option value="Other" selected>Other</option>
+    </select>
+    <textarea id="we-description" maxlength="280" placeholder="Short description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
+    <div style="display:flex;gap:6px;">
+      <button type="button" onclick="saveWorkExample()" style="flex:1;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.4);color:#2dd4a0;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Add example</button>
+      <button type="button" onclick="cancelWorkExampleForm()" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
+    </div>
+  </div>
+  <button type="button" id="we-add-btn" onclick="showWorkExampleForm()" style="background:rgba(255,255,255,0.03);border:1px dashed #2d4f6f;color:#94a3b8;padding:8px 14px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;width:100%;">+ Add work example</button>
+</div>
 <div style="margin-bottom:0.8rem;">
   <input type="text" id="edit-x-url" aria-label="X username or profile URL" placeholder="X username (e.g. MrGentleman93)" class="form-input" oninput="updateXUrlPreview(this.value)" style="margin-bottom:6px;">
   <div id="edit-x-url-preview" style="font-size:11px;color:#5a7a9a;line-height:1.4;min-height:14px;"></div>
