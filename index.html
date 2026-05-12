@@ -7611,6 +7611,61 @@ function renderIntentsPicker() {
     btn.classList.toggle('disabled', !isActive && atCap);
   });
 }
+  
+// =====================================================
+// Phase 2 V1 — Proof of Work / Work Showcase helpers
+// Trust layer: text + link only, no uploads, no deal integration.
+// =====================================================
+const VALID_WORK_CATEGORIES = [
+  'Design',
+  'Development',
+  'Marketing',
+  'Writing',
+  'Consulting',
+  'Other'
+];
+
+// Returns null if invalid, or a cleaned object if valid.
+// Required: title (1-60 chars), link (http(s) URL, max 500 chars).
+// Optional: description (max 280 chars), category (from VALID_WORK_CATEGORIES, defaults to 'Other').
+function pifValidateWorkExample(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+
+  const title = typeof obj.title === 'string' ? obj.title.trim() : '';
+  if (!title || title.length > 60) return null;
+
+  const link = typeof obj.link === 'string' ? obj.link.trim() : '';
+  if (!link || link.length > 500) return null;
+
+  const lowerLink = link.toLowerCase();
+  if (lowerLink.startsWith('javascript:') ||
+      lowerLink.startsWith('data:') ||
+      lowerLink.startsWith('vbscript:') ||
+      lowerLink.startsWith('file:')) return null;
+
+  if (!/^https?:\/\/.+/i.test(link)) return null;
+
+  const description = typeof obj.description === 'string'
+    ? obj.description.trim().slice(0, 280)
+    : '';
+
+  let category = typeof obj.category === 'string' ? obj.category.trim() : '';
+  if (!VALID_WORK_CATEGORIES.includes(category)) category = 'Other';
+
+  return { title, link, description, category };
+}
+
+// Strips bad entries, caps at 3.
+function pifSanitizeWorkExamples(arr) {
+  if (!Array.isArray(arr)) return [];
+  const cleaned = [];
+  for (const item of arr) {
+    const valid = pifValidateWorkExample(item);
+    if (valid) cleaned.push(valid);
+    if (cleaned.length >= 3) break;
+  }
+  return cleaned;
+}
 // =====================================================
 // PROFILE COMPLETION CHECK (Layer 4 Track 1)
 // =====================================================
