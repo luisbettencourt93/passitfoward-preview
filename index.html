@@ -7678,7 +7678,15 @@ function pifValidateWorkExample(obj) {
       lowerLink.startsWith('vbscript:') ||
       lowerLink.startsWith('file:')) return null;
 
-  if (!/^https?:\/\/.+/i.test(link)) return null;
+  // Require http/https and a parseable URL with a real hostname
+ if (!/^https?:\/\/.+/i.test(link)) return null;
+ try {
+  const u = new URL(link);
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (!u.hostname || u.hostname.length < 3 || !u.hostname.includes('.')) return null;
+} catch (_) {
+  return null;
+}
 
   const description = typeof obj.description === 'string'
     ? obj.description.trim().slice(0, 280)
