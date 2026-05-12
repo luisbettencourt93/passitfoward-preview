@@ -7584,7 +7584,20 @@ pendingIntents = existingIntents
   .slice(0, 3);
 
 renderIntentsPicker();
+// Phase 2 V1 — load existing work examples into the editor
+// Priority: live currentUser.work_examples (Supabase truth) > localStorage > empty
+const existingWE = (Array.isArray(currentUser?.work_examples) && currentUser.work_examples.length)
+  ? currentUser.work_examples
+  : (Array.isArray(p.work_examples) ? p.work_examples : []);
 
+pendingWorkExamples = pifSanitizeWorkExamples(existingWE);
+renderWorkExamplesPreview();
+
+// Reset the form to a clean state on modal open
+const weForm = document.getElementById('work-example-form');
+const weAddBtn = document.getElementById('we-add-btn');
+if (weForm) weForm.style.display = 'none';
+if (weAddBtn) weAddBtn.style.display = pendingWorkExamples.length >= 3 ? 'none' : '';
 document.getElementById('profile-modal').style.display='flex';
 }
 function addSkill(){const i=document.getElementById('skill-input');const v=i.value.trim();if(!v||pendingSkills.includes(v)||pendingSkills.length>=8){if(pendingSkills.length>=8)showToast("Max 8 skills");return;}pendingSkills.push(v);i.value='';renderSkillsPreview();}
@@ -8000,10 +8013,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // Track 1.3B — normalize X URL before save
 // null = invalid → store empty string (display fallback to "No X linked")
 // valid object → store canonical https://x.com/{username}
-const _xResult = pifNormalizeXUrl(xUrlRaw);
-const xUrl = _xResult ? _xResult.url : '';
+  const _xResult = pifNormalizeXUrl(xUrlRaw);
+  const xUrl = _xResult ? _xResult.url : '';
 // Warn user if they typed something that didn't normalize cleanly
-if (xUrlRaw && !_xResult) {
+   if (xUrlRaw && !_xResult) {
   showToast('X username invalid — link not saved');
 }
   const city = document.getElementById('edit-city')?.value || '';
@@ -8015,13 +8028,15 @@ if (xUrlRaw && !_xResult) {
     .filter(v => typeof v === 'string' && VALID_INTENTS.includes(v))
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .slice(0, 3);
-  localStorage.setItem('pf_profile_' + currentUser.handle, JSON.stringify({ display_name: displayName, bio, skills: pendingSkills, intents: intentsToSave, xUrl, city, stripeLink, usdtAddress, avatarUrl }));
-  if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
+   // Phase 2 V1 — sanitize work examples before save
+  const workExamplesToSave = pifSanitizeWorkExamples(pendingWorkExamples);
+  localStorage.setItem('pf_profile_' + currentUser.handle, JSON.stringify({ display_name: displayName, bio, skills: pendingSkills, intents: intentsToSave, work_examples: workExamplesToSave, xUrl, city, stripeLink, usdtAddress, avatarUrl }));  if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
     const { error } = await sb.from('profiles').update({
       display_name: displayName,
       bio,
       skills: pendingSkills,
       intents: intentsToSave,
+      work_examples: workExamplesToSave,
       x_url: xUrl,
       city: city,
       stripe_link: stripeLink,
@@ -8040,6 +8055,7 @@ if (xUrlRaw && !_xResult) {
   currentUser.bio = bio;
   currentUser.skills = pendingSkills;
   currentUser.intents = intentsToSave;
+  currentUser.work_examples = workExamplesToSave;
   currentUser.x_url = xUrl;
   currentUser.city = city;
   currentUser.stripe_link = stripeLink;
