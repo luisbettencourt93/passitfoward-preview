@@ -7688,6 +7688,96 @@ function pifSanitizeWorkExamples(arr) {
   }
   return cleaned;
 }
+// Phase 2 V1 — Work examples state + UI handlers
+let pendingWorkExamples = [];
+
+function showWorkExampleForm() {
+  if (pendingWorkExamples.length >= 3) {
+    showToast('Max 3 work examples — remove one first');
+    return;
+  }
+  const form = document.getElementById('work-example-form');
+  const addBtn = document.getElementById('we-add-btn');
+  if (form) form.style.display = 'block';
+  if (addBtn) addBtn.style.display = 'none';
+
+  const t = document.getElementById('we-title'); if (t) t.value = '';
+  const l = document.getElementById('we-link'); if (l) l.value = '';
+  const c = document.getElementById('we-category'); if (c) c.value = 'Other';
+  const d = document.getElementById('we-description'); if (d) d.value = '';
+  if (t) setTimeout(() => { try { t.focus(); } catch(_) {} }, 50);
+}
+
+function cancelWorkExampleForm() {
+  const form = document.getElementById('work-example-form');
+  const addBtn = document.getElementById('we-add-btn');
+  if (form) form.style.display = 'none';
+  if (addBtn) addBtn.style.display = '';
+}
+
+function saveWorkExample() {
+  const title = (document.getElementById('we-title')?.value || '').trim();
+  const link = (document.getElementById('we-link')?.value || '').trim();
+  const category = (document.getElementById('we-category')?.value || 'Other').trim();
+  const description = (document.getElementById('we-description')?.value || '').trim();
+
+  const valid = pifValidateWorkExample({ title, link, category, description });
+  if (!valid) {
+    if (!title) { showToast('Title required'); return; }
+    if (!link) { showToast('Link required'); return; }
+    if (!/^https?:\/\/.+/i.test(link)) { showToast('Link must start with http:// or https://'); return; }
+    showToast('Invalid example — check link format');
+    return;
+  }
+
+  if (pendingWorkExamples.length >= 3) {
+    showToast('Max 3 work examples');
+    return;
+  }
+
+  pendingWorkExamples.push(valid);
+  cancelWorkExampleForm();
+  renderWorkExamplesPreview();
+}
+
+function removeWorkExample(index) {
+  if (typeof index !== 'number' || index < 0 || index >= pendingWorkExamples.length) return;
+  pendingWorkExamples.splice(index, 1);
+  renderWorkExamplesPreview();
+
+  const addBtn = document.getElementById('we-add-btn');
+  if (addBtn && pendingWorkExamples.length < 3) {
+    const form = document.getElementById('work-example-form');
+    if (!form || form.style.display === 'none') addBtn.style.display = '';
+  }
+}
+
+function renderWorkExamplesPreview() {
+  const container = document.getElementById('work-examples-preview');
+  if (!container) return;
+
+  if (!pendingWorkExamples.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = pendingWorkExamples.map((ex, i) => `
+    <div style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.25);border-radius:6px;padding:8px 10px;display:flex;align-items:flex-start;gap:8px;">
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+          <span style="font-size:13px;font-weight:600;color:#e8f0f8;">${sanitize(ex.title)}</span>
+          <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:0.3px;">${sanitize(ex.category)}</span>
+        </div>
+        <a href="${sanitize(ex.link)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#5a7a9a;text-decoration:none;word-break:break-all;">${sanitize(ex.link)}</a>
+        ${ex.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(ex.description)}</div>` : ''}
+      </div>
+      <button type="button" onclick="removeWorkExample(${i})" aria-label="Remove" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;">×</button>
+    </div>
+  `).join('');
+
+  const addBtn = document.getElementById('we-add-btn');
+  if (addBtn && pendingWorkExamples.length >= 3) addBtn.style.display = 'none';
+}
 // =====================================================
 // PROFILE COMPLETION CHECK (Layer 4 Track 1)
 // =====================================================
