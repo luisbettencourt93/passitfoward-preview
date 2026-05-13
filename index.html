@@ -10153,6 +10153,7 @@ async function viewMemberProfile(handle) {
   const bio = profile?.bio || 'No bio yet.';
   const skills = Array.isArray(profile?.skills) ? profile.skills : [];
   const intents = Array.isArray(profile?.intents) ? profile.intents.filter(v => typeof v === 'string').slice(0, 3) : [];
+  const workExamples = pifSanitizeWorkExamples(profile?.work_examples);
   const strikes = profile?.forged_strikes || 0;
   const banned = profile?.banned || false;
   const city = profile?.city || '';
@@ -10248,6 +10249,22 @@ async function viewMemberProfile(handle) {
     ${intents.length ? `<div style="margin-bottom:14px;">
       <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Looking for</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;">${intents.map(it=>`<span style="font-size:11px;padding:3px 10px;border-radius:12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);color:#60a5fa;font-weight:600;">${sanitize(it)}</span>`).join('')}</div>
+    </div>` : ''}
+        <!-- WORK EXAMPLES (Phase 2 V1) -->
+    ${workExamples.length ? `<div id="member-work-section" style="margin-bottom:14px;">
+      <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Work</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${workExamples.map(we => `
+          <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:block;background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.25);border-radius:6px;padding:8px 10px;text-decoration:none;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap;">
+              <span style="font-size:13px;font-weight:600;color:#e8f0f8;">${sanitize(we.title)}</span>
+              <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:0.3px;">${sanitize(we.category)}</span>
+            </div>
+            ${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(we.description)}</div>` : ''}
+            <div style="font-size:10px;color:#5a7a9a;margin-top:4px;word-break:break-all;"><i class="fas fa-external-link-alt" style="font-size:9px;margin-right:3px;"></i>${sanitize(we.link)}</div>
+          </a>
+        `).join('')}
+      </div>
     </div>` : ''}
     <!-- PAYMENT METHODS -->
     ${(profile?.stripe_link || profile?.usdt_address) ? `<div style="margin-bottom:14px;">
