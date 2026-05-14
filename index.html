@@ -7882,12 +7882,19 @@ function ccHydrateShell() {
   const oppsEl = document.getElementById('cc-stat-opps');
   if (oppsEl) oppsEl.textContent = '—';
 
-  // Action banner — placeholder copy in Edit 1; real cascade in Edit 2
-  const titleEl = document.getElementById('cc-action-title');
-  const subEl = document.getElementById('cc-action-subtext');
-  if (titleEl) titleEl.textContent = 'Welcome back — explore the platform';
-  if (subEl) subEl.textContent = 'Action recommendations coming online soon.';
-
+  // Action banner — rule-based cascade against currentUser only (Edit 2)
+ // Conditions requiring Supabase queries (deals, DMs, matches) deferred to later edits.
+const action = ccComputeNextAction(currentUser);
+const titleEl = document.getElementById('cc-action-title');
+const subEl = document.getElementById('cc-action-subtext');
+const btnEl = document.getElementById('cc-action-btn');
+if (titleEl) titleEl.textContent = action.title;
+if (subEl) subEl.textContent = action.subtext;
+if (btnEl) {
+  btnEl.textContent = action.buttonLabel + ' →';
+  // Store the action id so the click handler knows what to do
+  btnEl.setAttribute('data-cc-action', action.id);
+}
   // NEXAR recs — placeholder in Edit 1; real rule-based recs in Edit 4
   const recsEl = document.getElementById('cc-nexar-recs');
   if (recsEl) {
@@ -7895,9 +7902,101 @@ function ccHydrateShell() {
   }
 }
 
-// Action banner click handler — Edit 1 default opens Opportunities; Edit 2 will swap based on cascade
+// Action banner cascade — pure function, currentUser-only state.
+// Returns { id, title, subtext, buttonLabel } for the highest-priority action.
+function ccComputeNextAction(user) {
+  if (!user) {
+    return { id: 'default', title: 'Welcome', subtext: 'Sign in to see your next action.', buttonLabel: 'Take action' };
+  }
+
+  const skills = Array.isArray(user.skills) ? user.skills : [];
+  const workExamples = Array.isArray(user.work_examples) ? user.work_examples : [];
+  const completeness = (typeof pifProfileCompleteness === 'function')
+    ? (pifProfileCompleteness(user).score || 0)
+    : 100;
+  const avatarMissing = (typeof pifIsAvatarMissing === 'function')
+    ? pifIsAvatarMissing(user)
+    : !user.avatar_url;
+  const cityMissing = !user.city || !String(user.city).trim();
+
+  // Priority cascade — first match wins
+  if (skills.length === 0) {
+    return {
+      id: 'add-skills',
+      title: 'Add your skills',
+      subtext: 'Skills unlock opportunity matching — start with what you do best.',
+      buttonLabel: 'Edit profile'
+    };
+  }
+
+  if (completeness < 50) {
+    return {
+      id: 'finish-profile',
+      title: 'Finish setting up your profile',
+      subtext: 'You\'re ' + completeness + '% complete — a few more steps unlocks the platform.',
+      buttonLabel: 'Edit profile'
+    };
+  }
+
+  if (workExamples.length === 0) {
+    return {
+      id: 'add-work',
+      title: 'Add a work example',
+      subtext: 'Members trust profiles that show real work.',
+      buttonLabel: 'Add example'
+    };
+  }
+
+  if (avatarMissing) {
+    return {
+      id: 'add-avatar',
+      title: 'Add a profile picture',
+      subtext: 'Members are more likely to engage with profiles that have a face.',
+      buttonLabel: 'Edit profile'
+    };
+  }
+
+  if (cityMissing) {
+    return {
+      id: 'add-city',
+      title: 'Add your city',
+      subtext: 'Helps match you to local opportunities and gives your profile context.',
+      buttonLabel: 'Edit profile'
+    };
+  }
+
+  // Default — nothing pressing, browse opportunities
+  return {
+    id: 'browse-opps',
+    title: 'Check the Live Market',
+    subtext: 'See what opportunities are active right now.',
+    buttonLabel: 'Open Live Market'
+  };
+}
+
+// Action banner click handler — cascade-aware (Edit 2)
 function ccActionBannerClick() {
-  if (typeof switchTab === 'function') switchTab('opportunities');
+  const btn = document.getElementById('cc-action-btn');
+  const actionId = btn ? btn.getAttribute('data-cc-action') : null;
+
+  switch (actionId) {
+    case 'add-skills':
+    case 'finish-profile':
+    case 'add-avatar':
+    case 'add-city':
+      if (typeof showProfileModal === 'function') showProfileModal();
+      break;
+
+    case 'add-work':
+      if (typeof ccOpenProfileToWork === 'function') ccOpenProfileToWork();
+      break;
+
+    case 'browse-opps':
+    case 'default':
+    default:
+      if (typeof switchTab === 'function') switchTab('opportunities');
+      break;
+  }
 }
 
 // Open Profile modal scrolled to Work section
