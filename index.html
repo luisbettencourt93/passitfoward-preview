@@ -5726,7 +5726,7 @@ function switchTab(tabId) {
     document.querySelectorAll('.lp-trust').forEach(el => el.style.display = 'none');
     sec.style.display = 'block';
     window.scrollTo({ top:0, behavior:'smooth' });
-    if (tabId === 'dashboard')     { loadOpportunitiesAndRender(); loadDashboardStats(); }
+    if (tabId === 'dashboard')     { loadOpportunitiesAndRender(); loadDashboardStats(); ccHydrateShell(); }
     if (tabId === 'testimonials')  loadAndRenderTestimonials();
     if (tabId === 'community')     { loadAndRenderCommunity(); loadAndRenderTestimonials(); renderGoalsReached(); }
     if (tabId === 'funds')         renderFunds();
@@ -7827,6 +7827,86 @@ function pifSanitizeWorkExamples(arr) {
     if (cleaned.length >= 3) break;
   }
   return cleaned;
+}
+  // =====================================================
+// Command Centre Shell V1 — hydrate from currentUser only
+// No Supabase queries in Edit 1. Data-bound regions come in later edits.
+// =====================================================
+function ccHydrateShell() {
+  if (!currentUser) return;
+  const shell = document.getElementById('cc-shell');
+  if (!shell) return;
+
+  // Founder strip — render only if founder; values stay as placeholders in V1 shell
+  if (currentUser.role === 'founder') {
+    const strip = document.getElementById('cc-founder-strip');
+    if (strip) strip.style.display = '';
+  }
+
+  // Header strip — real display name + handle + XP
+  const displayEl = document.getElementById('cc-display-name');
+  if (displayEl) {
+    const name = (typeof pifPrettyName === 'function')
+      ? pifPrettyName(currentUser.handle || '')
+      : (currentUser.display_name || currentUser.handle || 'member');
+    displayEl.textContent = name;
+  }
+  const handleEl = document.getElementById('cc-handle');
+  if (handleEl) handleEl.textContent = currentUser.handle || '';
+  const xpEl = document.getElementById('cc-xp');
+  if (xpEl) xpEl.textContent = (currentUser.xp || 0).toLocaleString();
+
+  // Pro badge — show if subscription active
+  if (typeof isProUser === 'function' && isProUser()) {
+    const badge = document.getElementById('cc-pro-badge');
+    if (badge) badge.style.display = '';
+  }
+
+  // Status: Profile completion (real from existing helper)
+  if (typeof pifProfileCompleteness === 'function') {
+    const score = pifProfileCompleteness(currentUser).score;
+    const profEl = document.getElementById('cc-stat-profile');
+    if (profEl) profEl.textContent = score + '%';
+  }
+
+  // Status: Proof of Work count (real from currentUser)
+  const we = Array.isArray(currentUser.work_examples) ? currentUser.work_examples : [];
+  const weEl = document.getElementById('cc-stat-work');
+  if (weEl) {
+    weEl.textContent = we.length === 0 ? '0' : (we.length + (we.length === 1 ? ' example' : ' examples'));
+  }
+
+  // Status: Deals & Opportunities — placeholders only in V1 shell
+  const dealsEl = document.getElementById('cc-stat-deals');
+  if (dealsEl) dealsEl.textContent = '—';
+  const oppsEl = document.getElementById('cc-stat-opps');
+  if (oppsEl) oppsEl.textContent = '—';
+
+  // Action banner — placeholder copy in Edit 1; real cascade in Edit 2
+  const titleEl = document.getElementById('cc-action-title');
+  const subEl = document.getElementById('cc-action-subtext');
+  if (titleEl) titleEl.textContent = 'Welcome back — explore the platform';
+  if (subEl) subEl.textContent = 'Action recommendations coming online soon.';
+
+  // NEXAR recs — placeholder in Edit 1; real rule-based recs in Edit 4
+  const recsEl = document.getElementById('cc-nexar-recs');
+  if (recsEl) {
+    recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">NEXAR recommendations coming online soon.</div>';
+  }
+}
+
+// Action banner click handler — Edit 1 default opens Opportunities; Edit 2 will swap based on cascade
+function ccActionBannerClick() {
+  if (typeof switchTab === 'function') switchTab('opportunities');
+}
+
+// Open Profile modal scrolled to Work section
+function ccOpenProfileToWork() {
+  showProfileModal();
+  setTimeout(() => {
+    const section = document.querySelector('#work-examples-preview');
+    if (section && section.scrollIntoView) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 200);
 }
 // Phase 2 V1 — Work examples state + UI handlers
 let pendingWorkExamples = [];
