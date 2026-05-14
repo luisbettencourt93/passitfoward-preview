@@ -3215,7 +3215,126 @@
 <!-- DASHBOARD -->
 <section class="member-section" id="dashboard" aria-label="Dashboard">
   <div style="max-width:1280px;margin:0 auto;padding:0 5%;font-family:'Inter',sans-serif;">
+   
+   <!-- COMMAND CENTRE SHELL V1 (Phase 4 — preview only until 27 May metric check) -->
+    <div id="cc-shell" style="margin-bottom:24px;">
 
+      <!-- FOUNDER STRIP (founder-only, placeholders in V1 shell) -->
+      <div id="cc-founder-strip" style="display:none;background:rgba(255,255,255,0.03);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:#5a7a9a;">
+        <span style="display:inline-block;background:rgba(96,165,250,0.15);color:#60a5fa;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:0.5px;margin-right:10px;">FOUNDER</span>
+        <span id="cc-founder-total">— members</span>
+        <span style="color:#3d5a7a;margin:0 6px;">·</span>
+        <span id="cc-founder-inactive">— inactive</span>
+        <span style="color:#3d5a7a;margin:0 6px;">·</span>
+        <span id="cc-founder-completion">— avg profile</span>
+        <button onclick="showToast('Founder admin panel coming after metric check')" style="float:right;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Founder view →</button>
+      </div>
+
+      <!-- HEADER STRIP (real display name + XP) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;margin-bottom:12px;">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#e8f0f8;font-family:'Space Grotesk',sans-serif;">Welcome back, <span id="cc-display-name">—</span></div>
+          <div style="font-size:11px;color:#5a7a9a;margin-top:2px;"><span id="cc-handle">—</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="cc-pro-badge" style="display:none;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.3px;">PRO</span>
+          <div style="display:flex;align-items:center;gap:6px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);padding:6px 12px;border-radius:8px;">
+            <i class="fas fa-star" style="font-size:11px;color:#fbbf24;"></i>
+            <span style="font-size:13px;font-weight:700;color:#e8f0f8;"><span id="cc-xp">—</span> XP</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION BANNER (rendered by Edit 2; container only in Edit 1) -->
+      <div id="cc-action-banner" style="background:linear-gradient(135deg,rgba(45,212,160,0.05),rgba(96,165,250,0.04));border:1px solid rgba(45,212,160,0.2);border-radius:10px;padding:16px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:14px;">
+        <div style="display:flex;align-items:flex-start;gap:12px;flex:1;">
+          <i class="fas fa-bolt" style="font-size:16px;color:#2dd4a0;margin-top:2px;"></i>
+          <div>
+            <div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:4px;">NEXT</div>
+            <div id="cc-action-title" style="font-size:15px;font-weight:700;color:#e8f0f8;margin-bottom:2px;">Loading…</div>
+            <div id="cc-action-subtext" style="font-size:12px;color:#94a3b8;"></div>
+          </div>
+        </div>
+        <button id="cc-action-btn" onclick="ccActionBannerClick()" style="background:#2dd4a0;color:#0d1520;border:none;padding:8px 14px;border-radius:8px;font:700 12px/1 'Inter',sans-serif;cursor:pointer;white-space:nowrap;">Take action →</button>
+      </div>
+
+      <!-- MAIN GRID: status column + NEXAR panel -->
+      <div id="cc-main-grid" style="display:grid;grid-template-columns:280px 1fr;gap:14px;">
+
+        <!-- LEFT — STATUS COLUMN -->
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;padding-left:2px;margin-bottom:2px;">STATUS</div>
+
+          <button onclick="showProfileModal()" class="cc-status-card" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left;font-family:inherit;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i class="fas fa-user" style="font-size:13px;color:#5a7a9a;width:14px;"></i>
+              <span style="font-size:13px;color:#94a3b8;">Profile</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="cc-stat-profile" style="font-size:13px;font-weight:700;color:#e8f0f8;">—%</span>
+              <i class="fas fa-chevron-right" style="font-size:10px;color:#5a7a9a;"></i>
+            </div>
+          </button>
+
+          <button onclick="ccOpenProfileToWork()" class="cc-status-card" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left;font-family:inherit;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i class="fas fa-briefcase" style="font-size:13px;color:#5a7a9a;width:14px;"></i>
+              <span style="font-size:13px;color:#94a3b8;">Proof of Work</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="cc-stat-work" style="font-size:13px;font-weight:700;color:#e8f0f8;">—</span>
+              <i class="fas fa-chevron-right" style="font-size:10px;color:#5a7a9a;"></i>
+            </div>
+          </button>
+
+          <button onclick="switchTab('opportunities')" class="cc-status-card" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left;font-family:inherit;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i class="fas fa-file-signature" style="font-size:13px;color:#5a7a9a;width:14px;"></i>
+              <span style="font-size:13px;color:#94a3b8;">Deals</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="cc-stat-deals" style="font-size:13px;font-weight:700;color:#5a7a9a;">—</span>
+              <i class="fas fa-chevron-right" style="font-size:10px;color:#5a7a9a;"></i>
+            </div>
+          </button>
+
+          <button onclick="switchTab('opportunities')" class="cc-status-card" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left;font-family:inherit;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i class="fas fa-bullseye" style="font-size:13px;color:#60a5fa;width:14px;"></i>
+              <span style="font-size:13px;color:#60a5fa;font-weight:700;">Opportunities</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="cc-stat-opps" style="font-size:13px;font-weight:700;color:#60a5fa;">—</span>
+              <i class="fas fa-chevron-right" style="font-size:10px;color:#60a5fa;"></i>
+            </div>
+          </button>
+        </div>
+
+        <!-- RIGHT — NEXAR GUIDANCE PANEL -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;padding:16px 18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <i class="fas fa-sparkles" style="font-size:14px;color:#2dd4a0;"></i>
+              <span style="font-size:13px;font-weight:700;color:#e8f0f8;font-family:'Space Grotesk',sans-serif;">NEXAR Guidance</span>
+            </div>
+            <button onclick="switchTab('nexar')" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Open NEXAR →</button>
+          </div>
+
+          <div id="cc-nexar-recs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+            <div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">Loading recommendations…</div>
+          </div>
+
+          <div style="border-top:1px solid #2d4f6f;padding-top:12px;">
+            <div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:6px;">ASK NEXAR</div>
+            <button onclick="switchTab('nexar')" style="width:100%;background:rgba(45,212,160,0.04);border:1px dashed rgba(45,212,160,0.3);color:#94a3b8;padding:9px 12px;border-radius:6px;font-size:12px;cursor:pointer;text-align:left;">Open NEXAR to ask anything →</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- END COMMAND CENTRE SHELL V1 -->
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
       <div>
   <div style="font-size:20px;font-weight:700;color:white;font-family:'Space Grotesk',sans-serif;">
