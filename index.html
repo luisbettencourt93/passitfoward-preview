@@ -8068,16 +8068,18 @@ function ccComputeNexarRecs(user) {
     });
   }
 
-  if (bio.length < 30) {
+    
+
+  if (recs.length < 3) {
     recs.push({
-      id: 'rec-improve-bio',
-      text: 'A clearer bio helps NEXAR understand what you offer.',
-      icon: 'fa-file-alt',
-      iconColor: '#94a3b8'
+      id: 'rec-ask-nexar',
+      text: 'Ask NEXAR what to focus on this week — get a personal next step.',
+      icon: 'fa-sparkles',
+      iconColor: '#2dd4a0'
     });
   }
 
-    return recs.slice(0, 3);
+  return recs.slice(0, 3);
 }
 
 // NEXAR recommendation click handler (Edit 3 v2b)
