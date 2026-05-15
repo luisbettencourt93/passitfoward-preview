@@ -7895,10 +7895,20 @@ if (btnEl) {
   // Store the action id so the click handler knows what to do
   btnEl.setAttribute('data-cc-action', action.id);
 }
-  // NEXAR recs — placeholder in Edit 1; real rule-based recs in Edit 4
-  const recsEl = document.getElementById('cc-nexar-recs');
-  if (recsEl) {
-    recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">NEXAR recommendations coming online soon.</div>';
+  // NEXAR recs — rule-based against currentUser only (Edit 3)
+const recs = ccComputeNexarRecs(currentUser);
+const recsEl = document.getElementById('cc-nexar-recs');
+if (recsEl) {
+  if (!recs.length) {
+    recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">You\'re in good shape — ask NEXAR for deeper guidance.</div>';
+  } else {
+    recsEl.innerHTML = recs.map((r, i) => `
+      <button onclick="ccNexarRecClick('${r.id}')" style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.18);border-radius:6px;padding:9px 11px;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:flex-start;gap:9px;width:100%;">
+        <i class="fas ${r.icon}" style="font-size:12px;color:${r.iconColor};margin-top:2px;width:14px;flex-shrink:0;"></i>
+        <span style="flex:1;font-size:12px;color:#e8f0f8;line-height:1.45;">${sanitize(r.text)}</span>
+        <i class="fas fa-chevron-right" style="font-size:9px;color:#5a7a9a;margin-top:4px;flex-shrink:0;"></i>
+      </button>
+    `).join('');
   }
 }
 
@@ -7995,6 +8005,104 @@ function ccActionBannerClick() {
     case 'default':
     default:
       if (typeof switchTab === 'function') switchTab('opportunities');
+      break;
+  }
+}
+
+// NEXAR rule-based recommendations — pure function, currentUser-only state (Edit 3)
+// Returns array of { id, text, icon, iconColor } for up to 3 recommendations.
+// Distinct from action banner: cascade picks ONE next action; this returns multiple
+// suggestions across different surfaces. They can overlap with the action banner
+// (e.g. both may mention work examples), and that's intentional reinforcement.
+function ccComputeNexarRecs(user) {
+  if (!user) return [];
+
+  const recs = [];
+  const skills = Array.isArray(user.skills) ? user.skills : [];
+  const workExamples = Array.isArray(user.work_examples) ? user.work_examples : [];
+  const completeness = (typeof pifProfileCompleteness === 'function')
+    ? (pifProfileCompleteness(user).score || 0)
+    : 100;
+  const avatarMissing = (typeof pifIsAvatarMissing === 'function')
+    ? pifIsAvatarMissing(user)
+    : !user.avatar_url;
+
+  // Recommendation pool — pushed in priority order; sliced to top 3 at end
+  if (skills.length === 0) {
+    recs.push({
+      id: 'rec-add-skills',
+      text: 'Add your skills so NEXAR can match you to relevant opportunities.',
+      icon: 'fa-tags',
+      iconColor: '#fbbf24'
+    });
+  }
+
+  if (workExamples.length === 0) {
+    recs.push({
+      id: 'rec-add-work',
+      text: 'Add a work example — profiles with proof get more responses.',
+      icon: 'fa-briefcase',
+      iconColor: '#2dd4a0'
+    });
+  }
+
+  if (completeness < 100 && completeness >= 50) {
+    recs.push({
+      id: 'rec-finish-profile',
+      text: 'Your profile is ' + completeness + '% complete — finish it for stronger matches.',
+      icon: 'fa-user-check',
+      iconColor: '#60a5fa'
+    });
+  }
+
+  if (avatarMissing) {
+    recs.push({
+      id: 'rec-add-avatar',
+      text: 'Add a profile picture so members can put a face to your name.',
+      icon: 'fa-image',
+      iconColor: '#60a5fa'
+    });
+  }
+
+  if (!user.bio || String(user.bio).trim().length < 30) {
+    recs.push({
+      id: 'rec-improve-bio',
+      text: 'A clearer bio helps NEXAR understand what you offer.',
+      icon: 'fa-file-alt',
+      iconColor: '#94a3b8'
+    });
+  }
+
+  // Always-available "ask NEXAR something this week" suggestion if room
+  if (recs.length < 3) {
+    recs.push({
+      id: 'rec-ask-nexar',
+      text: 'Ask NEXAR what to focus on this week — get a personal next step.',
+      icon: 'fa-sparkles',
+      iconColor: '#2dd4a0'
+    });
+  }
+
+  return recs.slice(0, 3);
+}
+
+// NEXAR rec click handler — routes to the right surface based on rec id
+function ccNexarRecClick(recId) {
+  switch (recId) {
+    case 'rec-add-skills':
+    case 'rec-finish-profile':
+    case 'rec-add-avatar':
+    case 'rec-improve-bio':
+      if (typeof showProfileModal === 'function') showProfileModal();
+      break;
+
+    case 'rec-add-work':
+      if (typeof ccOpenProfileToWork === 'function') ccOpenProfileToWork();
+      break;
+
+    case 'rec-ask-nexar':
+    default:
+      if (typeof switchTab === 'function') switchTab('nexar');
       break;
   }
 }
