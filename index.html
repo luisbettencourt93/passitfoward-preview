@@ -8007,6 +8007,89 @@ function ccOpenProfileToWork() {
     if (section && section.scrollIntoView) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 200);
 }
+
+// NEXAR recommendations — pure function, currentUser-only state (Edit 3 v2a)
+// Returns array of { id, text, icon, iconColor } for up to 3 recommendations.
+// Edit 3 v2a is the function only — not called from anywhere yet.
+// Edit 3 v2b will add the click handler. Edit 3 v2c will wire to DOM.
+function ccComputeNexarRecs(user) {
+  if (!user) return [];
+
+  var recs = [];
+  var skills = Array.isArray(user.skills) ? user.skills : [];
+  var workExamples = Array.isArray(user.work_examples) ? user.work_examples : [];
+  var completeness = 100;
+
+  if (typeof pifProfileCompleteness === 'function') {
+    var result = pifProfileCompleteness(user);
+    completeness = (result && typeof result.score === 'number') ? result.score : 100;
+  }
+
+  var avatarMissing = false;
+  if (typeof pifIsAvatarMissing === 'function') {
+    avatarMissing = pifIsAvatarMissing(user);
+  } else {
+    avatarMissing = !user.avatar_url;
+  }
+
+  var bio = (typeof user.bio === 'string') ? user.bio.trim() : '';
+
+  if (skills.length === 0) {
+    recs.push({
+      id: 'rec-add-skills',
+      text: 'Add your skills so NEXAR can match you to relevant opportunities.',
+      icon: 'fa-tags',
+      iconColor: '#fbbf24'
+    });
+  }
+
+  if (workExamples.length === 0) {
+    recs.push({
+      id: 'rec-add-work',
+      text: 'Add a work example — profiles with proof get more responses.',
+      icon: 'fa-briefcase',
+      iconColor: '#2dd4a0'
+    });
+  }
+
+  if (completeness < 100 && completeness >= 50) {
+    recs.push({
+      id: 'rec-finish-profile',
+      text: 'Your profile is ' + completeness + '% complete — finish it for stronger matches.',
+      icon: 'fa-user-check',
+      iconColor: '#60a5fa'
+    });
+  }
+
+  if (avatarMissing) {
+    recs.push({
+      id: 'rec-add-avatar',
+      text: 'Add a profile picture so members can put a face to your name.',
+      icon: 'fa-image',
+      iconColor: '#60a5fa'
+    });
+  }
+
+  if (bio.length < 30) {
+    recs.push({
+      id: 'rec-improve-bio',
+      text: 'A clearer bio helps NEXAR understand what you offer.',
+      icon: 'fa-file-alt',
+      iconColor: '#94a3b8'
+    });
+  }
+
+  if (recs.length < 3) {
+    recs.push({
+      id: 'rec-ask-nexar',
+      text: 'Ask NEXAR what to focus on this week — get a personal next step.',
+      icon: 'fa-sparkles',
+      iconColor: '#2dd4a0'
+    });
+  }
+
+  return recs.slice(0, 3);
+}
 // Phase 2 V1 — Work examples state + UI handlers
 let pendingWorkExamples = [];
 
