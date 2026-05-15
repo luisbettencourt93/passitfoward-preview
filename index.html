@@ -7895,21 +7895,10 @@ if (btnEl) {
   // Store the action id so the click handler knows what to do
   btnEl.setAttribute('data-cc-action', action.id);
 }
-  // NEXAR recs — rule-based against currentUser only (Edit 3)
-const recs = ccComputeNexarRecs(currentUser);
+  // NEXAR recs — placeholder in Edit 1; real rule-based recs in Edit 4
 const recsEl = document.getElementById('cc-nexar-recs');
 if (recsEl) {
-  if (!recs.length) {
-    recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">You\'re in good shape — ask NEXAR for deeper guidance.</div>';
-  } else {
-    recsEl.innerHTML = recs.map((r, i) => `
-      <button onclick="ccNexarRecClick('${r.id}')" style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.18);border-radius:6px;padding:9px 11px;cursor:pointer;text-align:left;font-family:inherit;display:flex;align-items:flex-start;gap:9px;width:100%;">
-        <i class="fas ${r.icon}" style="font-size:12px;color:${r.iconColor};margin-top:2px;width:14px;flex-shrink:0;"></i>
-        <span style="flex:1;font-size:12px;color:#e8f0f8;line-height:1.45;">${sanitize(r.text)}</span>
-        <i class="fas fa-chevron-right" style="font-size:9px;color:#5a7a9a;margin-top:4px;flex-shrink:0;"></i>
-      </button>
-    `).join('');
-  }
+  recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">NEXAR recommendations coming online soon.</div>';
 }
 
 // Action banner cascade — pure function, currentUser-only state.
