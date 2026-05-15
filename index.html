@@ -7900,14 +7900,7 @@ const recsEl = document.getElementById('cc-nexar-recs');
 if (recsEl) {
   recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">NEXAR recommendations coming online soon.</div>';
 }
-
-// NEXAR recs — placeholder in Edit 1; real rule-based recs in Edit 4
-const recsEl = document.getElementById('cc-nexar-recs');
-if (recsEl) {
-  recsEl.innerHTML = '<div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">NEXAR recommendations coming online soon.</div>';
 }
-}
-
 // Action banner cascade — pure function, currentUser-only state.
 // Returns { id, title, subtext, buttonLabel } for the highest-priority action.
 function ccComputeNextAction(user) {
