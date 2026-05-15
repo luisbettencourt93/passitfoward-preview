@@ -8102,6 +8102,82 @@ function ccNexarRecClick(recId) {
   // rec-ask-nexar and any unknown id route to NEXAR tab
   if (typeof switchTab === 'function') switchTab('nexar');
 }
+
+// NEXAR recommendations DOM renderer (Edit 3 v2c step 1)
+// Takes an array of rec objects, mutates the #cc-nexar-recs container.
+// Uses document.createElement exclusively — no innerHTML, no template strings.
+// Not called from anywhere yet — Edit 3 v2c step 2 will wire it into ccHydrateShell.
+function ccRenderNexarRecs(recs) {
+  var container = document.getElementById('cc-nexar-recs');
+  if (!container) return;
+
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+
+  if (!Array.isArray(recs) || recs.length === 0) {
+    var empty = document.createElement('div');
+    empty.style.fontSize = '12px';
+    empty.style.color = '#5a7a9a';
+    empty.style.padding = '10px';
+    empty.style.textAlign = 'center';
+    empty.textContent = 'You\'re in good shape — ask NEXAR for deeper guidance.';
+    container.appendChild(empty);
+    return;
+  }
+
+  for (var i = 0; i < recs.length; i++) {
+    var r = recs[i];
+    if (!r || typeof r !== 'object') continue;
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('data-rec-id', r.id || '');
+    btn.style.background = 'rgba(45,212,160,0.04)';
+    btn.style.border = '1px solid rgba(45,212,160,0.18)';
+    btn.style.borderRadius = '6px';
+    btn.style.padding = '9px 11px';
+    btn.style.cursor = 'pointer';
+    btn.style.textAlign = 'left';
+    btn.style.fontFamily = 'inherit';
+    btn.style.display = 'flex';
+    btn.style.alignItems = 'flex-start';
+    btn.style.gap = '9px';
+    btn.style.width = '100%';
+
+    var capturedId = r.id || '';
+    btn.onclick = (function(id) {
+      return function() { ccNexarRecClick(id); };
+    })(capturedId);
+
+    var icon = document.createElement('i');
+    icon.className = 'fas ' + (r.icon || 'fa-sparkles');
+    icon.style.fontSize = '12px';
+    icon.style.color = r.iconColor || '#94a3b8';
+    icon.style.marginTop = '2px';
+    icon.style.width = '14px';
+    icon.style.flexShrink = '0';
+    btn.appendChild(icon);
+
+    var text = document.createElement('span');
+    text.style.flex = '1';
+    text.style.fontSize = '12px';
+    text.style.color = '#e8f0f8';
+    text.style.lineHeight = '1.45';
+    text.textContent = (typeof r.text === 'string') ? r.text : '';
+    btn.appendChild(text);
+
+    var chevron = document.createElement('i');
+    chevron.className = 'fas fa-chevron-right';
+    chevron.style.fontSize = '9px';
+    chevron.style.color = '#5a7a9a';
+    chevron.style.marginTop = '4px';
+    chevron.style.flexShrink = '0';
+    btn.appendChild(chevron);
+
+    container.appendChild(btn);
+  }
+}
 // Phase 2 V1 — Work examples state + UI handlers
 let pendingWorkExamples = [];
 
