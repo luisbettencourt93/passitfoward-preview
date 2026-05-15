@@ -8079,16 +8079,28 @@ function ccComputeNexarRecs(user) {
     });
   }
 
-  if (recs.length < 3) {
-    recs.push({
-      id: 'rec-ask-nexar',
-      text: 'Ask NEXAR what to focus on this week — get a personal next step.',
-      icon: 'fa-sparkles',
-      iconColor: '#2dd4a0'
-    });
+    return recs.slice(0, 3);
+}
+
+// NEXAR recommendation click handler (Edit 3 v2b)
+// Routes a recommendation click to the right surface based on rec id.
+// Not called from anywhere yet — Edit 3 v2c will wire onclick to recommendation buttons.
+function ccNexarRecClick(recId) {
+  if (recId === 'rec-add-skills' ||
+      recId === 'rec-finish-profile' ||
+      recId === 'rec-add-avatar' ||
+      recId === 'rec-improve-bio') {
+    if (typeof showProfileModal === 'function') showProfileModal();
+    return;
   }
 
-  return recs.slice(0, 3);
+  if (recId === 'rec-add-work') {
+    if (typeof ccOpenProfileToWork === 'function') ccOpenProfileToWork();
+    return;
+  }
+
+  // rec-ask-nexar and any unknown id route to NEXAR tab
+  if (typeof switchTab === 'function') switchTab('nexar');
 }
 // Phase 2 V1 — Work examples state + UI handlers
 let pendingWorkExamples = [];
