@@ -3393,7 +3393,94 @@
       </div>
 
     </div>
-    <!-- END COMMAND CENTRE SHELL V1 -->
+<!-- END COMMAND CENTRE SHELL V1 -->
+
+<!-- ============================================================
+     COMMAND CENTRE COCKPIT — HIDDEN PARALLEL BUILD (Stage 1)
+     Hidden skeleton only. display:none — not visible to anyone.
+     Uses cc2-* prefixed IDs to avoid collision with the live cc-* shell.
+     The live shell above is untouched and remains the active dashboard.
+     PREVIEW ONLY — DO NOT COPY TO LIVE until the rebuild is complete.
+     ============================================================ -->
+<div id="cc2-shell" style="display:none;">
+
+  <!-- TOP FRAME -->
+  <div id="cc2-top-frame">
+    <div id="cc2-top-left">
+      <span id="cc2-cc-label">Command Centre</span>
+      <span id="cc2-display-name">—</span>
+      <span id="cc2-handle">—</span>
+    </div>
+    <div id="cc2-top-right">
+      <span id="cc2-pro-badge" style="display:none;">PRO</span>
+      <span id="cc2-xp">—</span>
+      <span id="cc2-founder-access" style="display:none;">Founder</span>
+    </div>
+  </div>
+
+  <!-- WORKSPACE: primary surface + NEXAR rail -->
+  <div id="cc2-workspace">
+
+    <!-- LEFT — PRIMARY SURFACE -->
+    <div id="cc2-primary">
+
+      <!-- Next move band -->
+      <div id="cc2-nextmove">
+        <div id="cc2-nextmove-label">NEXT</div>
+        <div id="cc2-action-title">—</div>
+        <div id="cc2-action-subtext">—</div>
+        <button id="cc2-action-btn" type="button">—</button>
+      </div>
+
+      <!-- Status stat strip -->
+      <div id="cc2-statstrip">
+        <div class="cc2-stat-slot"><span class="cc2-stat-label">Profile</span><span id="cc2-stat-profile">—</span></div>
+        <div class="cc2-stat-slot"><span class="cc2-stat-label">Proof of Work</span><span id="cc2-stat-work">—</span></div>
+        <div class="cc2-stat-slot"><span class="cc2-stat-label">Deals</span><span id="cc2-stat-deals">—</span></div>
+        <div class="cc2-stat-slot"><span class="cc2-stat-label">Opportunities</span><span id="cc2-stat-opps">—</span></div>
+      </div>
+
+      <!-- Deals section -->
+      <div id="cc2-deals-section">
+        <div class="cc2-section-header">Active Deals</div>
+        <div id="cc2-deals-body"></div>
+      </div>
+
+      <!-- Opportunities section -->
+      <div id="cc2-opps-section">
+        <div class="cc2-section-header">Opportunities</div>
+        <div id="cc2-opps-body"></div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT — NEXAR RAIL -->
+    <div id="cc2-rail">
+      <div id="cc2-rail-header">NEXAR</div>
+
+      <!-- Recommendations section (real now) -->
+      <div id="cc2-rail-recs-section">
+        <div class="cc2-section-header">Recommendations</div>
+        <div id="cc2-nexar-recs"></div>
+      </div>
+
+      <!-- Ask NEXAR — anchored area -->
+      <div id="cc2-rail-ask-section">
+        <div class="cc2-section-header">Ask NEXAR</div>
+        <div id="cc2-rail-ask-body"></div>
+      </div>
+
+      <!-- FUTURE SECTION SLOTS — intentionally empty, not rendered.
+           Reserved for when real NEXAR intelligence exists:
+           Daily Update / Needs Attention / Watchlist / Business Insights.
+           Documented here so the structure is known; they render only
+           when the product can honestly power them. -->
+
+    </div>
+
+  </div>
+</div>
+<!-- END COMMAND CENTRE COCKPIT (Stage 1 hidden skeleton) -->
 
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
