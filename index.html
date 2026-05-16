@@ -337,6 +337,14 @@
 #cc-founder-strip button { float: none !important; margin-top: 6px !important; display: block !important; }
 }
 
+/* === COMMAND CENTRE — legacy dashboard hide (PREVIEW ONLY — DO NOT COPY TO LIVE) ===
+   Hides all legacy dashboard content that follows the Command Centre shell,
+   so the CC layout can be judged cleanly on Preview.
+   The legacy dashboard (Wallet, Earnings, stats) still has useful areas and is
+   NOT being replaced — this rule must stay out of the live repo until the
+   Command Centre genuinely replaces the legacy dashboard's function. */
+#dashboard #cc-shell ~ * { display: none !important; }
+
     /* === EXTRA SMALL (phones < 480px) === */
     @media(max-width:480px) {
       .hero h1 { font-size:1.8rem !important; }
