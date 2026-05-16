@@ -8213,8 +8213,12 @@ async function ccRenderSignal1() {
   item.style.width = '100%';
 
   item.onclick = function() {
-    if (typeof switchTab === 'function') switchTab('deals');
-  };
+  if (typeof showToast === 'function') {
+    showToast('Deals dashboard coming soon');
+  } else {
+    alert('Deals dashboard coming soon');
+  }
+};
 
   var icon = document.createElement('i');
   icon.className = 'fas fa-exclamation-circle';
