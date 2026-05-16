@@ -345,6 +345,51 @@
    Command Centre genuinely replaces the legacy dashboard's function. */
 #dashboard #cc-shell ~ * { display: none !important; }
 
+/* === COMMAND CENTRE — desktop polish pass (CSS-only, layered over inline styles) ===
+   Polish-grade hierarchy/spacing improvements. Not a ground-up redesign. */
+
+/* Region spacing rhythm — consistent vertical gaps between shell regions */
+#cc-shell > #cc-founder-strip { margin-bottom: 10px !important; }
+#cc-shell > div[id="cc-action-banner"] { margin-bottom: 16px !important; }
+
+/* Founder strip — quieter, lower visual weight */
+#cc-founder-strip { opacity: 0.78; transition: opacity 0.15s ease; }
+#cc-founder-strip:hover { opacity: 1; }
+
+/* Action banner — reads as a distinct "next move" module */
+#cc-action-banner {
+  border-left: 3px solid #2dd4a0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}
+#cc-action-banner #cc-action-btn { transition: transform 0.12s ease, filter 0.12s ease; }
+#cc-action-banner #cc-action-btn:hover { filter: brightness(1.08); }
+#cc-action-banner #cc-action-btn:active { transform: translateY(1px); }
+
+/* Status cards — consistent treatment + hover feedback */
+#cc-shell .cc-status-card {
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+#cc-shell .cc-status-card:hover {
+  border-color: #3d6a8f !important;
+  background: rgba(255,255,255,0.045) !important;
+  transform: translateX(2px);
+}
+#cc-shell .cc-status-card:active { transform: translateX(0); }
+
+/* NEXAR panel — stronger prominence as the primary intelligence area */
+#cc-main-grid > div:last-child {
+  min-height: 280px;
+  border-color: rgba(45,212,160,0.28) !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  background: linear-gradient(180deg, rgba(45,212,160,0.035), rgba(255,255,255,0.02)) !important;
+}
+
+/* NEXAR recommendation cards — subtle hover so they feel interactive */
+#cc-nexar-recs > button { transition: border-color 0.15s ease, background 0.15s ease; }
+#cc-nexar-recs > button:hover {
+  border-color: rgba(45,212,160,0.4) !important;
+  background: rgba(45,212,160,0.08) !important;
+}
     /* === EXTRA SMALL (phones < 480px) === */
     @media(max-width:480px) {
       .hero h1 { font-size:1.8rem !important; }
