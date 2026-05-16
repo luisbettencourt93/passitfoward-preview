@@ -8154,6 +8154,27 @@ function ccOpenProfileToWork() {
   }, 200);
 }
 
+// Needs Attention — Signal 1: pending forged deals awaiting current user's response
+// Self-contained: runs its own count query. Returns a number (0 on any failure).
+// Not called from anywhere yet — display wiring is a separate later step.
+// Counts deals where current user is the RECEIVER and status is pending/pending_acceptance.
+async function ccCheckPendingDeals() {
+  try {
+    if (!sb || !currentUser) return 0;
+    var handle = currentUser.handle;
+    if (!handle) return 0;
+    var res = await sb
+      .from('forged_deals')
+      .select('*', { count: 'exact', head: true })
+      .eq('receiver_handle', handle)
+      .in('status', ['pending', 'pending_acceptance']);
+    if (res && typeof res.count === 'number') return res.count;
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
 // NEXAR recommendations — pure function, currentUser-only state (Edit 3 v2a)
 // Returns array of { id, text, icon, iconColor } for up to 3 recommendations.
 // Edit 3 v2a is the function only — not called from anywhere yet.
