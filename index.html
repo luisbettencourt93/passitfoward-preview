@@ -3380,7 +3380,8 @@
             </div>
             <button onclick="switchTab('nexar')" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Open NEXAR →</button>
           </div>
-
+          <!-- Needs Attention Signal 1 — own container, populated by ccRenderSignal1() -->
+          <div id="cc-needs-attention" style="display:flex;flex-direction:column;gap:8px;"></div>
           <div id="cc-nexar-recs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
             <div style="font-size:12px;color:#5a7a9a;padding:10px;text-align:center;">Loading recommendations…</div>
           </div>
@@ -8046,6 +8047,7 @@ if (btnEl) {
   // NEXAR recs — rule-based against currentUser only (Edit 3 v2c step 2)
 var nexarRecs = ccComputeNexarRecs(currentUser);
 ccRenderNexarRecs(nexarRecs);
+ccRenderSignal1();
 }
 // Action banner cascade — pure function, currentUser-only state.
 // Returns { id, title, subtext, buttonLabel } for the highest-priority action.
@@ -8174,7 +8176,63 @@ async function ccCheckPendingDeals() {
     return 0;
   }
 }
+// Needs Attention Signal 1 — render into #cc-needs-attention.
+// Async, self-contained, populates its OWN container only.
+// Count 0 = container stays empty.
+async function ccRenderSignal1() {
+  var container = document.getElementById('cc-needs-attention');
+  if (!container) return;
 
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+
+  var count = await ccCheckPendingDeals();
+  if (!count || count < 1) return;
+
+  var msg;
+  if (count === 1) {
+    msg = '1 forged deal needs your response';
+  } else {
+    msg = count + ' forged deals need your response';
+  }
+
+  var item = document.createElement('button');
+  item.type = 'button';
+  item.setAttribute('data-signal', 'pending-deals');
+  item.style.background = 'rgba(251,191,36,0.06)';
+  item.style.border = '1px solid rgba(251,191,36,0.3)';
+  item.style.borderRadius = '6px';
+  item.style.padding = '9px 11px';
+  item.style.cursor = 'pointer';
+  item.style.textAlign = 'left';
+  item.style.fontFamily = 'inherit';
+  item.style.display = 'flex';
+  item.style.alignItems = 'center';
+  item.style.gap = '9px';
+  item.style.width = '100%';
+
+  item.onclick = function() {
+    if (typeof switchTab === 'function') switchTab('deals');
+  };
+
+  var icon = document.createElement('i');
+  icon.className = 'fas fa-exclamation-circle';
+  icon.style.fontSize = '12px';
+  icon.style.color = '#fbbf24';
+  icon.style.flexShrink = '0';
+  item.appendChild(icon);
+
+  var text = document.createElement('span');
+  text.style.flex = '1';
+  text.style.fontSize = '12px';
+  text.style.color = '#e8f0f8';
+  text.style.lineHeight = '1.4';
+  text.textContent = msg;
+  item.appendChild(text);
+
+  container.appendChild(item);
+}
 // NEXAR recommendations — pure function, currentUser-only state (Edit 3 v2a)
 // Returns array of { id, text, icon, iconColor } for up to 3 recommendations.
 // Edit 3 v2a is the function only — not called from anywhere yet.
