@@ -8656,6 +8656,8 @@ function renderWorkExamplesPreview() {
         ${ex.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(ex.description)}</div>` : ''}
        ${ex.outcome ? `<div style="font-size:11px;color:#2dd4a0;margin-top:4px;font-weight:600;"><i class="fas fa-arrow-trend-up" style="font-size:9px;margin-right:4px;"></i>${sanitize(ex.outcome)}</div>` : ''}
        ${(Array.isArray(ex.skills_used) && ex.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${ex.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:1px 6px;border-radius:8px;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+       ${ex.image_url ? `<img src="${sanitize(ex.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;max-height:140px;max-width:100%;object-fit:cover;border-radius:6px;border:1px solid rgba(45,212,160,0.2);margin-top:6px;" alt="">` : ''}
+       ${ex.video_url ? `<a href="${sanitize(ex.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;margin-top:6px;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
       </div>
       <button type="button" onclick="removeWorkExample(${i})" aria-label="Remove" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;">×</button>
     </div>
@@ -11128,6 +11130,8 @@ async function viewMemberProfile(handle) {
             ${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(we.description)}</div>` : ''}
             ${we.outcome ? `<div style="font-size:11px;color:#2dd4a0;margin-top:4px;font-weight:600;"><i class="fas fa-arrow-trend-up" style="font-size:9px;margin-right:4px;"></i>${sanitize(we.outcome)}</div>` : ''}
             ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:1px 6px;border-radius:8px;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;max-height:140px;max-width:100%;object-fit:cover;border-radius:6px;border:1px solid rgba(45,212,160,0.2);margin-top:6px;" alt="">` : ''}
+            ${we.video_url ? `<span onclick="event.preventDefault();event.stopPropagation();window.open('${sanitize(we.video_url)}','_blank','noopener,noreferrer');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;margin-top:6px;font-weight:600;cursor:pointer;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</span>` : ''}
             <div style="font-size:10px;color:#5a7a9a;margin-top:4px;word-break:break-all;"><i class="fas fa-external-link-alt" style="font-size:9px;margin-right:3px;"></i>${sanitize(we.link)}</div>
           </a>
         `).join('')}
