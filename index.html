@@ -330,6 +330,8 @@
 
 /* === COMMAND CENTRE SHELL (V1 preview mobile polish) === */
 #cc-main-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+#cc-qa-row { flex-wrap: wrap !important; }
+#cc-quick-access .cc-qa-btn { flex: 1 1 30% !important; min-width: 90px !important; padding: 9px 6px !important; font-size: 11px !important; }
 #cc-shell .cc-status-card { padding: 11px 12px !important; }
 #cc-shell #cc-action-banner { padding: 14px 14px !important; flex-wrap: wrap !important; }
 #cc-shell #cc-action-btn { width: 100% !important; margin-top: 8px !important; }
@@ -385,10 +387,23 @@
 }
 
 /* NEXAR recommendation cards — subtle hover so they feel interactive */
-#cc-nexar-recs > button { transition: border-color 0.15s ease, background 0.15s ease; }
-#cc-nexar-recs > button:hover {
+  #cc-nexar-recs > button { transition: border-color 0.15s ease, background 0.15s ease; }
+  #cc-nexar-recs > button:hover {
   border-color: rgba(45,212,160,0.4) !important;
   background: rgba(45,212,160,0.08) !important;
+}
+
+/* Quick Access nav buttons — Command Centre Navigation V1 */
+#cc-quick-access .cc-qa-btn {
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+#cc-quick-access .cc-qa-btn:hover {
+  border-color: #3d6a8f;
+  background: rgba(255,255,255,0.045);
+  color: #e8f0f8;
+}
+#cc-quick-access .cc-qa-btn:active {
+  transform: translateY(1px);
 }
     /* === EXTRA SMALL (phones < 480px) === */
     @media(max-width:480px) {
@@ -3317,6 +3332,30 @@
           </div>
         </div>
         <button id="cc-action-btn" onclick="ccActionBannerClick()" style="background:#2dd4a0;color:#0d1520;border:none;padding:8px 14px;border-radius:8px;font:700 12px/1 'Inter',sans-serif;cursor:pointer;white-space:nowrap;">Take action →</button>
+      </div>
+
+           </div>
+
+      <!-- QUICK ACCESS — Command Centre Navigation V1 -->
+      <div id="cc-quick-access" style="margin-bottom:12px;">
+        <div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:6px;">QUICK ACCESS</div>
+        <div id="cc-qa-row" style="display:flex;gap:8px;">
+          <button type="button" class="cc-qa-btn" onclick="switchTab('directory')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
+            <i class="fas fa-users" style="font-size:13px;"></i><span>Directory</span>
+          </button>
+          <button type="button" class="cc-qa-btn" onclick="switchTab('livefeed')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
+            <i class="fas fa-bullseye" style="font-size:13px;"></i><span>Live Market</span>
+          </button>
+          <button type="button" class="cc-qa-btn" onclick="switchTab('messages')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
+            <i class="fas fa-envelope" style="font-size:13px;"></i><span>Messages</span>
+          </button>
+          <button type="button" class="cc-qa-btn" onclick="showToast('Deals dashboard coming soon')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
+            <i class="fas fa-handshake" style="font-size:13px;"></i><span>Deals</span>
+          </button>
+          <button type="button" class="cc-qa-btn" onclick="switchTab('nexar')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
+            <i class="fas fa-sparkles" style="font-size:13px;"></i><span>NEXAR</span>
+          </button>
+        </div>
       </div>
 
       <!-- MAIN GRID: status column + NEXAR panel -->
