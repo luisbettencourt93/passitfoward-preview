@@ -8176,6 +8176,26 @@ async function ccCheckPendingDeals() {
     return 0;
   }
 }
+// Needs Attention — Signal 2: unread direct messages for the current user
+// Self-contained: runs its own count query. Returns a number (0 on any failure).
+// Not called from anywhere yet — display wiring is a separate later step.
+// Counts messages where to_handle = current user AND read = false.
+async function ccCheckUnreadDMs() {
+  try {
+    if (!sb || !currentUser) return 0;
+    var handle = currentUser.handle;
+    if (!handle) return 0;
+    var res = await sb
+      .from('messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('to_handle', handle)
+      .eq('read', false);
+    if (res && typeof res.count === 'number') return res.count;
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}
 // Needs Attention Signal 1 — render into #cc-needs-attention.
 // Async, self-contained, populates its OWN container only.
 // Count 0 = container stays empty.
