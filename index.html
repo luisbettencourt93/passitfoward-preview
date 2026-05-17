@@ -8196,6 +8196,28 @@ async function ccCheckUnreadDMs() {
     return 0;
   }
 }
+// Needs Attention — Signal 3: new opportunities in the Live Market
+// Self-contained: runs its own count query. Returns a number (0 on any failure).
+// Not called from anywhere yet — display wiring is a separate later step.
+// Counts opportunities posted by someone OTHER than the current user,
+// created within the last 7 days. Honest "new opportunities" — NOT skill-matching.
+async function ccCheckNewOpportunities() {
+  try {
+    if (!sb || !currentUser) return 0;
+    var handle = currentUser.handle;
+    if (!handle) return 0;
+    var cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    var res = await sb
+      .from('opportunities')
+      .select('*', { count: 'exact', head: true })
+      .neq('poster_handle', handle)
+      .gte('created_at', cutoff);
+    if (res && typeof res.count === 'number') return res.count;
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}
 // Needs Attention — central renderer. Owns #cc-needs-attention.
 // Supersedes the old per-signal ccRenderSignal1. One function clears and
 // fills the container; signals render in priority order (deals, then DMs).
