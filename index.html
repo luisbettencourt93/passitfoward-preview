@@ -8269,7 +8269,22 @@ async function ccRenderNeedsAttention() {
     container.appendChild(dmItem);
   }
 }
+  // --- Signal 3: new opportunities in the Live Market ---
+  var oppCount = await ccCheckNewOpportunities();
+  if (oppCount && oppCount >= 1) {
+    var oppMsg;
+    if (oppCount === 1) {
+      oppMsg = '1 new opportunity in the Live Market';
+    } else {
+      oppMsg = oppCount + ' new opportunities in the Live Market';
+    }
 
+    var oppItem = ccBuildAttentionItem('new-opportunities', oppMsg, function() {
+      if (typeof switchTab === 'function') switchTab('livefeed');
+    });
+
+    container.appendChild(oppItem);
+  }
 // Builds one Needs Attention list item. createElement only — no innerHTML.
 // signalId: data-signal attribute. msg: text. onClick: click handler function.
 function ccBuildAttentionItem(signalId, msg, onClick) {
