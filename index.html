@@ -8647,17 +8647,19 @@ function renderWorkExamplesPreview() {
 
   container.innerHTML = pendingWorkExamples.map((ex, i) => `
     <div style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.25);border-radius:6px;padding:8px 10px;display:flex;align-items:flex-start;gap:8px;">
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-          <span style="font-size:13px;font-weight:600;color:#e8f0f8;">${sanitize(ex.title)}</span>
-          <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:0.3px;">${sanitize(ex.category)}</span>
+            <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+          <span style="font-size:13px;font-weight:700;color:#e8f0f8;">${sanitize(ex.title)}</span>
+          <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;">${sanitize(ex.category)}</span>
         </div>
-        <a href="${sanitize(ex.link)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#5a7a9a;text-decoration:none;word-break:break-all;">${sanitize(ex.link)}</a>
-        ${ex.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(ex.description)}</div>` : ''}
-       ${ex.outcome ? `<div style="font-size:11px;color:#2dd4a0;margin-top:4px;font-weight:600;"><i class="fas fa-arrow-trend-up" style="font-size:9px;margin-right:4px;"></i>${sanitize(ex.outcome)}</div>` : ''}
-       ${(Array.isArray(ex.skills_used) && ex.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${ex.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:1px 6px;border-radius:8px;">${sanitize(s)}</span>`).join('')}</div>` : ''}
-       ${ex.image_url ? `<img src="${sanitize(ex.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;max-height:140px;max-width:100%;object-fit:cover;border-radius:6px;border:1px solid rgba(45,212,160,0.2);margin-top:6px;" alt="">` : ''}
-       ${ex.video_url ? `<a href="${sanitize(ex.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;margin-top:6px;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
+        ${ex.image_url ? `<img src="${sanitize(ex.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;" alt="">` : ''}
+        ${ex.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;line-height:1.45;">${sanitize(ex.description)}</div>` : ''}
+        ${ex.outcome ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;font-weight:600;margin-bottom:6px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(ex.outcome)}</span></div>` : ''}
+        ${(Array.isArray(ex.skills_used) && ex.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${ex.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:500;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+        <div style="display:flex;align-items:center;gap:14px;margin-top:2px;">
+          <a href="${sanitize(ex.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
+          ${ex.video_url ? `<a href="${sanitize(ex.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
+        </div>
       </div>
       <button type="button" onclick="removeWorkExample(${i})" aria-label="Remove" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;">×</button>
     </div>
@@ -11122,18 +11124,20 @@ async function viewMemberProfile(handle) {
       <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Work</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${workExamples.map(we => `
-          <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:block;background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.25);border-radius:6px;padding:8px 10px;text-decoration:none;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap;">
-              <span style="font-size:13px;font-weight:600;color:#e8f0f8;">${sanitize(we.title)}</span>
-              <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:0.3px;">${sanitize(we.category)}</span>
+                   <div style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.25);border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+              <span style="font-size:13px;font-weight:700;color:#e8f0f8;">${sanitize(we.title)}</span>
+              <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;">${sanitize(we.category)}</span>
             </div>
-            ${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(we.description)}</div>` : ''}
-            ${we.outcome ? `<div style="font-size:11px;color:#2dd4a0;margin-top:4px;font-weight:600;"><i class="fas fa-arrow-trend-up" style="font-size:9px;margin-right:4px;"></i>${sanitize(we.outcome)}</div>` : ''}
-            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:1px 6px;border-radius:8px;">${sanitize(s)}</span>`).join('')}</div>` : ''}
-            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;max-height:140px;max-width:100%;object-fit:cover;border-radius:6px;border:1px solid rgba(45,212,160,0.2);margin-top:6px;" alt="">` : ''}
-            ${we.video_url ? `<span onclick="event.preventDefault();event.stopPropagation();window.open('${sanitize(we.video_url)}','_blank','noopener,noreferrer');" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;margin-top:6px;font-weight:600;cursor:pointer;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</span>` : ''}
-            <div style="font-size:10px;color:#5a7a9a;margin-top:4px;word-break:break-all;"><i class="fas fa-external-link-alt" style="font-size:9px;margin-right:3px;"></i>${sanitize(we.link)}</div>
-          </a>
+            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;" alt="">` : ''}
+            ${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;line-height:1.45;">${sanitize(we.description)}</div>` : ''}
+            ${we.outcome ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;font-weight:600;margin-bottom:6px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
+            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:500;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:14px;margin-top:2px;">
+              <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
+              ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
+            </div>
+          </div>
         `).join('')}
       </div>
     </div>` : ''}
