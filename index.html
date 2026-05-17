@@ -7947,14 +7947,15 @@ function pifValidateWorkExample(obj) {
       lowerLink.startsWith('file:')) return null;
 
   // Require http/https and a parseable URL with a real hostname
- if (!/^https?:\/\/.+/i.test(link)) return null;
- try {
-  const u = new URL(link);
-  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-  if (!u.hostname || u.hostname.length < 3 || !u.hostname.includes('.')) return null;
-} catch (_) {
-  return null;
-}
+  if (!/^https?:\/\/.+/i.test(link)) return null;
+
+  try {
+    const u = new URL(link);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (!u.hostname || u.hostname.length < 3 || !u.hostname.includes('.')) return null;
+  } catch (_) {
+    return null;
+  }
 
   const description = typeof obj.description === 'string'
     ? obj.description.trim().slice(0, 280)
@@ -7982,15 +7983,6 @@ function pifValidateWorkExample(obj) {
   }
 
   return { title, link, description, category, outcome, skills_used };
-}
-  const description = typeof obj.description === 'string'
-    ? obj.description.trim().slice(0, 280)
-    : '';
-
-  let category = typeof obj.category === 'string' ? obj.category.trim() : '';
-  if (!VALID_WORK_CATEGORIES.includes(category)) category = 'Other';
-
-  return { title, link, description, category };
 }
 
 // Strips bad entries, caps at 5 (V2 — raised from 3).
