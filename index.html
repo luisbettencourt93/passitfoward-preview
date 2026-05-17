@@ -4790,6 +4790,8 @@
     <textarea id="we-description" maxlength="280" placeholder="Short description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
     <input type="text" id="we-outcome" maxlength="120" placeholder="Outcome (optional — e.g. +40% signups)" class="form-input" style="margin-bottom:6px;font-size:13px;">
     <input type="text" id="we-skills" maxlength="200" placeholder="Skills used (optional — comma-separated)" class="form-input" style="margin-bottom:8px;font-size:13px;">
+    <input type="url" id="we-image-url" maxlength="500" placeholder="Image URL (optional — link to a screenshot)" class="form-input" style="margin-bottom:6px;font-size:13px;">
+    <input type="url" id="we-video-url" maxlength="500" placeholder="Video URL (optional — YouTube, Loom, Vimeo)" class="form-input" style="margin-bottom:8px;font-size:13px;">
     <div style="display:flex;gap:6px;">
       <button type="button" onclick="saveWorkExample()" style="flex:1;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.4);color:#2dd4a0;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Add example</button>
       <button type="button" onclick="cancelWorkExampleForm()" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
@@ -8563,7 +8565,9 @@ const c = document.getElementById('we-category'); if (c) c.value = 'Other';
 const d = document.getElementById('we-description'); if (d) d.value = '';
 const o = document.getElementById('we-outcome'); if (o) o.value = '';
 const sk = document.getElementById('we-skills'); if (sk) sk.value = '';
-if (t) setTimeout(() => { try { t.focus(); } catch(_) {} }, 50);
+const iu = document.getElementById('we-image-url'); if (iu) iu.value = '';
+const vu = document.getElementById('we-video-url'); if (vu) vu.value = '';
+if (t) setTimeout(() => { try { t.focus(); } catch(_) {} }, 50);, 50);
 }
 
 function cancelWorkExampleForm() {
