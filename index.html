@@ -7963,17 +7963,44 @@ function pifValidateWorkExample(obj) {
   let category = typeof obj.category === 'string' ? obj.category.trim() : '';
   if (!VALID_WORK_CATEGORIES.includes(category)) category = 'Other';
 
+  // V2: optional outcome — missing/invalid defaults to empty string, never an error
+  const outcome = typeof obj.outcome === 'string'
+    ? obj.outcome.trim().slice(0, 120)
+    : '';
+
+  // V2: optional skills_used — missing/invalid defaults to empty array, never an error
+  let skills_used = [];
+  if (Array.isArray(obj.skills_used)) {
+    for (var si = 0; si < obj.skills_used.length; si++) {
+      var sk = obj.skills_used[si];
+      if (typeof sk === 'string') {
+        var skTrim = sk.trim().slice(0, 30);
+        if (skTrim) skills_used.push(skTrim);
+      }
+      if (skills_used.length >= 5) break;
+    }
+  }
+
+  return { title, link, description, category, outcome, skills_used };
+}
+  const description = typeof obj.description === 'string'
+    ? obj.description.trim().slice(0, 280)
+    : '';
+
+  let category = typeof obj.category === 'string' ? obj.category.trim() : '';
+  if (!VALID_WORK_CATEGORIES.includes(category)) category = 'Other';
+
   return { title, link, description, category };
 }
 
-// Strips bad entries, caps at 3.
+// Strips bad entries, caps at 5 (V2 — raised from 3).
 function pifSanitizeWorkExamples(arr) {
   if (!Array.isArray(arr)) return [];
   const cleaned = [];
   for (const item of arr) {
     const valid = pifValidateWorkExample(item);
     if (valid) cleaned.push(valid);
-    if (cleaned.length >= 3) break;
+    if (cleaned.length >= 5) break;
   }
   return cleaned;
 }
