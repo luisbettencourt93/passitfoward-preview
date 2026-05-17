@@ -4788,6 +4788,8 @@
       <option value="Other" selected>Other</option>
     </select>
     <textarea id="we-description" maxlength="280" placeholder="Short description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
+    <input type="text" id="we-outcome" maxlength="120" placeholder="Outcome (optional — e.g. +40% signups)" class="form-input" style="margin-bottom:6px;font-size:13px;">
+    <input type="text" id="we-skills" maxlength="200" placeholder="Skills used (optional — comma-separated)" class="form-input" style="margin-bottom:8px;font-size:13px;">
     <div style="display:flex;gap:6px;">
       <button type="button" onclick="saveWorkExample()" style="flex:1;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.4);color:#2dd4a0;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Add example</button>
       <button type="button" onclick="cancelWorkExampleForm()" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
@@ -7865,7 +7867,7 @@ renderWorkExamplesPreview();
 const weForm = document.getElementById('work-example-form');
 const weAddBtn = document.getElementById('we-add-btn');
 if (weForm) weForm.style.display = 'none';
-if (weAddBtn) weAddBtn.style.display = pendingWorkExamples.length >= 3 ? 'none' : '';
+if (weAddBtn) weAddBtn.style.display = pendingWorkExamples.length >= 5 ? 'none' : '';
 document.getElementById('profile-modal').style.display='flex';
 }
 function addSkill(){const i=document.getElementById('skill-input');const v=i.value.trim();if(!v||pendingSkills.includes(v)||pendingSkills.length>=8){if(pendingSkills.length>=8)showToast("Max 8 skills");return;}pendingSkills.push(v);i.value='';renderSkillsPreview();}
@@ -8517,8 +8519,8 @@ function ccRenderNexarRecs(recs) {
 let pendingWorkExamples = [];
 
 function showWorkExampleForm() {
-  if (pendingWorkExamples.length >= 3) {
-    showToast('Max 3 work examples — remove one first');
+  if (pendingWorkExamples.length >= 5) {
+    showToast('Max 5 work examples — remove one first');
     return;
   }
   const form = document.getElementById('work-example-form');
@@ -8555,8 +8557,8 @@ function saveWorkExample() {
     return;
   }
 
-  if (pendingWorkExamples.length >= 3) {
-    showToast('Max 3 work examples');
+  if (pendingWorkExamples.length >= 5) {
+    showToast('Max 5 work examples');
     return;
   }
 
@@ -8601,7 +8603,7 @@ function renderWorkExamplesPreview() {
   `).join('');
 
   const addBtn = document.getElementById('we-add-btn');
-  if (addBtn && pendingWorkExamples.length >= 3) addBtn.style.display = 'none';
+  if (addBtn && pendingWorkExamples.length >= 5) addBtn.style.display = 'none';
 }
 // =====================================================
 // PROFILE COMPLETION CHECK (Layer 4 Track 1)
