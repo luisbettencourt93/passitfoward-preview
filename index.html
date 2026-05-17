@@ -7971,22 +7971,51 @@ function pifValidateWorkExample(obj) {
     ? obj.outcome.trim().slice(0, 120)
     : '';
 
-  // V2: optional skills_used — missing/invalid defaults to empty array, never an error
-  let skills_used = [];
-  if (Array.isArray(obj.skills_used)) {
-    for (var si = 0; si < obj.skills_used.length; si++) {
-      var sk = obj.skills_used[si];
-      if (typeof sk === 'string') {
-        var skTrim = sk.trim().slice(0, 30);
-        if (skTrim) skills_used.push(skTrim);
-      }
-      if (skills_used.length >= 5) break;
+// V2: optional skills_used — missing/invalid defaults to empty array, never an error
+let skills_used = [];
+if (Array.isArray(obj.skills_used)) {
+  for (var si = 0; si < obj.skills_used.length; si++) {
+    var sk = obj.skills_used[si];
+    if (typeof sk === 'string') {
+      var skTrim = sk.trim().slice(0, 30);
+      if (skTrim) skills_used.push(skTrim);
     }
+    if (skills_used.length >= 5) break;
   }
-
-  return { title, link, description, category, outcome, skills_used };
 }
 
+// V2 media: optional image_url + video_url — same URL rules as link, but
+// optional. An invalid media URL is silently dropped to '' and does NOT
+// invalidate the work example. (saveWorkExample shows a toast at save time.)
+var image_url = pifValidateMediaUrl(obj.image_url);
+var video_url = pifValidateMediaUrl(obj.video_url);
+
+return { title, link, description, category, outcome, skills_used, image_url, video_url };
+}
+
+// V2 media URL validator — returns the trimmed URL if valid, or '' if absent/invalid.
+// Same checks as the link field, but never throws and never rejects an example —
+// a bad media URL just becomes ''. Pure function: no toasts, no DOM, no side effects.
+function pifValidateMediaUrl(value) {
+  if (typeof value !== 'string') return '';
+  var url = value.trim();
+  if (!url) return '';
+  if (url.length > 500) return '';
+  var lower = url.toLowerCase();
+  if (lower.startsWith('javascript:') ||
+      lower.startsWith('data:') ||
+      lower.startsWith('vbscript:') ||
+      lower.startsWith('file:')) return '';
+  if (!/^https?:\/\/.+/i.test(url)) return '';
+  try {
+    var u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    if (!u.hostname || u.hostname.length < 3 || !u.hostname.includes('.')) return '';
+  } catch (_) {
+    return '';
+  }
+  return url;
+}
 // Strips bad entries, caps at 5 (V2 — raised from 3).
 function pifSanitizeWorkExamples(arr) {
   if (!Array.isArray(arr)) return [];
