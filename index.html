@@ -8528,11 +8528,13 @@ function showWorkExampleForm() {
   if (form) form.style.display = 'block';
   if (addBtn) addBtn.style.display = 'none';
 
-  const t = document.getElementById('we-title'); if (t) t.value = '';
-  const l = document.getElementById('we-link'); if (l) l.value = '';
-  const c = document.getElementById('we-category'); if (c) c.value = 'Other';
-  const d = document.getElementById('we-description'); if (d) d.value = '';
-  if (t) setTimeout(() => { try { t.focus(); } catch(_) {} }, 50);
+const t = document.getElementById('we-title'); if (t) t.value = '';
+const l = document.getElementById('we-link'); if (l) l.value = '';
+const c = document.getElementById('we-category'); if (c) c.value = 'Other';
+const d = document.getElementById('we-description'); if (d) d.value = '';
+const o = document.getElementById('we-outcome'); if (o) o.value = '';
+const sk = document.getElementById('we-skills'); if (sk) sk.value = '';
+if (t) setTimeout(() => { try { t.focus(); } catch(_) {} }, 50);
 }
 
 function cancelWorkExampleForm() {
@@ -8548,7 +8550,18 @@ function saveWorkExample() {
   const category = (document.getElementById('we-category')?.value || 'Other').trim();
   const description = (document.getElementById('we-description')?.value || '').trim();
 
-  const valid = pifValidateWorkExample({ title, link, category, description });
+  // V2: read optional outcome + skills_used
+  const outcome = (document.getElementById('we-outcome')?.value || '').trim();
+  var skillsRaw = (document.getElementById('we-skills')?.value || '');
+  var skills_used = [];
+  var skillParts = skillsRaw.split(',');
+  for (var spi = 0; spi < skillParts.length; spi++) {
+    var sp = skillParts[spi].trim();
+    if (sp) skills_used.push(sp);
+  }
+
+  
+  const valid = pifValidateWorkExample({ title, link, category, description, outcome, skills_used });
   if (!valid) {
     if (!title) { showToast('Title required'); return; }
     if (!link) { showToast('Link required'); return; }
