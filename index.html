@@ -8610,6 +8610,8 @@ function renderWorkExamplesPreview() {
         </div>
         <a href="${sanitize(ex.link)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#5a7a9a;text-decoration:none;word-break:break-all;">${sanitize(ex.link)}</a>
         ${ex.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(ex.description)}</div>` : ''}
+       ${ex.outcome ? `<div style="font-size:11px;color:#2dd4a0;margin-top:4px;font-weight:600;"><i class="fas fa-arrow-trend-up" style="font-size:9px;margin-right:4px;"></i>${sanitize(ex.outcome)}</div>` : ''}
+       ${(Array.isArray(ex.skills_used) && ex.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${ex.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:1px 6px;border-radius:8px;">${sanitize(s)}</span>`).join('')}</div>` : ''}
       </div>
       <button type="button" onclick="removeWorkExample(${i})" aria-label="Remove" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;">×</button>
     </div>
@@ -11080,6 +11082,8 @@ async function viewMemberProfile(handle) {
               <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:1px 6px;border-radius:8px;font-weight:600;letter-spacing:0.3px;">${sanitize(we.category)}</span>
             </div>
             ${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px;line-height:1.4;">${sanitize(we.description)}</div>` : ''}
+            ${we.outcome ? `<div style="font-size:11px;color:#2dd4a0;margin-top:4px;font-weight:600;"><i class="fas fa-arrow-trend-up" style="font-size:9px;margin-right:4px;"></i>${sanitize(we.outcome)}</div>` : ''}
+            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:1px 6px;border-radius:8px;">${sanitize(s)}</span>`).join('')}</div>` : ''}
             <div style="font-size:10px;color:#5a7a9a;margin-top:4px;word-break:break-all;"><i class="fas fa-external-link-alt" style="font-size:9px;margin-right:3px;"></i>${sanitize(we.link)}</div>
           </a>
         `).join('')}
