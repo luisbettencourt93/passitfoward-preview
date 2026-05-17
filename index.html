@@ -8584,24 +8584,35 @@ function saveWorkExample() {
   const description = (document.getElementById('we-description')?.value || '').trim();
 
   // V2: read optional outcome + skills_used
-  const outcome = (document.getElementById('we-outcome')?.value || '').trim();
-  var skillsRaw = (document.getElementById('we-skills')?.value || '');
-  var skills_used = [];
-  var skillParts = skillsRaw.split(',');
-  for (var spi = 0; spi < skillParts.length; spi++) {
-    var sp = skillParts[spi].trim();
-    if (sp) skills_used.push(sp);
-  }
+const outcome = (document.getElementById('we-outcome')?.value || '').trim();
+var skillsRaw = (document.getElementById('we-skills')?.value || '');
+var skills_used = [];
+var skillParts = skillsRaw.split(',');
+for (var spi = 0; spi < skillParts.length; spi++) {
+  var sp = skillParts[spi].trim();
+  if (sp) skills_used.push(sp);
+}
 
-  
-  const valid = pifValidateWorkExample({ title, link, category, description, outcome, skills_used });
-  if (!valid) {
-    if (!title) { showToast('Title required'); return; }
-    if (!link) { showToast('Link required'); return; }
-    if (!/^https?:\/\/.+/i.test(link)) { showToast('Link must start with http:// or https://'); return; }
-    showToast('Invalid example — check link format');
-    return;
-  }
+// V2 media: read optional image_url + video_url
+var imageRaw = (document.getElementById('we-image-url')?.value || '').trim();
+var videoRaw = (document.getElementById('we-video-url')?.value || '').trim();
+
+const valid = pifValidateWorkExample({ title, link, category, description, outcome, skills_used, image_url: imageRaw, video_url: videoRaw });
+if (!valid) {
+  if (!title) { showToast('Title required'); return; }
+  if (!link) { showToast('Link required'); return; }
+  if (!/^https?:\/\/.+/i.test(link)) { showToast('Link must start with http:// or https://'); return; }
+  showToast('Invalid example — check link format');
+  return;
+}
+
+// V2 media: if the user typed a media URL but the validator dropped it as
+// invalid, the work example still saved — tell them the media was not kept.
+if (imageRaw && !valid.image_url) {
+  showToast('Image URL looked invalid — saved without it');
+} else if (videoRaw && !valid.video_url) {
+  showToast('Video URL looked invalid — saved without it');
+}
 
   if (pendingWorkExamples.length >= 5) {
     showToast('Max 5 work examples');
