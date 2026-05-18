@@ -3398,16 +3398,15 @@
             </div>
           </button>
 
-          <button onclick="switchTab('livefeed')" class="cc-status-card" style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left;font-family:inherit;">
+             <div class="cc-status-card" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;text-align:left;font-family:inherit;">
             <div style="display:flex;align-items:center;gap:10px;">
-              <i class="fas fa-bullseye" style="font-size:13px;color:#60a5fa;width:14px;"></i>
-              <span style="font-size:13px;color:#60a5fa;font-weight:700;">Opportunities</span>
+              <i class="fas fa-bullseye" style="font-size:13px;color:#5a7a9a;width:14px;"></i>
+              <span style="font-size:13px;color:#94a3b8;">Posted Opportunities</span>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
-              <span id="cc-stat-opps" style="font-size:13px;font-weight:700;color:#60a5fa;">—</span>
-              <i class="fas fa-chevron-right" style="font-size:10px;color:#60a5fa;"></i>
+              <span id="cc-stat-opps" style="font-size:13px;font-weight:700;color:#e8f0f8;">—</span>
             </div>
-          </button>
+          </div>
         </div>
 
         <!-- RIGHT — NEXAR GUIDANCE PANEL -->
@@ -8120,7 +8119,13 @@ function ccHydrateShell() {
   const dealsEl = document.getElementById('cc-stat-deals');
   if (dealsEl) dealsEl.textContent = '—';
   const oppsEl = document.getElementById('cc-stat-opps');
-  if (oppsEl) oppsEl.textContent = '—';
+if (oppsEl) {
+  oppsEl.textContent = '—';
+  ccCountPostedOpportunities().then(function(n) {
+    var el = document.getElementById('cc-stat-opps');
+    if (el) el.textContent = n;
+  });
+}
 
   // Action banner — rule-based cascade against currentUser only (Edit 2)
  // Conditions requiring Supabase queries (deals, DMs, matches) deferred to later edits.
@@ -8303,6 +8308,25 @@ async function ccCheckNewOpportunities() {
       .select('*', { count: 'exact', head: true })
       .neq('poster_handle', handle)
       .gte('created_at', cutoff);
+    if (res && typeof res.count === 'number') return res.count;
+    return 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+// Command Centre — Posted Opportunities card (Stage 1 IA).
+// Self-contained count: opportunities posted by the current user.
+// Returns a number, 0 on any failure. Lightweight head:true count query.
+async function ccCountPostedOpportunities() {
+  try {
+    if (!sb || !currentUser) return 0;
+    var handle = currentUser.handle;
+    if (!handle) return 0;
+    var res = await sb
+      .from('opportunities')
+      .select('*', { count: 'exact', head: true })
+      .eq('poster_handle', handle);
     if (res && typeof res.count === 'number') return res.count;
     return 0;
   } catch (e) {
