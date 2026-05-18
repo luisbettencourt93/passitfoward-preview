@@ -346,7 +346,7 @@
    NOT being replaced — this rule must stay out of the live repo until the
    Command Centre genuinely replaces the legacy dashboard's function. */
 #dashboard > #cc-dashboard-wrapper ~ *,
-#cc-dashboard-wrapper #cc-shell ~ * {
+#cc-dashboard-wrapper #cc-shell ~ *:not(#cc-quick-access):not(#cc-main-grid):not(#cc2-shell) {
   display: none !important;
 }
 
