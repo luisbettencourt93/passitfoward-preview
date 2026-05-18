@@ -345,7 +345,10 @@
    The legacy dashboard (Wallet, Earnings, stats) still has useful areas and is
    NOT being replaced — this rule must stay out of the live repo until the
    Command Centre genuinely replaces the legacy dashboard's function. */
-#dashboard > #cc-dashboard-wrapper ~ * { display: none !important; }
+#dashboard > #cc-dashboard-wrapper ~ *,
+#cc-dashboard-wrapper #cc-shell ~ * {
+  display: none !important;
+}
 
 /* === COMMAND CENTRE — desktop polish pass (CSS-only, layered over inline styles) ===
    Polish-grade hierarchy/spacing improvements. Not a ground-up redesign. */
