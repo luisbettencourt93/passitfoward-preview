@@ -8828,7 +8828,7 @@ async function ccGetFounderData(force) {
   } catch (e) {
     return null;
   }
-  
+}
   // Command Centre — Founder View modal opener + renderer (Stage 4).
   function showFounderView() {
   if (typeof isFounder !== 'function' || !isFounder()) return;
@@ -8973,8 +8973,8 @@ function renderFounderView(data) {
 
   el.innerHTML = html;
 }
-}
-  // Relative-time helper for Command Centre cards. Returns "today",
+
+ // Relative-time helper for Command Centre cards. Returns "today",
 // "yesterday", "N days ago", "N weeks ago", or "" if the date is unusable.
 function ccRelativeTime(iso) {
   try {
