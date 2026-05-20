@@ -8634,9 +8634,9 @@ async function ccGetFounderData(force) {
 
   async function fetchMembers() {
     try {
-      var r = await sb
-        .from('profiles')
-        .select('handle, created_at, last_seen, forged_strikes, banned, bio, skills, city, intents, work_examples, twitter, instagram, linkedin');
+     var r = await sb
+      .from('profiles')
+      .select('*');
 
       if (!r || !Array.isArray(r.data)) return EMPTY_MEMBERS;
 
@@ -8829,8 +8829,9 @@ async function ccGetFounderData(force) {
   } catch (e) {
     return null;
   }
-// Command Centre — Founder View modal opener + renderer (Stage 4).
-function showFounderView() {
+  }
+  // Command Centre — Founder View modal opener + renderer (Stage 4).
+  function showFounderView() {
   if (typeof isFounder !== 'function' || !isFounder()) return;
 
   var modal = document.getElementById('founder-view-modal');
