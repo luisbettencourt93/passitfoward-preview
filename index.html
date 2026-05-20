@@ -8200,8 +8200,10 @@ function ccHydrateShell() {
       };
 
       var stats = '';
-      stats += statCardOpen + statLabel('Completed') + statHead(r.completed) + statMeta('deals settled') + statCardClose;
-      stats += statCardOpen + statLabel('Active') + statHead(r.active) + statMeta('in pipeline') + statCardClose;
+      var completedOpen = r.completed > 0 ? statCardOpen : statCardOpenStatic;
+      var pipelineOpen = r.active > 0 ? statCardOpen : statCardOpenStatic;
+      stats += completedOpen + statLabel('Completed') + statHead(r.completed) + statMeta('deals settled') + statCardClose;
+      stats += pipelineOpen + statLabel('Pipeline') + statHead(r.active) + statMeta('active / pending') + statCardClose;
 
       if (r.successRate !== null) {
         stats += statCardOpen + statLabel('Success Rate') + statHead(r.successRate + '%') + statMeta('on ' + r.total + ' deals') + statCardClose;
@@ -8571,7 +8573,7 @@ async function ccGetTrackRecord() {
     for (var i = 0; i < rows.length; i++) {
       var s = rows[i].status;
       if (s === 'settled') settledRows.push(rows[i]);
-      else if (s === 'active') activeCount++;
+      else if (s === 'active' || s === 'pending' || s === 'pending_acceptance') activeCount++;
     }
     var total = rows.length;
     var sr = null;
