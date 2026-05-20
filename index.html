@@ -3390,14 +3390,14 @@
             </div>
           </button>
 
-          <button onclick="if(typeof showToast==='function') showToast('Deals dashboard coming soon')" class="cc-status-card" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left;font-family:inherit;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <i class="fas fa-file-signature" style="font-size:13px;color:#5a7a9a;width:14px;"></i>
-              <span style="font-size:13px;color:#94a3b8;">Deals</span>
+             <button onclick="if(typeof showMyForgedDeals==='function') showMyForgedDeals()" class="cc-status-card" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;text-align:left;font-family:inherit;cursor:pointer;width:100%;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <i class="fas fa-file-signature" style="font-size:12px;color:#5a7a9a;width:13px;"></i>
+              <span style="font-size:11px;color:#5a7a9a;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">Deals</span>
+              <i class="fas fa-chevron-right" style="font-size:10px;color:#5a7a9a;margin-left:auto;"></i>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span id="cc-stat-deals" style="font-size:13px;font-weight:700;color:#5a7a9a;">—</span>
-              <i class="fas fa-chevron-right" style="font-size:10px;color:#5a7a9a;"></i>
+            <div id="cc-deals-body">
+              <div style="font-size:13px;color:#5a7a9a;">Loading…</div>
             </div>
           </button>
 
@@ -8117,9 +8117,42 @@ function ccHydrateShell() {
     weEl.textContent = we.length === 0 ? '0' : (we.length + (we.length === 1 ? ' example' : ' examples'));
   }
 
-  // Status: Deals & Opportunities — placeholders only in V1 shell
-  const dealsEl = document.getElementById('cc-stat-deals');
-  if (dealsEl) dealsEl.textContent = '—';
+    // Status: Deals card — Stage 2 IA (pattern-applied; real forged_deals summary)
+  const dealsBody = document.getElementById('cc-deals-body');
+  if (dealsBody) {
+    ccGetForgedDeals().then(function(r) {
+      var el = document.getElementById('cc-deals-body');
+      if (!el) return;
+
+      var total = (r.active || 0) + (r.pending || 0) + (r.completed || 0);
+
+      if (!total) {
+        el.innerHTML =
+          '<div style="font-size:15px;font-weight:700;color:#e8f0f8;">None yet</div>' +
+          '<div style="font-size:11px;color:#5a7a9a;margin-top:3px;">Active deals will appear here</div>';
+        return;
+      }
+
+      var headline = r.active === 1 ? '1 active' : r.active + ' active';
+      var html = '<div style="font-size:15px;font-weight:700;color:#e8f0f8;">' + headline + '</div>';
+
+      if (r.latest && r.latest.title) {
+        var t = String(r.latest.title);
+        if (t.length > 38) t = t.slice(0, 38) + '…';
+        html += '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Latest: ' + sanitize(t) + '</div>';
+      }
+
+      var meta = [];
+      if (r.pending > 0) meta.push(r.pending + ' pending');
+      if (r.completed > 0) meta.push(r.completed + ' completed');
+
+      if (meta.length) {
+        html += '<div style="font-size:10px;color:#5a7a9a;margin-top:3px;">' + meta.join(' · ') + '</div>';
+      }
+
+      el.innerHTML = html;
+    });
+  }
    const oppsBody = document.getElementById('cc-opps-body');
   if (oppsBody) {
     ccGetPostedOpportunities().then(function(r) {
@@ -8367,7 +8400,43 @@ async function ccGetPostedOpportunities() {
     return { count: 0, latest: null };
   }
 }
+// Command Centre — Forged Deals summary (Stage 2 IA).
+// Self-contained. Fetches the user's deals (both directions) and returns
+// { active, pending, completed, latest }. latest is the most recent row.
+// Returns { active:0, pending:0, completed:0, latest:null } on any failure.
+async function ccGetForgedDeals() {
+  var EMPTY = { active: 0, pending: 0, completed: 0, latest: null };
+  try {
+    if (!sb || !currentUser) return EMPTY;
+    var handle = currentUser.handle;
+    if (!handle) return EMPTY;
+    var res = await sb
+      .from('forged_deals')
+      .select('title, status, created_at, initiator_handle, receiver_handle')
+      .or('initiator_handle.eq.' + handle + ',receiver_handle.eq.' + handle)
+      .order('created_at', { ascending: false });
+    if (!res || !Array.isArray(res.data)) return EMPTY;
 
+    var rows = res.data;
+    var active = 0, pending = 0, completed = 0;
+
+    for (var i = 0; i < rows.length; i++) {
+      var s = rows[i].status;
+      if (s === 'active') active++;
+      else if (s === 'pending' || s === 'pending_acceptance') pending++;
+      else if (s === 'settled') completed++;
+    }
+
+    return {
+      active: active,
+      pending: pending,
+      completed: completed,
+      latest: rows.length ? rows[0] : null
+    };
+  } catch (e) {
+    return EMPTY;
+  }
+}
 // Relative-time helper for Command Centre cards. Returns "today",
 // "yesterday", "N days ago", "N weeks ago", or "" if the date is unusable.
 function ccRelativeTime(iso) {
