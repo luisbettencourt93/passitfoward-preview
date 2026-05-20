@@ -8974,8 +8974,148 @@ function renderFounderView(data) {
     html += '<div style="font-size:11px;color:#2dd4a0;padding:10px 14px;background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.18);border-radius:8px;display:flex;align-items:center;gap:6px;"><i class="fas fa-check-circle" style="font-size:11px;"></i>All clear</div>';
   }
 
-  el.innerHTML = html;
+   el.innerHTML = html;
 }
+
+// NEXAR Context Layer V1 — assembles a bounded, structured payload of the
+// current user's real data for nexar-chat. Built fresh on every send.
+// Privacy rule: only data the user can already see about themselves.
+// Never includes payment fields, IDs, emails, DM content, other users' data,
+// or work_example URLs/images/videos.
+// Hard caps: bio 280 chars, skills 10, intents 5, work_examples 3.
+// Edge Function must read body.context + body.client_context_version to use it;
+// if Edge Function is unaware, the extra fields are silently ignored.
+async function ccBuildNexarContext() {
+  try {
+    if (!currentUser) return {};
+    var ctx = {};
+
+    // --- Tier 1: user identity + profile (always when present) ---
+    var u = {};
+    if (currentUser.handle) u.handle = String(currentUser.handle);
+    if (currentUser.display_name) u.display_name = String(currentUser.display_name);
+
+    if (typeof currentUser.bio === 'string' && currentUser.bio.trim()) {
+      u.bio = currentUser.bio.trim().slice(0, 280);
+    }
+
+    if (Array.isArray(currentUser.skills)) {
+      var sk = [];
+      for (var si = 0; si < currentUser.skills.length; si++) {
+        var s = currentUser.skills[si];
+        if (typeof s === 'string' && s.trim()) sk.push(s.trim());
+        if (sk.length >= 10) break;
+      }
+      if (sk.length) u.skills = sk;
+    }
+
+    if (Array.isArray(currentUser.intents)) {
+      var it = [];
+      for (var ii = 0; ii < currentUser.intents.length; ii++) {
+        var v = currentUser.intents[ii];
+        if (typeof v === 'string' && v.trim()) it.push(v.trim());
+        if (it.length >= 5) break;
+      }
+      if (it.length) u.intents = it;
+    }
+
+    if (currentUser.city) u.city = String(currentUser.city);
+    if (Object.keys(u).length) ctx.user = u;
+
+    // --- Tier 2: proof of work — titled summaries only, no URLs/images/desc ---
+    if (Array.isArray(currentUser.work_examples) && currentUser.work_examples.length) {
+      var pow = [];
+
+      for (var wi = 0; wi < currentUser.work_examples.length && pow.length < 3; wi++) {
+        var w = currentUser.work_examples[wi];
+        if (!w || typeof w !== 'object') continue;
+
+        var entry = {};
+
+        if (w.title) entry.title = String(w.title).slice(0, 120);
+        if (w.outcome) entry.outcome = String(w.outcome).slice(0, 200);
+
+        if (Array.isArray(w.skills_used) && w.skills_used.length) {
+          var su = [];
+          for (var sui = 0; sui < w.skills_used.length && su.length < 5; sui++) {
+            var x = w.skills_used[sui];
+            if (typeof x === 'string' && x.trim()) su.push(x.trim());
+          }
+          if (su.length) entry.skills_used = su;
+        }
+
+        if (w.category) entry.category = String(w.category);
+        if (Object.keys(entry).length) pow.push(entry);
+      }
+
+      if (pow.length) ctx.proof_of_work = pow;
+    }
+
+    // --- Tier 2: track record — completed/pipeline/success_rate/latest_settled ---
+    try {
+      if (typeof ccGetTrackRecord === 'function') {
+        var tr = await ccGetTrackRecord();
+
+        if (tr) {
+          var trOut = {};
+
+          if (typeof tr.completed === 'number') trOut.completed = tr.completed;
+          if (typeof tr.active === 'number') trOut.pipeline = tr.active;
+          if (typeof tr.successRate === 'number') trOut.success_rate = tr.successRate;
+
+          if (tr.latestSettled && tr.latestSettled.title) {
+            trOut.latest_settled = String(tr.latestSettled.title).slice(0, 120);
+          }
+
+          if (Object.keys(trOut).length) ctx.track_record = trOut;
+        }
+      }
+    } catch (e) {}
+
+    // --- Tier 2: posted opportunities — count + latest title only ---
+    try {
+      if (typeof ccGetPostedOpportunities === 'function') {
+        var po = await ccGetPostedOpportunities();
+
+        if (po) {
+          var poOut = {};
+
+          if (typeof po.count === 'number' && po.count > 0) {
+            poOut.posted_count = po.count;
+
+            if (po.latest && po.latest.title) {
+              poOut.latest_posted = String(po.latest.title).slice(0, 120);
+            }
+          }
+
+          if (Object.keys(poOut).length) ctx.opportunities = poOut;
+        }
+      }
+    } catch (e) {}
+
+    // --- Tier 3: deals — active + pending counts only ---
+    try {
+      if (typeof ccGetForgedDeals === 'function') {
+        var fd = await ccGetForgedDeals();
+
+        if (fd) {
+          var fdOut = {};
+
+          if (typeof fd.active === 'number' && fd.active > 0) fdOut.active = fd.active;
+          if (typeof fd.pending === 'number' && fd.pending > 0) fdOut.pending = fd.pending;
+
+          if (Object.keys(fdOut).length) ctx.deals = fdOut;
+        }
+      }
+    } catch (e) {}
+
+    return ctx;
+  } catch (e) {
+    return {};
+  }
+}
+
+
 
  // Relative-time helper for Command Centre cards. Returns "today",
 // "yesterday", "N days ago", "N weeks ago", or "" if the date is unusable.
@@ -13869,7 +14009,7 @@ if (payload?.name === 'update_match_status') {
         'Authorization': `Bearer ${token}`,
         'Accept': 'text/event-stream',
       },
-      body: JSON.stringify({ message: msg }),
+      body: JSON.stringify({ message: msg, client_context_version: 'v1', context: await ccBuildNexarContext() }),
     });
 
     // Rate-limit response
