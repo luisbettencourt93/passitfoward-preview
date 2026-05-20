@@ -4885,8 +4885,10 @@
       <p style="font-size:0.68rem;color:#4b5563;font-style:italic;margin-bottom:0.8rem;">Payment goes directly to you — the platform never holds funds.</p>
     </div>
     <button onclick="saveProfile()" class="btn" style="width:100%;">Save Profile</button>
-    <button onclick="closeModal('profile-modal')" class="modal-cancel">Cancel</button>
-  </div>
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+      <button type="button" onclick="changePassword()" style="width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:8px 12px;border-radius:8px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-lock" style="font-size:11px;"></i>Change password</button>
+    </div>
+    <button onclick="closeModal('profile-modal')" class="modal-cancel">Cancel</button>  </div>
 </div>
 
 <div id="dm-modal" class="modal">
@@ -8853,36 +8855,42 @@ function renderFounderView(data) {
   if (!el) return;
 
   if (!data) {
-    el.innerHTML = '<div style="padding:30px 0;text-align:center;color:#5a7a9a;font-size:13px;">Founder data unavailable.</div>';
+    el.innerHTML = '<div style="padding:40px 0;text-align:center;color:#5a7a9a;font-size:13px;">Founder data unavailable.</div>';
     return;
   }
-
   var html = '';
 
-  var pulseCard = function(label, value) {
-    return '<div style="flex:1;min-width:120px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;">' +
-      '<div style="font-size:10px;font-weight:600;color:#5a7a9a;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">' + label + '</div>' +
-      '<div style="font-size:18px;font-weight:700;color:#e8f0f8;">' + value + '</div>' +
+  // ============================================================
+  // SECTION 1: PLATFORM PULSE — hero stat strip (largest visual weight)
+  // ============================================================
+  var pulseCard = function(label, value, accent) {
+    var col = accent || '#e8f0f8';
+    return '<div style="flex:1;min-width:130px;background:linear-gradient(180deg, rgba(45,79,111,0.18) 0%, rgba(255,255,255,0.02) 100%);border:1px solid #2d4f6f;border-radius:10px;padding:14px 16px;">' +
+      '<div style="font-size:9px;font-weight:700;color:#5a7a9a;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:8px;">' + label + '</div>' +
+      '<div style="font-size:24px;font-weight:700;color:' + col + ';line-height:1;font-family:\'Space Grotesk\',sans-serif;">' + value + '</div>' +
     '</div>';
   };
-
-  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">PLATFORM PULSE</div>';
-  html += '<div id="fv-pulse" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:22px;">';
   html += pulseCard('Members', data.members.total);
   html += pulseCard('Opportunities', data.opportunities.total);
   html += pulseCard('Deals', data.deals.total);
-  html += pulseCard('Applications', data.applications.total);
+  html += pulseCard('Applications', data.applications.total, data.applications.total > 0 ? '#60a5fa' : '#e8f0f8');
   html += '</div>';
 
+  // ============================================================
+  // SECTION 2: FOUNDER QUICK ACTIONS — real button shapes, button-like prominence
+  // ============================================================
   var actionBtn = function(icon, label, onClick) {
-    return '<button type="button" onclick="' + onClick + '" style="flex:1 1 30%;min-width:140px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 12px;cursor:pointer;font-family:inherit;color:#e8f0f8;font-size:12px;font-weight:600;text-align:left;">' +
-      '<i class="' + icon + '" style="font-size:13px;color:#5a7a9a;width:16px;text-align:center;"></i>' +
-      '<span>' + label + '</span>' +
+    return '<button type="button" onclick="' + onClick + '" ' +
+      'onmouseover="this.style.background=\'rgba(45,212,160,0.08)\';this.style.borderColor=\'rgba(45,212,160,0.35)\';this.querySelector(\'i\').style.color=\'#2dd4a0\';" ' +
+      'onmouseout="this.style.background=\'rgba(255,255,255,0.03)\';this.style.borderColor=\'#2d4f6f\';this.querySelector(\'i\').style.color=\'#94a3b8\';" ' +
+      'style="flex:1 1 calc(33.333% - 7px);min-width:130px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;background:rgba(255,255,255,0.03);border:1px solid #2d4f6f;border-radius:10px;padding:14px;cursor:pointer;font-family:inherit;color:#e8f0f8;text-align:left;transition:background 0.15s ease,border-color 0.15s ease;">' +
+      '<i class="' + icon + '" style="font-size:16px;color:#94a3b8;transition:color 0.15s ease;"></i>' +
+      '<span style="font-size:12px;font-weight:600;line-height:1.2;">' + label + '</span>' +
     '</button>';
   };
-
-  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">FOUNDER QUICK ACTIONS</div>';
-  html += '<div id="fv-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;">';
+  html += '<div style="font-size:9px;font-weight:700;color:#5a7a9a;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:10px;">Quick Actions</div>';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;">';
   html += actionBtn('fas fa-bullseye', '30-day goal', "closeModal('founder-view-modal'); if(typeof showGoalModal==='function') showGoalModal();");
   html += actionBtn('fas fa-key', 'Invite codes', "closeModal('founder-view-modal'); if(typeof showInviteModal==='function') showInviteModal();");
   html += actionBtn('fas fa-inbox', 'Applications', "closeModal('founder-view-modal'); if(typeof showApplicationsModal==='function') showApplicationsModal();");
@@ -8890,86 +8898,81 @@ function renderFounderView(data) {
   html += actionBtn('fas fa-lock', 'Password', "closeModal('founder-view-modal'); if(typeof changePassword==='function') changePassword();");
   html += '</div>';
 
-  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">MEMBERSHIP INBOX</div>';
-  html += '<div id="fv-inbox" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:6px 0;margin-bottom:18px;">';
-
+  // ============================================================
+  // SECTION 3: MEMBERSHIP INBOX — proper list, avatar circles, density, row hover
+  // ============================================================
+  var inboxHeader = '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">' +
+    '<div style="font-size:9px;font-weight:700;color:#5a7a9a;letter-spacing:0.6px;text-transform:uppercase;">Membership Inbox</div>' +
+    (data.applications.total > 0 ? '<div style="font-size:10px;color:#94a3b8;">' + data.applications.total + ' pending</div>' : '') +
+  '</div>';
+  html += inboxHeader;
+  html += '<div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;overflow:hidden;margin-bottom:24px;">';
   if (!data.applications.recent || !data.applications.recent.length) {
-    html += '<div style="padding:14px;text-align:center;color:#5a7a9a;font-size:12px;">No applications pending</div>';
+    html += '<div style="padding:24px 14px;text-align:center;color:#5a7a9a;font-size:12px;">No applications pending</div>';
   } else {
     for (var ai = 0; ai < data.applications.recent.length; ai++) {
       var a = data.applications.recent[ai];
-
       var name = a.full_name ? sanitize(String(a.full_name)) : '(no name)';
       var xh = a.x_handle ? '@' + sanitize(String(a.x_handle)) : '';
       var sk = a.skills ? String(a.skills) : '';
-
-      if (sk.length > 60) sk = sk.slice(0, 60) + '…';
+      if (sk.length > 70) sk = sk.slice(0, 70) + '…';
       sk = sanitize(sk);
-
       var rel = (typeof ccRelativeTime === 'function') ? ccRelativeTime(a.created_at) : '';
-      var isLast = ai === data.applications.recent.length - 1;
-      var border = isLast ? '' : 'border-bottom:1px solid rgba(45,79,111,0.4);';
-
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;' + border + '">';
+      var isLast = (ai === data.applications.recent.length - 1);
+      var border = isLast ? '' : 'border-bottom:1px solid rgba(45,79,111,0.35);';
+      var initial = (a.full_name ? String(a.full_name).trim().charAt(0).toUpperCase() : '?');
+      html += '<div onmouseover="this.style.background=\'rgba(255,255,255,0.025)\';" onmouseout="this.style.background=\'transparent\';" style="display:flex;align-items:center;gap:11px;padding:10px 14px;' + border + 'transition:background 0.12s ease;">';
+      // Avatar circle
+      html += '<div style="flex-shrink:0;width:30px;height:30px;border-radius:50%;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.25);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#60a5fa;font-family:\'Space Grotesk\',sans-serif;">' + sanitize(initial) + '</div>';
+      // Name + handle + skills
       html += '<div style="flex:1;min-width:0;">';
-      html += '<div style="font-size:12px;color:#e8f0f8;font-weight:600;">' + name + '<span style="color:#5a7a9a;font-weight:400;margin-left:6px;">' + xh + '</span></div>';
-
-      if (sk) {
-        html += '<div style="font-size:11px;color:#94a3b8;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + sk + '</div>';
-      }
-
+      html += '<div style="font-size:12px;color:#e8f0f8;font-weight:600;line-height:1.3;">' + name + (xh ? '<span style="color:#5a7a9a;font-weight:400;margin-left:6px;font-size:11px;">' + xh + '</span>' : '') + '</div>';
+      if (sk) html += '<div style="font-size:11px;color:#94a3b8;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3;">' + sk + '</div>';
       html += '</div>';
-      html += '<div style="font-size:10px;color:#5a7a9a;flex-shrink:0;">' + rel + '</div>';
+      // Time
+      html += '<div style="font-size:10px;color:#5a7a9a;flex-shrink:0;white-space:nowrap;">' + rel + '</div>';
       html += '</div>';
     }
-
     if (data.applications.total > data.applications.recent.length) {
-      html += '<div style="padding:9px 14px;border-top:1px solid rgba(45,79,111,0.4);text-align:center;">';
-      html += '<span onclick="closeModal(\'founder-view-modal\'); if(typeof showApplicationsModal===\'function\') showApplicationsModal();" style="font-size:11px;color:#60a5fa;cursor:pointer;font-weight:600;">View all ' + data.applications.total + ' applications →</span>';
+      html += '<div onclick="closeModal(\'founder-view-modal\'); if(typeof showApplicationsModal===\'function\') showApplicationsModal();" onmouseover="this.style.background=\'rgba(96,165,250,0.06)\';" onmouseout="this.style.background=\'rgba(45,79,111,0.18)\';" style="padding:10px 14px;border-top:1px solid rgba(45,79,111,0.35);text-align:center;cursor:pointer;background:rgba(45,79,111,0.18);transition:background 0.12s ease;">';
+      html += '<span style="font-size:11px;color:#60a5fa;font-weight:600;">View all ' + data.applications.total + ' applications →</span>';
       html += '</div>';
     }
   }
-
   html += '</div>';
 
-  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">PLATFORM ACTIVITY</div>';
-  html += '<div id="fv-activity" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;margin-bottom:18px;">';
-  html += '<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#94a3b8;">';
-  html += '<div><span style="color:#5a7a9a;">Deals:</span> ' + data.deals.active + ' active · ' + data.deals.pending + ' pending · ' + data.deals.settled + ' settled</div>';
-  html += '<div><span style="color:#5a7a9a;">Opportunities:</span> ' + data.opportunities.total + ' total' + (data.opportunities.lastWeek ? ' · ' + data.opportunities.lastWeek + ' this week' : '') + '</div>';
-  html += '<div><span style="color:#5a7a9a;">Members:</span> ' + data.members.total + ' total' + (data.members.lastWeek ? ' · ' + data.members.lastWeek + ' this week' : '') + '</div>';
-
+  // ============================================================
+  // SECTION 4: PLATFORM ACTIVITY — compact data line, label/value pairs
+  // ============================================================
+  var actStat = function(label, value) {
+    return '<div style="display:flex;align-items:baseline;gap:6px;">' +
+      '<span style="font-size:10px;color:#5a7a9a;letter-spacing:0.3px;text-transform:uppercase;font-weight:600;">' + label + '</span>' +
+      '<span style="font-size:12px;color:#e8f0f8;font-weight:600;">' + value + '</span>' +
+    '</div>';
+  };
+  html += '<div style="font-size:9px;font-weight:700;color:#5a7a9a;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:10px;">Platform Activity</div>';
+  html += '<div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;padding:14px 16px;margin-bottom:22px;display:flex;flex-wrap:wrap;gap:18px 22px;">';
+  html += actStat('Deals', data.deals.active + ' active · ' + data.deals.pending + ' pending · ' + data.deals.settled + ' settled');
+  html += actStat('Opportunities', data.opportunities.total + (data.opportunities.lastWeek ? ' · +' + data.opportunities.lastWeek + ' this week' : ''));
+  html += actStat('Members', data.members.total + (data.members.lastWeek ? ' · +' + data.members.lastWeek + ' this week' : ''));
   if (data.messages.lastWeek > 0) {
-    html += '<div><span style="color:#5a7a9a;">Messages:</span> ' + data.messages.lastWeek + ' this week</div>';
+    html += actStat('Messages', data.messages.lastWeek + ' this week');
   }
-
-  html += '</div>';
   html += '</div>';
 
-  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">MODERATION SIGNALS</div>';
-  html += '<div id="fv-moderation" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;">';
-
+  // ============================================================
+  // SECTION 5: MODERATION SIGNALS — muted secondary, deliberately quieter
+  // ============================================================
+  html += '<div style="font-size:9px;font-weight:700;color:#5a7a9a;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:10px;opacity:0.85;">Moderation</div>';
   var modBits = [];
-
-  if (data.moderation.withStrikes > 0) {
-    modBits.push(data.moderation.withStrikes + ' with strikes');
-  }
-
-  if (data.moderation.banned > 0) {
-    modBits.push(data.moderation.banned + ' banned');
-  }
-
-  if (data.moderation.staleOpps > 0) {
-    modBits.push(data.moderation.staleOpps + ' opportunities older than 30 days');
-  }
-
+  if (data.moderation.withStrikes > 0) modBits.push('<span style="color:#fbbf24;">' + data.moderation.withStrikes + '</span> with strikes');
+  if (data.moderation.banned > 0) modBits.push('<span style="color:#ef4444;">' + data.moderation.banned + '</span> banned');
+  if (data.moderation.staleOpps > 0) modBits.push('<span style="color:#94a3b8;">' + data.moderation.staleOpps + '</span> opportunities older than 30 days');
   if (modBits.length) {
-    html += '<div style="font-size:12px;color:#94a3b8;">' + modBits.join(' · ') + '</div>';
+    html += '<div style="font-size:11px;color:#94a3b8;line-height:1.6;padding:10px 14px;background:rgba(255,255,255,0.015);border:1px solid rgba(45,79,111,0.5);border-radius:8px;">' + modBits.join(' · ') + '</div>';
   } else {
-    html += '<div style="font-size:12px;color:#2dd4a0;">All clear</div>';
+    html += '<div style="font-size:11px;color:#2dd4a0;padding:10px 14px;background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.18);border-radius:8px;display:flex;align-items:center;gap:6px;"><i class="fas fa-check-circle" style="font-size:11px;"></i>All clear</div>';
   }
-
-  html += '</div>';
 
   el.innerHTML = html;
 }
