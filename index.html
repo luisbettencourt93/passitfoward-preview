@@ -3307,8 +3307,7 @@
         <span id="cc-founder-inactive">— inactive</span>
         <span style="color:#3d5a7a;margin:0 6px;">·</span>
         <span id="cc-founder-completion">— avg profile</span>
-        <button onclick="showToast('Founder admin panel coming after metric check')" style="float:right;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Founder view →</button>
-      </div>
+        <button onclick="showFounderView()" style="float:right;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;">Founder view →</button> 
 
       <!-- HEADER STRIP (real display name + XP) -->
       <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;margin-bottom:12px;">
@@ -8087,10 +8086,27 @@ function ccHydrateShell() {
   const shell = document.getElementById('cc-shell');
   if (!shell) return;
 
-  // Founder strip — render only if founder; values stay as placeholders in V1 shell
+    // Founder strip — render only if founder, and populate the placeholder values (Stage 4)
   if (currentUser.role === 'founder') {
     const strip = document.getElementById('cc-founder-strip');
     if (strip) strip.style.display = '';
+
+    // Fresh hydrate = fresh founder data; clear the cache so reopen gets current values
+    if (typeof ccClearFounderCache === 'function') ccClearFounderCache();
+
+    if (typeof ccGetFounderData === 'function') {
+      ccGetFounderData().then(function(d) {
+        if (!d || !d.members) return;
+
+        var totEl = document.getElementById('cc-founder-total');
+        var inacEl = document.getElementById('cc-founder-inactive');
+        var compEl = document.getElementById('cc-founder-completion');
+
+        if (totEl) totEl.textContent = d.members.total + ' members';
+        if (inacEl) inacEl.textContent = d.members.inactive + ' inactive';
+        if (compEl) compEl.textContent = d.members.avgCompletion + '% avg profile';
+      });
+    }
   }
 
   // Header strip — real display name + handle + XP
@@ -8590,7 +8606,375 @@ async function ccGetTrackRecord() {
     return EMPTY;
   }
 }
- // Relative-time helper for Command Centre cards. Returns "today",
+// Command Centre — Founder View data (Stage 4).
+// Founder-gated. Platform-wide point-in-time data, no money, no fake metrics.
+// Each sub-fetch isolated so one failure doesn't kill the whole modal.
+// Cached on the function so repeat opens don't re-hit Supabase; cache cleared
+// when ccHydrateShell runs (fresh shell hydrate = fresh founder data).
+var ccFounderCache = null;
+function ccClearFounderCache() { ccFounderCache = null; }
+
+async function ccGetFounderData(force) {
+  if (typeof isFounder !== 'function' || !isFounder()) {
+    return null;
+  }
+
+  if (!force && ccFounderCache) return ccFounderCache;
+  if (!sb) return null;
+
+  var EMPTY_MEMBERS = { total: 0, lastWeek: 0, inactive: 0, avgCompletion: 0 };
+  var EMPTY_OPPS = { total: 0, lastWeek: 0 };
+  var EMPTY_DEALS = { active: 0, pending: 0, settled: 0, total: 0 };
+  var EMPTY_APPS = { total: 0, recent: [] };
+  var EMPTY_MOD = { withStrikes: 0, banned: 0, staleOpps: 0 };
+  var EMPTY_MSGS = { lastWeek: 0 };
+
+  var weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  var thirtyAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  async function fetchMembers() {
+    try {
+      var r = await sb
+        .from('profiles')
+        .select('handle, created_at, last_seen, forged_strikes, banned, bio, skills, city, intents, work_examples, twitter, instagram, linkedin');
+
+      if (!r || !Array.isArray(r.data)) return EMPTY_MEMBERS;
+
+      var rows = r.data;
+      var totalComp = 0;
+      var inactiveCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      var inactive = 0;
+      var lastWeek = 0;
+      var weekCutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      for (var i = 0; i < rows.length; i++) {
+        var p = rows[i];
+
+        if (typeof pifProfileCompleteness === 'function') {
+          var c = pifProfileCompleteness(p);
+          if (typeof c === 'number') totalComp += c;
+        }
+
+        var ls = p.last_seen ? new Date(p.last_seen).getTime() : 0;
+        if (!ls || ls < inactiveCutoff) inactive++;
+
+        var ca = p.created_at ? new Date(p.created_at).getTime() : 0;
+        if (ca && ca >= weekCutoff) lastWeek++;
+      }
+
+      var avg = rows.length ? Math.round(totalComp / rows.length) : 0;
+
+      return {
+        total: rows.length,
+        lastWeek: lastWeek,
+        inactive: inactive,
+        avgCompletion: avg
+      };
+    } catch (e) {
+      return EMPTY_MEMBERS;
+    }
+  }
+
+  async function fetchOpps() {
+    try {
+      var r = await sb.from('opportunities').select('id, created_at');
+
+      if (!r || !Array.isArray(r.data)) return EMPTY_OPPS;
+
+      var rows = r.data;
+      var lw = 0;
+      var cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      for (var i = 0; i < rows.length; i++) {
+        var c = rows[i].created_at ? new Date(rows[i].created_at).getTime() : 0;
+        if (c >= cutoff) lw++;
+      }
+
+      return {
+        total: rows.length,
+        lastWeek: lw
+      };
+    } catch (e) {
+      return EMPTY_OPPS;
+    }
+  }
+
+  async function fetchStaleOpps() {
+    try {
+      var r = await sb
+        .from('opportunities')
+        .select('*', { count: 'exact', head: true })
+        .lt('created_at', thirtyAgo);
+
+      if (r && typeof r.count === 'number') return r.count;
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  async function fetchDeals() {
+    try {
+      var r = await sb.from('forged_deals').select('status');
+
+      if (!r || !Array.isArray(r.data)) return EMPTY_DEALS;
+
+      var active = 0;
+      var pending = 0;
+      var settled = 0;
+
+      for (var i = 0; i < r.data.length; i++) {
+        var s = r.data[i].status;
+
+        if (s === 'active') active++;
+        else if (s === 'pending' || s === 'pending_acceptance') pending++;
+        else if (s === 'settled') settled++;
+      }
+
+      return {
+        active: active,
+        pending: pending,
+        settled: settled,
+        total: r.data.length
+      };
+    } catch (e) {
+      return EMPTY_DEALS;
+    }
+  }
+
+  async function fetchApplications() {
+    try {
+      var r = await sb
+        .from('applications')
+        .select('id, full_name, x_handle, skills, created_at')
+        .order('created_at', { ascending: false });
+
+      if (!r || !Array.isArray(r.data)) return EMPTY_APPS;
+
+      return {
+        total: r.data.length,
+        recent: r.data.slice(0, 10)
+      };
+    } catch (e) {
+      return EMPTY_APPS;
+    }
+  }
+
+  async function fetchMessagesWeek() {
+    try {
+      var r = await sb
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', weekAgo);
+
+      if (r && typeof r.count === 'number') {
+        return { lastWeek: r.count };
+      }
+
+      return EMPTY_MSGS;
+    } catch (e) {
+      return EMPTY_MSGS;
+    }
+  }
+
+  async function fetchModeration() {
+    try {
+      var rs = await sb.from('profiles').select('forged_strikes, banned');
+
+      var withStrikes = 0;
+      var banned = 0;
+
+      if (rs && Array.isArray(rs.data)) {
+        for (var i = 0; i < rs.data.length; i++) {
+          var p = rs.data[i];
+
+          if (p.forged_strikes && p.forged_strikes > 0) withStrikes++;
+          if (p.banned) banned++;
+        }
+      }
+
+      var stale = await fetchStaleOpps();
+
+      return {
+        withStrikes: withStrikes,
+        banned: banned,
+        staleOpps: stale
+      };
+    } catch (e) {
+      return EMPTY_MOD;
+    }
+  }
+
+  try {
+    var results = await Promise.all([
+      fetchMembers(),
+      fetchOpps(),
+      fetchDeals(),
+      fetchApplications(),
+      fetchMessagesWeek(),
+      fetchModeration()
+    ]);
+
+    var out = {
+      members: results[0],
+      opportunities: results[1],
+      deals: results[2],
+      applications: results[3],
+      messages: results[4],
+      moderation: results[5]
+    };
+
+    ccFounderCache = out;
+    return out;
+  } catch (e) {
+    return null;
+  }
+// Command Centre — Founder View modal opener + renderer (Stage 4).
+function showFounderView() {
+  if (typeof isFounder !== 'function' || !isFounder()) return;
+
+  var modal = document.getElementById('founder-view-modal');
+  if (!modal) return;
+
+  var body = document.getElementById('founder-view-body');
+  if (body) {
+    body.innerHTML = '<div style="padding:30px 0;text-align:center;color:#5a7a9a;font-size:13px;">Loading…</div>';
+  }
+
+  modal.style.display = 'flex';
+
+  ccGetFounderData().then(function(data) {
+    renderFounderView(data);
+  });
+}
+
+function renderFounderView(data) {
+  var el = document.getElementById('founder-view-body');
+  if (!el) return;
+
+  if (!data) {
+    el.innerHTML = '<div style="padding:30px 0;text-align:center;color:#5a7a9a;font-size:13px;">Founder data unavailable.</div>';
+    return;
+  }
+
+  var html = '';
+
+  var pulseCard = function(label, value) {
+    return '<div style="flex:1;min-width:120px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;">' +
+      '<div style="font-size:10px;font-weight:600;color:#5a7a9a;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">' + label + '</div>' +
+      '<div style="font-size:18px;font-weight:700;color:#e8f0f8;">' + value + '</div>' +
+    '</div>';
+  };
+
+  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">PLATFORM PULSE</div>';
+  html += '<div id="fv-pulse" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px;">';
+  html += pulseCard('Members', data.members.total);
+  html += pulseCard('Opportunities', data.opportunities.total);
+  html += pulseCard('Deals', data.deals.total);
+  html += pulseCard('Applications', data.applications.total);
+  html += '</div>';
+
+  var actionBtn = function(icon, label, onClick) {
+    return '<button type="button" onclick="' + onClick + '" style="flex:1 1 30%;min-width:140px;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 12px;cursor:pointer;font-family:inherit;color:#e8f0f8;font-size:12px;font-weight:600;text-align:left;">' +
+      '<i class="' + icon + '" style="font-size:13px;color:#5a7a9a;width:16px;text-align:center;"></i>' +
+      '<span>' + label + '</span>' +
+    '</button>';
+  };
+
+  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">FOUNDER QUICK ACTIONS</div>';
+  html += '<div id="fv-actions" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px;">';
+  html += actionBtn('fas fa-bullseye', '30-day goal', "closeModal('founder-view-modal'); if(typeof showGoalModal==='function') showGoalModal();");
+  html += actionBtn('fas fa-key', 'Invite codes', "closeModal('founder-view-modal'); if(typeof showInviteModal==='function') showInviteModal();");
+  html += actionBtn('fas fa-inbox', 'Applications', "closeModal('founder-view-modal'); if(typeof showApplicationsModal==='function') showApplicationsModal();");
+  html += actionBtn('fas fa-star', 'Testimonial', "closeModal('founder-view-modal'); if(typeof switchTab==='function') switchTab('community'); setTimeout(function(){ var t=document.getElementById('add-testimonial-form-community'); if(t) t.scrollIntoView({behavior:'smooth'}); }, 400);");
+  html += actionBtn('fas fa-lock', 'Password', "closeModal('founder-view-modal'); if(typeof changePassword==='function') changePassword();");
+  html += '</div>';
+
+  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">MEMBERSHIP INBOX</div>';
+  html += '<div id="fv-inbox" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:6px 0;margin-bottom:18px;">';
+
+  if (!data.applications.recent || !data.applications.recent.length) {
+    html += '<div style="padding:14px;text-align:center;color:#5a7a9a;font-size:12px;">No applications pending</div>';
+  } else {
+    for (var ai = 0; ai < data.applications.recent.length; ai++) {
+      var a = data.applications.recent[ai];
+
+      var name = a.full_name ? sanitize(String(a.full_name)) : '(no name)';
+      var xh = a.x_handle ? '@' + sanitize(String(a.x_handle)) : '';
+      var sk = a.skills ? String(a.skills) : '';
+
+      if (sk.length > 60) sk = sk.slice(0, 60) + '…';
+      sk = sanitize(sk);
+
+      var rel = (typeof ccRelativeTime === 'function') ? ccRelativeTime(a.created_at) : '';
+      var isLast = ai === data.applications.recent.length - 1;
+      var border = isLast ? '' : 'border-bottom:1px solid rgba(45,79,111,0.4);';
+
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;' + border + '">';
+      html += '<div style="flex:1;min-width:0;">';
+      html += '<div style="font-size:12px;color:#e8f0f8;font-weight:600;">' + name + '<span style="color:#5a7a9a;font-weight:400;margin-left:6px;">' + xh + '</span></div>';
+
+      if (sk) {
+        html += '<div style="font-size:11px;color:#94a3b8;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + sk + '</div>';
+      }
+
+      html += '</div>';
+      html += '<div style="font-size:10px;color:#5a7a9a;flex-shrink:0;">' + rel + '</div>';
+      html += '</div>';
+    }
+
+    if (data.applications.total > data.applications.recent.length) {
+      html += '<div style="padding:9px 14px;border-top:1px solid rgba(45,79,111,0.4);text-align:center;">';
+      html += '<span onclick="closeModal(\'founder-view-modal\'); if(typeof showApplicationsModal===\'function\') showApplicationsModal();" style="font-size:11px;color:#60a5fa;cursor:pointer;font-weight:600;">View all ' + data.applications.total + ' applications →</span>';
+      html += '</div>';
+    }
+  }
+
+  html += '</div>';
+
+  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">PLATFORM ACTIVITY</div>';
+  html += '<div id="fv-activity" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;margin-bottom:18px;">';
+  html += '<div style="display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:#94a3b8;">';
+  html += '<div><span style="color:#5a7a9a;">Deals:</span> ' + data.deals.active + ' active · ' + data.deals.pending + ' pending · ' + data.deals.settled + ' settled</div>';
+  html += '<div><span style="color:#5a7a9a;">Opportunities:</span> ' + data.opportunities.total + ' total' + (data.opportunities.lastWeek ? ' · ' + data.opportunities.lastWeek + ' this week' : '') + '</div>';
+  html += '<div><span style="color:#5a7a9a;">Members:</span> ' + data.members.total + ' total' + (data.members.lastWeek ? ' · ' + data.members.lastWeek + ' this week' : '') + '</div>';
+
+  if (data.messages.lastWeek > 0) {
+    html += '<div><span style="color:#5a7a9a;">Messages:</span> ' + data.messages.lastWeek + ' this week</div>';
+  }
+
+  html += '</div>';
+  html += '</div>';
+
+  html += '<div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">MODERATION SIGNALS</div>';
+  html += '<div id="fv-moderation" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;">';
+
+  var modBits = [];
+
+  if (data.moderation.withStrikes > 0) {
+    modBits.push(data.moderation.withStrikes + ' with strikes');
+  }
+
+  if (data.moderation.banned > 0) {
+    modBits.push(data.moderation.banned + ' banned');
+  }
+
+  if (data.moderation.staleOpps > 0) {
+    modBits.push(data.moderation.staleOpps + ' opportunities older than 30 days');
+  }
+
+  if (modBits.length) {
+    html += '<div style="font-size:12px;color:#94a3b8;">' + modBits.join(' · ') + '</div>';
+  } else {
+    html += '<div style="font-size:12px;color:#2dd4a0;">All clear</div>';
+  }
+
+  html += '</div>';
+
+  el.innerHTML = html;
+}
+}
+  // Relative-time helper for Command Centre cards. Returns "today",
 // "yesterday", "N days ago", "N weeks ago", or "" if the date is unusable.
 function ccRelativeTime(iso) {
   try {
@@ -13783,6 +14167,20 @@ window.nexarUpdateFabs = nexarUpdateFabs;
     </div>
     <div id="invite-codes-list" style="max-height:360px;overflow-y:auto;scrollbar-width:thin;"></div>
     <button onclick="closeModal('invite-modal')" class="modal-cancel" style="display:block;width:100%;margin-top:1rem;">Close</button>
+  </div>
+</div>
+</div>
+<!-- FOUNDER VIEW MODAL (founder only) — Stage 4 -->
+<div id="founder-view-modal" class="modal">
+  <div class="modal-content" style="max-width:760px;max-height:90vh;overflow-y:auto;text-align:left;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <h2 style="margin:0;font-size:18px;color:#e8f0f8;">Founder View</h2>
+      <button onclick="closeModal('founder-view-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;line-height:1;padding:0 4px;" aria-label="Close">×</button>
+    </div>
+    <div id="founder-view-body">
+      <div style="padding:30px 0;text-align:center;color:#5a7a9a;font-size:13px;">Loading…</div>
+    </div>
+    <button onclick="closeModal('founder-view-modal')" class="modal-cancel" style="display:block;width:100%;margin-top:14px;">Close</button>
   </div>
 </div>
 <!-- APPLICATIONS MODAL (founder only) -->
