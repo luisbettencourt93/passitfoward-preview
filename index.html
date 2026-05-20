@@ -332,6 +332,7 @@
 #cc-main-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
 #cc-qa-row { flex-wrap: wrap !important; }
 #cc-quick-access .cc-qa-btn { flex: 1 1 30% !important; min-width: 90px !important; padding: 9px 6px !important; font-size: 11px !important; }
+#cc-tr-stats > div { flex: 1 1 calc(50% - 5px) !important; min-width: 0 !important; }
 #cc-shell .cc-status-card { padding: 11px 12px !important; }
 #cc-shell #cc-action-banner { padding: 14px 14px !important; flex-wrap: wrap !important; }
 #cc-shell #cc-action-btn { width: 100% !important; margin-top: 8px !important; }
@@ -3430,6 +3431,14 @@
             <div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:6px;">ASK NEXAR</div>
             <button onclick="switchTab('nexar')" style="width:100%;background:rgba(45,212,160,0.04);border:1px dashed rgba(45,212,160,0.3);color:#94a3b8;padding:9px 12px;border-radius:6px;font-size:12px;cursor:pointer;text-align:left;">Open NEXAR to ask anything →</button>
           </div>
+         </div>
+      </div>
+
+      <!-- TRACK RECORD region — Stage 3 IA (full-width, below main grid) -->
+      <div id="cc-track-record" style="margin-top:14px;">
+        <div style="font-size:10px;font-weight:700;color:#5a7a9a;letter-spacing:1px;margin-bottom:8px;">TRACK RECORD</div>
+        <div id="cc-track-record-body">
+          <div style="font-size:13px;color:#5a7a9a;padding:14px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;">Loading…</div>
         </div>
       </div>
 
@@ -8153,7 +8162,103 @@ function ccHydrateShell() {
       el.innerHTML = html;
     });
   }
-   const oppsBody = document.getElementById('cc-opps-body');
+    // Status: Track Record region — Stage 3 IA (full-width, no money number)
+  const trackBody = document.getElementById('cc-track-record-body');
+  if (trackBody) {
+    ccGetTrackRecord().then(function(r) {
+      var el = document.getElementById('cc-track-record-body');
+      if (!el) return;
+
+      var formatHandle = function(h) {
+        var v = String(h || '');
+        if (!v) return '';
+        if (v.charAt(0) !== '@') v = '@' + v;
+        return sanitize(v);
+      };
+
+      if (!r || (!r.completed && !r.active && !r.total)) {
+        el.innerHTML =
+          '<div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:18px 16px;text-align:center;">' +
+            '<div style="font-size:15px;font-weight:700;color:#e8f0f8;margin-bottom:4px;">No deals completed yet</div>' +
+            '<div style="font-size:11px;color:#5a7a9a;margin-bottom:14px;">Settled deals will appear here as you build your track record.</div>' +
+            '<button type="button" onclick="switchTab(\'livefeed\')" style="background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.35);color:#2dd4a0;border-radius:6px;padding:8px 14px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">Browse Live Market →</button>' +
+          '</div>';
+        return;
+      }
+
+      var statCardOpen = '<div onclick="if(typeof showMyForgedDeals===\'function\') showMyForgedDeals()" style="flex:1;min-width:120px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;cursor:pointer;">';
+      var statCardOpenStatic = '<div style="flex:1;min-width:120px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;">';
+      var statCardClose = '</div>';
+      var statLabel = function(t) {
+        return '<div style="font-size:10px;font-weight:600;color:#5a7a9a;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:6px;">' + t + '</div>';
+      };
+      var statHead = function(v) {
+        return '<div style="font-size:18px;font-weight:700;color:#e8f0f8;">' + v + '</div>';
+      };
+      var statMeta = function(t) {
+        return '<div style="font-size:10px;color:#5a7a9a;margin-top:3px;">' + t + '</div>';
+      };
+
+      var stats = '';
+      stats += statCardOpen + statLabel('Completed') + statHead(r.completed) + statMeta('deals settled') + statCardClose;
+      stats += statCardOpen + statLabel('Active') + statHead(r.active) + statMeta('in pipeline') + statCardClose;
+
+      if (r.successRate !== null) {
+        stats += statCardOpen + statLabel('Success Rate') + statHead(r.successRate + '%') + statMeta('on ' + r.total + ' deals') + statCardClose;
+      }
+
+      stats += statCardOpenStatic + statLabel('Verified Earnings') + '<div style="font-size:11px;color:#5a7a9a;line-height:1.45;">Coming when payment integration is connected.</div>' + statCardClose;
+
+      var html = '<div id="cc-tr-stats" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">' + stats + '</div>';
+
+      if (r.latestSettled && r.latestSettled.title) {
+        var L = r.latestSettled;
+        var lt = String(L.title);
+        if (lt.length > 38) lt = lt.slice(0, 38) + '…';
+
+        var counter = L.initiator_handle === currentUser.handle ? L.receiver_handle : L.initiator_handle;
+        var metaParts = [];
+        if (counter) metaParts.push('with ' + formatHandle(counter));
+
+        var relStr = ccRelativeTime(L.created_at);
+        if (relStr) metaParts.push(relStr);
+
+        html += '<div onclick="if(typeof showMyForgedDeals===\'function\') showMyForgedDeals()" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 14px;margin-bottom:12px;cursor:pointer;">';
+        html += '<div style="font-size:10px;font-weight:600;color:#5a7a9a;letter-spacing:0.4px;text-transform:uppercase;margin-bottom:4px;">Latest Completed</div>';
+        html += '<div style="font-size:13px;color:#e8f0f8;font-weight:600;">' + sanitize(lt) + '</div>';
+        html += '<div style="font-size:11px;color:#94a3b8;margin-top:2px;">' + metaParts.join(' · ') + '</div>';
+        html += '</div>';
+      }
+
+      if (r.recentSettled && r.recentSettled.length) {
+        html += '<div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:6px 0;">';
+        html += '<div style="font-size:10px;font-weight:600;color:#5a7a9a;letter-spacing:0.4px;text-transform:uppercase;padding:8px 14px 6px;">Recent Completed</div>';
+
+        for (var fi = 0; fi < r.recentSettled.length; fi++) {
+          var d = r.recentSettled[fi];
+          var dt = String(d.title || 'Deal');
+          if (dt.length > 38) dt = dt.slice(0, 38) + '…';
+
+          var dc = d.initiator_handle === currentUser.handle ? d.receiver_handle : d.initiator_handle;
+          var dcStr = dc ? formatHandle(dc) : '';
+          var drel = ccRelativeTime(d.created_at);
+          var isLast = fi === r.recentSettled.length - 1;
+          var borderStyle = isLast ? '' : 'border-bottom:1px solid rgba(45,79,111,0.4);';
+
+          html += '<div onclick="if(typeof showMyForgedDeals===\'function\') showMyForgedDeals()" style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;' + borderStyle + '">';
+          html += '<div style="flex:1;min-width:0;font-size:12px;color:#e8f0f8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + sanitize(dt) + '</div>';
+          html += '<div style="font-size:11px;color:#94a3b8;flex-shrink:0;">' + dcStr + '</div>';
+          html += '<div style="font-size:10px;color:#5a7a9a;flex-shrink:0;">' + drel + '</div>';
+          html += '</div>';
+        }
+
+        html += '</div>';
+      }
+
+      el.innerHTML = html;
+    });
+  }
+  const oppsBody = document.getElementById('cc-opps-body');
   if (oppsBody) {
     ccGetPostedOpportunities().then(function(r) {
       var el = document.getElementById('cc-opps-body');
@@ -8437,7 +8542,53 @@ async function ccGetForgedDeals() {
     return EMPTY;
   }
 }
-// Relative-time helper for Command Centre cards. Returns "today",
+// Command Centre — Track Record region (Stage 3 IA).
+// Self-contained. Fetches the user's deals (both directions) and returns
+// { completed, active, total, successRate, latestSettled, recentSettled }.
+// - completed: count of status === 'settled'
+// - active: count of status === 'active'
+// - total: total deals involving the user
+// - successRate: percentage int (0-100) or null if total < 3
+// - latestSettled: most recent settled row, or null
+// - recentSettled: up to 5 settled rows newest first
+// Returns safe empty on any failure. No money/amount data — verified earnings
+// are intentionally not surfaced until a real payment layer exists.
+async function ccGetTrackRecord() {
+  var EMPTY = { completed: 0, active: 0, total: 0, successRate: null, latestSettled: null, recentSettled: [] };
+  try {
+    if (!sb || !currentUser) return EMPTY;
+    var handle = currentUser.handle;
+    if (!handle) return EMPTY;
+    var res = await sb
+      .from('forged_deals')
+      .select('title, status, created_at, initiator_handle, receiver_handle')
+      .or('initiator_handle.eq.' + handle + ',receiver_handle.eq.' + handle)
+      .order('created_at', { ascending: false });
+    if (!res || !Array.isArray(res.data)) return EMPTY;
+    var rows = res.data;
+    var settledRows = [];
+    var activeCount = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var s = rows[i].status;
+      if (s === 'settled') settledRows.push(rows[i]);
+      else if (s === 'active') activeCount++;
+    }
+    var total = rows.length;
+    var sr = null;
+    if (total >= 3) sr = Math.round((settledRows.length / total) * 100);
+    return {
+      completed: settledRows.length,
+      active: activeCount,
+      total: total,
+      successRate: sr,
+      latestSettled: settledRows.length ? settledRows[0] : null,
+      recentSettled: settledRows.slice(0, 5)
+    };
+  } catch (e) {
+    return EMPTY;
+  }
+}
+ // Relative-time helper for Command Centre cards. Returns "today",
 // "yesterday", "N days ago", "N weeks ago", or "" if the date is unusable.
 function ccRelativeTime(iso) {
   try {
