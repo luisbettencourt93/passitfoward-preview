@@ -10387,7 +10387,15 @@ function addNotif(text, targetHandle, meta){
   const notifs=getNotifs();
   const t=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
   // Preserve metadata in localStorage too — N1b's render will use these
-  var local = { id: Date.now(), text: text, time: t, read: false };
+  var nowIso = new Date().toISOString();
+
+  var local = {
+  id: Date.now(),
+  text: text,
+  created_at: nowIso,
+  time: t,
+  read: false
+};
   if(meta.type) local.type = meta.type;
   if(meta.target_type) local.target_type = meta.target_type;
   if(meta.target_id != null) local.target_id = String(meta.target_id);
@@ -10412,12 +10420,12 @@ async function loadNotifsFromSupabase(){
       const id='sb_'+n.id;
       if(!existingIds.has(id)){
         var local = {
-          id: id,
-          text: n.text,
-          time: new Date(n.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
-          read: n.read || false
-        };
-
+         id: id,
+         text: n.text,
+        created_at: n.created_at,
+        time: new Date(n.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
+         read: n.read || false
+     };
         if(n.type) local.type = n.type;
         if(n.target_type) local.target_type = n.target_type;
         if(n.target_id != null) local.target_id = String(n.target_id);
@@ -10439,7 +10447,11 @@ async function loadNotifsFromSupabase(){
 // Renders bell badge + dropdown list with per-type icons. Click handler routes
 // to the right destination based on notification type.
 function renderNotifBell(){
-  var notifs = getNotifs();
+  var notifs = getNotifs().sort(function(a,b){
+  var at = a.created_at ? new Date(a.created_at).getTime() : Number(a.id) || 0;
+  var bt = b.created_at ? new Date(b.created_at).getTime() : Number(b.id) || 0;
+  return bt - at;
+});
   var badge = document.getElementById('notif-badge');
   var list = document.getElementById('notif-list');
   if(!badge || !list) return;
