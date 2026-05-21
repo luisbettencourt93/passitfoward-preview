@@ -869,6 +869,7 @@
     .nr-icon.deal_accepted { background:rgba(16,185,129,0.12); color:#10b981; }
     .nr-icon.deal_rejected { background:rgba(148,163,184,0.12); color:#94a3b8; }
     .nr-icon.legacy { background:rgba(148,163,184,0.12); color:#94a3b8; }
+    .nr-icon.founder_application { background:rgba(251,191,36,0.12); color:#fbbf24; }
     .nr-text { flex:1; color:#94a3b8; font-size:0.78rem; line-height:1.5; }
     .nr-text strong { color:white; }
     body.light .nr-text { color:#475569; }
@@ -10476,12 +10477,13 @@ function renderNotifBell(){
     return;
   }
 
-  var iconMap = {
-    new_message:   'fa-comment',
-    deal_received: 'fa-handshake',
-    deal_accepted: 'fa-check-circle',
-    deal_rejected: 'fa-times-circle'
-  };
+ var iconMap = {
+  new_message:   'fa-comment',
+  deal_received: 'fa-handshake',
+  deal_accepted: 'fa-check-circle',
+  deal_rejected: 'fa-times-circle',
+  founder_application: 'fa-user-plus'
+};
 
   list.innerHTML = notifs.map(function(n){
     var typeClass = (n.type && iconMap[n.type]) ? n.type : 'legacy';
@@ -10520,10 +10522,12 @@ function readNotif(id){
 
   // Route to destination
   if(n.type === 'new_message' && n.actor_handle){
-    if(typeof openDmWith === 'function') openDmWith(n.actor_handle);
-  } else if(n.type === 'deal_received' || n.type === 'deal_accepted' || n.type === 'deal_rejected'){
-    if(typeof showMyForgedDeals === 'function') showMyForgedDeals();
-  }
+  if(typeof openDmWith === 'function') openDmWith(n.actor_handle);
+} else if(n.type === 'deal_received' || n.type === 'deal_accepted' || n.type === 'deal_rejected'){
+  if(typeof showMyForgedDeals === 'function') showMyForgedDeals();
+} else if(n.type === 'founder_application'){
+  if(typeof showApplicationsModal === 'function') showApplicationsModal();
+}
 }
 
 // clearAllNotifs — N1b
@@ -11200,6 +11204,16 @@ document.getElementById('apply-form')?.addEventListener('submit', async e => {
   if (!full_name || !x_handle) return showToast("Please fill in all fields");
   if (sb) {
     await sb.from('applications').insert({ full_name, x_handle, skills });
+  addNotif(
+  `📥 ${full_name} (@${x_handle}) applied to join PIF.`,
+  '@miguelbettencourt74', // hardcoded founder handle — update if founder handle changes
+  {
+    type: 'founder_application',
+    target_type: 'application',
+    target_id: null,
+    actor_handle: x_handle
+  }
+);
   }
   e.target.reset();
   showToast("✅ Application received! We'll DM you on X within 48 hours.");
