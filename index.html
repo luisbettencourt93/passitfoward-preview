@@ -10291,17 +10291,18 @@ async function sendInterestDm() {
   // Save X link before closing modal
   const xUrl = document.getElementById('dm-x-link')?.href || '';
   try {
-    await sb.from('messages').insert({
-      from_handle: currentUser.handle,
-      to_handle: _oppDmTarget,
-      body: msg,
-      created_at: new Date().toISOString()
-    });
-    await sb.from('notifications').insert({
-      handle: _oppDmTarget,
-      text: `💬 ${currentUser.handle} is interested in your opportunity and shared it on X — check your DMs!`,
-      created_at: new Date().toISOString(), read: false
-    });
+     const { data: msgRow } = await sb.from('messages').insert({
+     from_handle: currentUser.handle,
+     to_handle: _oppDmTarget,
+     body: msg,
+     created_at: new Date().toISOString()
+    }).select().single();
+
+    addNotif(
+     `💬 ${currentUser.handle} is interested in your opportunity and shared it on X — check your DMs!`,
+     _oppDmTarget,
+      { type: 'new_message', target_type: 'message', target_id: msgRow ? msgRow.id : null, actor_handle: currentUser.handle }
+    );
   } catch(e) {}
   closeModal('dm-modal');
   showToast("DM sent! Opening X... 🔥");
@@ -10314,13 +10315,18 @@ async function sendOppDm() {
   if (!_oppDmTarget || !_oppDmMessage) return;
   if (!dmThreads[_oppDmTarget]) dmThreads[_oppDmTarget] = [];
   if (sb && !currentUser.id.startsWith('demo-')) {
-    const { error } = await sb.from('messages').insert({
+    const { data: msgRow, error } = await sb.from('messages').insert({
       from_handle: currentUser.handle,
       to_handle: _oppDmTarget,
       body: _oppDmMessage,
       read: false
-    });
+    }).select().single();
     if (error) return showToast("Error sending: " + error.message);
+    addNotif(
+      `💬 New message from ${currentUser.handle}`,
+      _oppDmTarget,
+      { type: 'new_message', target_type: 'message', target_id: msgRow ? msgRow.id : null, actor_handle: currentUser.handle }
+    );
   }
   dmThreads[_oppDmTarget].push({
     from_handle: currentUser.handle,
@@ -10339,17 +10345,39 @@ async function sendOppDm() {
 // -- NOTIFICATIONS -------------------------------------------------
 function getNotifs(){return JSON.parse(localStorage.getItem('pf_notifs_'+(currentUser?.handle||'x'))||'[]');}
 function saveNotifs(n){localStorage.setItem('pf_notifs_'+(currentUser?.handle||'x'),JSON.stringify(n));}
-function addNotif(text,targetHandle){
-  // Save to localStorage for current user
+// addNotif — extended for N1a. Optional `meta` is { type, target_type, target_id, actor_handle }.
+// Backward compatible: existing 2-arg calls still work. Persisted to Supabase when
+// targeting another user; localStorage for current user (UI render only — type
+// metadata is preserved for cross-device sync via loadNotifsFromSupabase).
+function addNotif(text, targetHandle, meta){
+  meta = meta || {};
+  // Save to Supabase if targeting another user
   if(targetHandle && targetHandle !== currentUser?.handle){
-    // For other users — save to Supabase notifications table
-    if(sb) sb.from('notifications').insert({handle:targetHandle,text,created_at:new Date().toISOString(),read:false}).then(()=>{});
+    if(sb) {
+      var row = {
+        handle: targetHandle,
+        text: text,
+        created_at: new Date().toISOString(),
+        read: false
+      };
+      if(meta.type) row.type = meta.type;
+      if(meta.target_type) row.target_type = meta.target_type;
+      if(meta.target_id != null) row.target_id = String(meta.target_id);
+      if(meta.actor_handle) row.actor_handle = meta.actor_handle;
+      sb.from('notifications').insert(row).then(function(){});
+    }
     return;
   }
   if(!currentUser)return;
   const notifs=getNotifs();
   const t=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  notifs.unshift({id:Date.now(),text,time:t,read:false});
+  // Preserve metadata in localStorage too — N1b's render will use these
+  var local = { id: Date.now(), text: text, time: t, read: false };
+  if(meta.type) local.type = meta.type;
+  if(meta.target_type) local.target_type = meta.target_type;
+  if(meta.target_id != null) local.target_id = String(meta.target_id);
+  if(meta.actor_handle) local.actor_handle = meta.actor_handle;
+  notifs.unshift(local);
   if(notifs.length>30)notifs.length=30;
   saveNotifs(notifs);renderNotifBell();
 }
@@ -12273,11 +12301,11 @@ if (forgeContext.oppId) {
     opportunity_id: forgeContext.oppId || null
   }).select().single();
   if(error) return showToast("Error: " + error.message);
-  await sb.from('notifications').insert({
-    handle: receiver,
-    text: `🔨 ${currentUser.handle} wants to Forge a deal with you: "${title}" — ${amount}. They staked ${xpStake} XP. Open My Forged Deals to set your own stake and Accept.`,
-    created_at: new Date().toISOString(), read: false
-  });
+ addNotif(
+  `🔨 ${currentUser.handle} wants to Forge a deal with you: "${title}" — ${amount}. They staked ${xpStake} XP. Open My Forged Deals to set your own stake and Accept.`,
+  receiver,
+  { type: 'deal_received', target_type: 'deal', target_id: data ? data.id : null, actor_handle: currentUser.handle }
+);
   closeModal('forge-modal');
   showToast(`🔨 Forge proposal sent! ${receiver} will set their own stake when they accept.`);
 }
@@ -12435,11 +12463,11 @@ async function _doAcceptForge(dealId) {
     return showToast("Error activating deal: " + updErr.message);
   }
 
-  await sb.from('notifications').insert({
-    handle: deal.initiator_handle,
-    text: `✅ ${currentUser.handle} accepted your Forge proposal for "${deal.title}"! They staked ${myStake} XP. Both stakes are now LOCKED. The deal is ACTIVE — do the work, then mark the outcome.`,
-    created_at: new Date().toISOString(), read: false
-  });
+ addNotif(
+  `✅ ${currentUser.handle} accepted your Forge proposal for "${deal.title}"! They staked ${myStake} XP. Both stakes are now LOCKED. The deal is ACTIVE — do the work, then mark the outcome.`,
+  deal.initiator_handle,
+  { type: 'deal_accepted', target_type: 'deal', target_id: dealId, actor_handle: currentUser.handle }
+);
   document.getElementById('accept-forge-modal')?.remove();
   showToast(`✅ Deal accepted! ${initiatorStake + myStake} XP locked total. Get to work.`);
   showMyForgedDeals();
@@ -12451,11 +12479,11 @@ async function rejectForge(dealId) {
   const { data: deal } = await sb.from('forged_deals').select('*').eq('id', dealId).single();
   await sb.from('forged_deals').update({ status: 'rejected', outcome: 'rejected' }).eq('id', dealId);
   if(deal) {
-    await sb.from('notifications').insert({
-      handle: deal.initiator_handle,
-      text: `❌ ${currentUser.handle} declined your Forge proposal for "${deal.title}".`,
-      created_at: new Date().toISOString(), read: false
-    });
+    addNotif(
+  `❌ ${currentUser.handle} declined your Forge proposal for "${deal.title}".`,
+  deal.initiator_handle,
+  { type: 'deal_rejected', target_type: 'deal', target_id: dealId, actor_handle: currentUser.handle }
+);
   }
   showToast("Deal proposal rejected.");
   showMyForgedDeals();
