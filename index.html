@@ -863,6 +863,12 @@
     .notif-row:hover { background:rgba(16,185,129,0.07); }
     .nr-dot { width:7px; height:7px; border-radius:50%; background:var(--primary); flex-shrink:0; margin-top:5px; }
     .nr-dot.read { background:var(--border); }
+    .nr-icon { width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; margin-top:1px; }
+    .nr-icon.new_message { background:rgba(96,165,250,0.12); color:#60a5fa; }
+    .nr-icon.deal_received { background:rgba(45,212,160,0.12); color:#2dd4a0; }
+    .nr-icon.deal_accepted { background:rgba(16,185,129,0.12); color:#10b981; }
+    .nr-icon.deal_rejected { background:rgba(148,163,184,0.12); color:#94a3b8; }
+    .nr-icon.legacy { background:rgba(148,163,184,0.12); color:#94a3b8; }
     .nr-text { flex:1; color:#94a3b8; font-size:0.78rem; line-height:1.5; }
     .nr-text strong { color:white; }
     body.light .nr-text { color:#475569; }
@@ -10390,28 +10396,133 @@ function addNotif(text, targetHandle, meta){
   if(notifs.length>30)notifs.length=30;
   saveNotifs(notifs);renderNotifBell();
 }
+// loadNotifsFromSupabase — N1b
+// Pulls notification rows with N1a typed metadata and merges into localStorage.
+// Bug fix: does NOT mark notifications read just because they loaded.
 async function loadNotifsFromSupabase(){
   if(!sb||!currentUser||currentUser.id.startsWith('demo-')) return;
   try {
     const {data} = await sb.from('notifications').select('*').eq('handle',currentUser.handle).order('created_at',{ascending:false}).limit(30);
     if(!data||!data.length) return;
+
     const existing=getNotifs();
     const existingIds=new Set(existing.map(n=>String(n.id)));
-    data.forEach(n=>{
+
+    data.forEach(function(n){
       const id='sb_'+n.id;
       if(!existingIds.has(id)){
-        existing.unshift({id,text:n.text,time:new Date(n.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),read:n.read||false});
+        var local = {
+          id: id,
+          text: n.text,
+          time: new Date(n.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
+          read: n.read || false
+        };
+
+        if(n.type) local.type = n.type;
+        if(n.target_type) local.target_type = n.target_type;
+        if(n.target_id != null) local.target_id = String(n.target_id);
+        if(n.actor_handle) local.actor_handle = n.actor_handle;
+
+        existing.unshift(local);
       }
     });
+
     existing.length=Math.min(existing.length,30);
-    saveNotifs(existing);renderNotifBell();
-    // Mark as read in supabase
-    await sb.from('notifications').update({read:true}).eq('handle',currentUser.handle).eq('read',false);
+    saveNotifs(existing);
+    renderNotifBell();
+
+    // N1b bug fix:
+    // Do not bulk-mark-read here. Read state changes only on row click or Mark all read.
   } catch(e){}
 }
-function renderNotifBell(){const notifs=getNotifs();const badge=document.getElementById('notif-badge');const list=document.getElementById('notif-list');if(!badge||!list)return;const unread=notifs.filter(n=>!n.read).length;if(unread>0){badge.textContent=unread>9?'9+':unread;badge.classList.add('on');}else{badge.textContent='';badge.classList.remove('on');}list.innerHTML=notifs.length?notifs.map(n=>`<div class="notif-row ${n.read?'':'unread'}" onclick="readNotif(${n.id})"><div class="nr-dot ${n.read?'read':''}"></div><div class="nr-text">${sanitize(n.text)}<span class="nr-time">${sanitize(n.time)}</span></div></div>`).join(''):'<div class="notif-empty">No notifications yet</div>';}
-function readNotif(id){const notifs=getNotifs();const n=notifs.find(x=>x.id===id);if(n){n.read=true;saveNotifs(notifs);renderNotifBell();}}
-function clearAllNotifs(){saveNotifs(getNotifs().map(n=>({...n,read:true})));renderNotifBell();document.getElementById('notif-panel').classList.remove('open');}
+// renderNotifBell — N1b
+// Renders bell badge + dropdown list with per-type icons. Click handler routes
+// to the right destination based on notification type.
+function renderNotifBell(){
+  var notifs = getNotifs();
+  var badge = document.getElementById('notif-badge');
+  var list = document.getElementById('notif-list');
+  if(!badge || !list) return;
+
+  var unread = notifs.filter(function(n){ return !n.read; }).length;
+  if(unread > 0){
+    badge.textContent = unread > 9 ? '9+' : unread;
+    badge.classList.add('on');
+  } else {
+    badge.textContent = '';
+    badge.classList.remove('on');
+  }
+
+  if(!notifs.length){
+    list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+    return;
+  }
+
+  var iconMap = {
+    new_message:   'fa-comment',
+    deal_received: 'fa-handshake',
+    deal_accepted: 'fa-check-circle',
+    deal_rejected: 'fa-times-circle'
+  };
+
+  list.innerHTML = notifs.map(function(n){
+    var typeClass = (n.type && iconMap[n.type]) ? n.type : 'legacy';
+    var iconClass = (n.type && iconMap[n.type]) ? iconMap[n.type] : 'fa-bell';
+    var idAttr = (typeof n.id === 'string') ? "'" + n.id + "'" : n.id;
+
+    return '<div class="notif-row ' + (n.read ? '' : 'unread') + '" onclick="readNotif(' + idAttr + ')">'
+         + '<div class="nr-icon ' + typeClass + '"><i class="fas ' + iconClass + '"></i></div>'
+         + '<div class="nr-text">' + sanitize(n.text) + '<span class="nr-time">' + sanitize(n.time) + '</span></div>'
+         + '</div>';
+  }).join('');
+}
+// readNotif — N1b
+// Marks the clicked notification read, closes the panel, and routes by type.
+function readNotif(id){
+  var notifs = getNotifs();
+  var n = notifs.find(function(x){ return String(x.id) === String(id); });
+  if(!n) return;
+
+  // Mark read locally
+  n.read = true;
+  saveNotifs(notifs);
+
+  // Mark read in Supabase for server-loaded rows
+  if(sb && typeof n.id === 'string' && n.id.indexOf('sb_') === 0){
+    var supabaseId = n.id.slice(3);
+    sb.from('notifications').update({ read: true }).eq('id', supabaseId).then(function(){});
+  }
+
+  // Close panel
+  var panel = document.getElementById('notif-panel');
+  if(panel) panel.classList.remove('open');
+
+  // Re-render badge/list
+  renderNotifBell();
+
+  // Route to destination
+  if(n.type === 'new_message' && n.actor_handle){
+    if(typeof openDmWith === 'function') openDmWith(n.actor_handle);
+  } else if(n.type === 'deal_received' || n.type === 'deal_accepted' || n.type === 'deal_rejected'){
+    if(typeof showMyForgedDeals === 'function') showMyForgedDeals();
+  }
+}
+
+// clearAllNotifs — N1b
+// Marks all notifications read locally and in Supabase.
+function clearAllNotifs(){
+  var notifs = getNotifs().map(function(n){ return Object.assign({}, n, { read: true }); });
+  saveNotifs(notifs);
+
+  if(sb && currentUser && !currentUser.id.startsWith('demo-')){
+    sb.from('notifications').update({ read: true }).eq('handle', currentUser.handle).eq('read', false).then(function(){});
+  }
+
+  renderNotifBell();
+
+  var panel = document.getElementById('notif-panel');
+  if(panel) panel.classList.remove('open');
+}
 function toggleNotifPanel(e){e&&e.stopPropagation();document.getElementById('notif-panel').classList.toggle('open');}
 document.addEventListener('click',()=>{const p=document.getElementById('notif-panel');if(p)p.classList.remove('open');});
 
