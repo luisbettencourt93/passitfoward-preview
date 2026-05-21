@@ -10353,6 +10353,13 @@ function saveNotifs(n){localStorage.setItem('pf_notifs_'+(currentUser?.handle||'
 // metadata is preserved for cross-device sync via loadNotifsFromSupabase).
 function addNotif(text, targetHandle, meta){
   meta = meta || {};
+  // N1a safety fallback: any older 2-arg "New message from" call becomes typed
+  if(!meta.type && typeof text === 'string' && text.indexOf('New message from') !== -1){
+    meta.type = 'new_message';
+    meta.target_type = 'message';
+    meta.target_id = null;
+    meta.actor_handle = currentUser?.handle || null;
+  }
   // Save to Supabase if targeting another user
   if(targetHandle && targetHandle !== currentUser?.handle){
     if(sb) {
