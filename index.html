@@ -3358,7 +3358,7 @@
           <button type="button" class="cc-qa-btn" onclick="switchTab('messages')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
             <i class="fas fa-envelope" style="font-size:13px;"></i><span>Messages</span>
           </button>
-          <button type="button" class="cc-qa-btn" onclick="showToast('Deals dashboard coming soon')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
+          <button type="button" class="cc-qa-btn" onclick="showMyForgedDeals()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
             <i class="fas fa-handshake" style="font-size:13px;"></i><span>Deals</span>
           </button>
           <button type="button" class="cc-qa-btn" onclick="switchTab('nexar')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 8px;cursor:pointer;font-family:inherit;color:#94a3b8;font-size:12px;font-weight:600;">
@@ -9166,12 +9166,10 @@ async function ccRenderNeedsAttention() {
     }
 
     var dealItem = ccBuildAttentionItem('pending-deals', dealMsg, function() {
-      if (typeof showToast === 'function') {
-        showToast('Deals dashboard coming soon');
-      } else {
-        alert('Deals dashboard coming soon');
-      }
-    });
+  if (typeof showMyForgedDeals === 'function') {
+    showMyForgedDeals();
+  }
+});
 
     container.appendChild(dealItem);
   }
