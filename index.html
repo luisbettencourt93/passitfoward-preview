@@ -10315,18 +10315,20 @@ async function sendOppDm() {
   if (!_oppDmTarget || !_oppDmMessage) return;
   if (!dmThreads[_oppDmTarget]) dmThreads[_oppDmTarget] = [];
   if (sb && !currentUser.id.startsWith('demo-')) {
-    const { data: msgRow, error } = await sb.from('messages').insert({
-      from_handle: currentUser.handle,
-      to_handle: _oppDmTarget,
-      body: _oppDmMessage,
-      read: false
-    }).select().single();
-    if (error) return showToast("Error sending: " + error.message);
-    addNotif(
-      `💬 New message from ${currentUser.handle}`,
-      _oppDmTarget,
-      { type: 'new_message', target_type: 'message', target_id: msgRow ? msgRow.id : null, actor_handle: currentUser.handle }
-    );
+    const { error } = await sb.from('messages').insert({
+  from_handle: currentUser.handle,
+  to_handle: _oppDmTarget,
+  body: _oppDmMessage,
+  read: false
+});
+
+if (error) return showToast("Error sending: " + error.message);
+
+addNotif(
+  `💬 New message from ${currentUser.handle}`,
+  _oppDmTarget,
+  { type: 'new_message', target_type: 'message', target_id: null, actor_handle: currentUser.handle }
+);
   }
   dmThreads[_oppDmTarget].push({
     from_handle: currentUser.handle,
