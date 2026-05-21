@@ -10903,14 +10903,18 @@ async function sendDmMsg() {
   bumpWeekly('dms');
 
   // Notify recipient
-  if (sb && !currentUser.id.startsWith('demo-')) {
-    await sb.from('notifications').insert({
-      handle: activeDmHandle,
-      text: `💬 New message from ${currentUser.handle}`,
-      created_at: new Date().toISOString(),
-      read: false
-    });
-  }
+if (sb && !currentUser.id.startsWith('demo-')) {
+  addNotif(
+    `💬 New message from ${currentUser.handle}`,
+    activeDmHandle,
+    {
+      type: 'new_message',
+      target_type: 'message',
+      target_id: newMsg.id || null,
+      actor_handle: currentUser.handle
+    }
+  );
+}
 
   openThread(activeDmHandle);
 }
