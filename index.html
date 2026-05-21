@@ -10416,25 +10416,31 @@ async function loadNotifsFromSupabase(){
     const existing=getNotifs();
     const existingIds=new Set(existing.map(n=>String(n.id)));
 
-    data.forEach(function(n){
-      const id='sb_'+n.id;
-      if(!existingIds.has(id)){
-        var local = {
-         id: id,
-         text: n.text,
-        created_at: n.created_at,
-        time: new Date(n.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}),
-         read: n.read || false
-     };
-        if(n.type) local.type = n.type;
-        if(n.target_type) local.target_type = n.target_type;
-        if(n.target_id != null) local.target_id = String(n.target_id);
-        if(n.actor_handle) local.actor_handle = n.actor_handle;
+   data.forEach(function(n){
+  const id='sb_'+n.id;
+  var existingRow = existing.find(function(x){ return String(x.id) === String(id); });
 
-        existing.unshift(local);
-      }
-    });
+  var local = existingRow || {
+    id: id,
+    text: n.text,
+    read: n.read || false
+  };
 
+  // Always refresh server-backed metadata so older cached rows self-heal
+  local.text = n.text;
+  local.created_at = n.created_at;
+  local.time = new Date(n.created_at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  local.read = n.read || local.read || false;
+
+  if(n.type) local.type = n.type;
+  if(n.target_type) local.target_type = n.target_type;
+  if(n.target_id != null) local.target_id = String(n.target_id);
+  if(n.actor_handle) local.actor_handle = n.actor_handle;
+
+  if(!existingRow){
+    existing.unshift(local);
+  }
+});
     existing.length=Math.min(existing.length,30);
     saveNotifs(existing);
     renderNotifBell();
