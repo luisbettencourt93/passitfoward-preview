@@ -10931,15 +10931,38 @@ async function sendNewDm() {
   if (!handle) return showToast("Enter a handle");
   if (!msg) return showToast("Write a message");
   if (!handle.startsWith('@')) handle = '@' + handle;
-
+  let sentMsgId = null;
   if (sb && !currentUser.id.startsWith('demo-')) {
-    const { error } = await sb.from('messages')
-      .insert({ from_handle: currentUser.handle, to_handle: handle, body: msg, read: false });
-    if (error) return showToast("Error: " + error.message);
-  }
+  const { data, error } = await sb.from('messages')
+    .insert({ from_handle: currentUser.handle, to_handle: handle, body: msg, read: false })
+    .select()
+    .single();
+
+  if (error) return showToast("Error: " + error.message);
+
+  sentMsgId = data ? data.id : null;
+
+  addNotif(
+    `💬 New message from ${currentUser.handle}`,
+    handle,
+    {
+      type: 'new_message',
+      target_type: 'message',
+      target_id: sentMsgId,
+      actor_handle: currentUser.handle
+    }
+  );
+}
 
   if (!dmThreads[handle]) dmThreads[handle] = [];
-  dmThreads[handle].push({ from_handle: currentUser.handle, to_handle: handle, body: msg, created_at: new Date().toISOString(), read: false, id: Date.now() });
+  dmThreads[handle].push({
+  from_handle: currentUser.handle,
+  to_handle: handle,
+  body: msg,
+  created_at: new Date().toISOString(),
+  read: false,
+  id: sentMsgId || Date.now()
+});
 
   document.getElementById('dm-to-inp').value = '';
   document.getElementById('dm-msg-inp').value = '';
