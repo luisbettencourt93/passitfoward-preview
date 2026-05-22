@@ -11,6 +11,14 @@
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://passitfoward.xyz/">
 
+<!-- PWA / Stage N3a foundation -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b1118">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PIF">
+<link rel="apple-touch-icon" href="/icon-192.png">
+
 <meta property="og:type" content="website">
 <meta property="og:title" content="Pass It Forward | Opportunity Infrastructure">
 <meta property="og:description" content="A global platform for skills, trust, support, deals, and member-to-member opportunity.">
@@ -2652,6 +2660,41 @@
 <body>
 
 <a href="#dashboard" class="skip-link" style="position:absolute;top:-100px;left:0;background:#2dd4a0;color:#0d1520;padding:8px 16px;z-index:9999;font-size:14px;font-weight:700;text-decoration:none;border-radius:0 0 8px 0;" onfocus="this.style.top='0'" onblur="this.style.top='-100px'">Skip to content</a>
+<!-- iOS PWA install hint — Stage N3a (only shows on iOS Safari, not installed, not dismissed) -->
+<div id="pif-ios-install-hint" style="display:none;position:fixed;bottom:16px;left:16px;right:16px;z-index:9999;background:rgba(11,17,24,0.96);border:1px solid #2d4f6f;border-radius:12px;padding:14px 16px;box-shadow:0 8px 24px rgba(0,0,0,0.4);max-width:520px;margin:0 auto;font-family:'Inter',sans-serif;">
+  <div style="display:flex;align-items:flex-start;gap:12px;">
+    <div style="flex-shrink:0;width:32px;height:32px;border-radius:8px;background:rgba(45,212,160,0.12);display:flex;align-items:center;justify-content:center;">
+      <i class="fas fa-mobile-alt" style="font-size:14px;color:#2dd4a0;"></i>
+    </div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:600;color:#e8f0f8;margin-bottom:4px;">Install PIF on your home screen</div>
+      <div style="font-size:11px;color:#94a3b8;line-height:1.45;">Tap the <i class="fas fa-share" style="font-size:10px;"></i> Share button below, then "Add to Home Screen" for the full app experience.</div>
+    </div>
+    <button type="button" onclick="document.getElementById('pif-ios-install-hint').style.display='none';try{localStorage.setItem('pif_ios_install_hint_dismissed','1');}catch(e){}" style="flex-shrink:0;background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:18px;line-height:1;padding:0;margin-top:-4px;" aria-label="Dismiss">×</button>
+  </div>
+</div>
+<script>
+  (function() {
+    try {
+      var ua = navigator.userAgent;
+      var isIOS = /iPhone|iPad|iPod/.test(ua);
+      var isSafari = /Safari/.test(ua) && !/Chrome|CriOS|FxiOS/.test(ua);
+      var isStandalone = window.matchMedia && window.matchMedia('(display-mode: standalone)').matches;
+      var iosStandalone = window.navigator.standalone === true;
+      var dismissed = false;
+      try { dismissed = localStorage.getItem('pif_ios_install_hint_dismissed') === '1'; } catch (e) {}
+      if (isIOS && isSafari && !isStandalone && !iosStandalone && !dismissed) {
+        setTimeout(function() {
+          var el = document.getElementById('pif-ios-install-hint');
+          if (el) el.style.display = 'block';
+        }, 3000);
+      }
+    } catch (e) {
+      // Silent fail — hint is non-critical
+    }
+  })();
+</script>
+  
 <header>
   <div class="header-inner">
     <div class="logo"><i class="fas fa-arrow-right-arrow-left"></i> Pass It Forward</div>
@@ -14812,5 +14855,21 @@ async function nexarPipelineDelete(id) {
 }
 </script>
  <script src="pif-patch.js"></script>
+<!-- PIF Service Worker registration — Stage N3a foundation -->
+<script>
+  (function() {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(function(reg) {
+          // Registered. Silent in production.
+        })
+        .catch(function(err) {
+          // Silent fail — SW registration errors must not break the page.
+        });
+    });
+  })();
+</script>
+  
 </body>
 </html>
