@@ -2803,34 +2803,105 @@
 </div>
 
 <!-- HERO -->
-<section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#0d1520;">
-  <div class="lp-orb lp-orb-teal" style="width:600px;height:600px;top:-100px;left:-200px;"></div>
-  <div class="lp-orb lp-orb-orange" style="width:380px;height:380px;top:20%;right:-80px;"></div>
-  <div class="lp-grid-pattern"></div>
-  <div style="position:relative;z-index:2;width:100%;padding:80px 24px;max-width:1200px;margin:0 auto;text-align:center;" class="lp-fade">
-    <div class="lp-live-badge"><span class="lp-live-dot"></span>Now Live — Join the Movement</div>
-    <h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(42px,7vw,84px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin-bottom:20px;color:#e8f0f8;">Find <span style="color:#2dd4a0;">work.</span><br>Build <span style="color:#f97316;">trust.</span> Execute faster.</h1>
-    <p style="font-size:clamp(16px,2vw,19px);color:#5a7a9a;max-width:600px;margin:0 auto 36px;line-height:1.65;font-family:'Inter',sans-serif;">A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.</p>
-    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:56px;">
-      <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" class="lp-btn">Request access →</button>
-      <button onclick="switchTab('about')" class="lp-btn-outline">How It Works</button>
+<!-- LANDING HERO — Option L-B upgrade (Earth background + metric cards + value pills) -->
+<section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#03060c;">
+  <!-- Earth background layer: full-bleed, centred, behind everything else -->
+  <div aria-hidden="true" style="position:absolute;inset:0;background-image:url('earth-hero.webp');background-repeat:no-repeat;background-position:center center;background-size:cover;opacity:1;z-index:0;"></div>
+  <!-- Subtle vignette to deepen the edges and lift centre content readability -->
+  <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(ellipse at center, rgba(3,6,12,0) 35%, rgba(3,6,12,0.55) 75%, rgba(3,6,12,0.85) 100%);z-index:1;pointer-events:none;"></div>
+
+  <div style="position:relative;z-index:2;width:100%;padding:80px 24px;max-width:1280px;margin:0 auto;text-align:center;" class="lp-fade">
+
+    <!-- Live badge -->
+    <div style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(45,212,160,0.35);background:rgba(45,212,160,0.08);color:#2dd4a0;font:700 11px/1 'Inter',sans-serif;letter-spacing:0.14em;text-transform:uppercase;padding:9px 18px;border-radius:9999px;margin-bottom:32px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+      <span style="width:7px;height:7px;border-radius:50%;background:#2dd4a0;box-shadow:0 0 8px rgba(45,212,160,0.7);animation:lp-pulse 1.6s ease-in-out infinite;"></span>
+      Now Live — Join the Movement
     </div>
-    <div style="margin-bottom:40px;">
-      <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:20px;"><span class="lp-live-dot"></span><span style="font:700 11px/1 'Inter',sans-serif;letter-spacing:0.12em;text-transform:uppercase;color:#2dd4a0;">GLOBAL NETWORK METRICS</span></div>
-      <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:48px;">
-        <div style="text-align:center;"><span id="hero-stat-members" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Members</span></div>
-        <div style="text-align:center;"><span id="hero-stat-deals" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Deals Forged</span></div>
-        <div style="text-align:center;"><span id="hero-stat-xp" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">XP Earned</span></div>
-        <div style="text-align:center;"><span id="hero-stat-opps" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,4vw,42px);font-weight:700;color:#2dd4a0;display:block;">—</span><span style="font-size:11px;color:#5a7a9a;margin-top:4px;display:block;font-family:'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.5px;">Live Opportunities</span></div>
+
+    <!-- Multi-color headline -->
+    <h1 style="font-family:'Space Grotesk',sans-serif;font-size:clamp(40px,7.5vw,92px);font-weight:700;line-height:1.05;letter-spacing:-0.02em;margin:0 0 24px;color:#ffffff;text-shadow:0 2px 24px rgba(0,0,0,0.5);">
+      Find <span style="color:#2dd4a0;">work.</span><br>
+      Build <span style="color:#f97316;">trust.</span> Execute <span style="color:#60a5fa;">faster.</span>
+    </h1>
+
+    <!-- Supporting paragraph -->
+    <p style="font-size:clamp(15px,1.6vw,18px);color:rgba(232,240,248,0.78);max-width:640px;margin:0 auto 40px;line-height:1.65;font-family:'Inter',sans-serif;text-shadow:0 1px 8px rgba(0,0,0,0.5);">
+      A 24/7 opportunity market where people find work, create deals, build reputation, and use NEXAR to move faster, follow up smarter, and turn action into results.
+    </p>
+
+    <!-- CTAs -->
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:72px;">
+      <button onclick="document.getElementById('lp-apply')?.scrollIntoView({behavior:'smooth'})" style="display:inline-flex;align-items:center;gap:8px;background:#2dd4a0;color:#03060c;font:700 15px/1 'Inter',sans-serif;border:none;border-radius:12px;padding:16px 32px;cursor:pointer;box-shadow:0 8px 32px rgba(45,212,160,0.35),0 0 0 1px rgba(45,212,160,0.5);transition:transform 0.15s ease,box-shadow 0.2s ease;" onmouseover="this.style.transform='translateY(-1px)';this.style.boxShadow='0 12px 40px rgba(45,212,160,0.45),0 0 0 1px rgba(45,212,160,0.6)';" onmouseout="this.style.transform='';this.style.boxShadow='0 8px 32px rgba(45,212,160,0.35),0 0 0 1px rgba(45,212,160,0.5)';">
+        Request access <span style="font-size:16px;">→</span>
+      </button>
+      <button onclick="switchTab('about')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(232,240,248,0.04);color:#e8f0f8;font:600 15px/1 'Inter',sans-serif;border:1px solid rgba(45,212,160,0.4);border-radius:12px;padding:15px 28px;cursor:pointer;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:background 0.2s ease,border-color 0.2s ease;" onmouseover="this.style.background='rgba(45,212,160,0.08)';this.style.borderColor='rgba(45,212,160,0.7)';" onmouseout="this.style.background='rgba(232,240,248,0.04)';this.style.borderColor='rgba(45,212,160,0.4)';">
+        How It Works
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid rgba(45,212,160,0.6);"><i class="fas fa-play" style="font-size:8px;color:#2dd4a0;margin-left:1px;"></i></span>
+      </button>
+    </div>
+
+    <!-- GLOBAL NETWORK METRICS -->
+    <div style="margin-bottom:48px;">
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:24px;">
+        <span style="width:6px;height:6px;border-radius:50%;background:#2dd4a0;"></span>
+        <span style="font:700 11px/1 'Inter',sans-serif;letter-spacing:0.22em;text-transform:uppercase;color:#2dd4a0;">Global Network Metrics</span>
+        <span style="width:6px;height:6px;border-radius:50%;background:#2dd4a0;"></span>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;max-width:1100px;margin:0 auto;">
+        <div style="display:flex;align-items:center;gap:18px;background:rgba(3,6,12,0.55);border:1px solid rgba(45,212,160,0.25);border-radius:14px;padding:20px 22px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+          <i class="fas fa-user" style="font-size:24px;color:#2dd4a0;width:32px;text-align:center;"></i>
+          <div style="text-align:left;">
+            <div id="hero-stat-members" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,3.5vw,38px);font-weight:700;color:#ffffff;line-height:1;">32+</div>
+            <div style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.16em;text-transform:uppercase;color:#94a3b8;margin-top:6px;">Members</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:18px;background:rgba(3,6,12,0.55);border:1px solid rgba(249,115,22,0.25);border-radius:14px;padding:20px 22px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+          <i class="fas fa-handshake" style="font-size:24px;color:#f97316;width:32px;text-align:center;"></i>
+          <div style="text-align:left;">
+            <div id="hero-stat-deals" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,3.5vw,38px);font-weight:700;color:#ffffff;line-height:1;">0+</div>
+            <div style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.16em;text-transform:uppercase;color:#94a3b8;margin-top:6px;">Deals Forged</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:18px;background:rgba(3,6,12,0.55);border:1px solid rgba(96,165,250,0.25);border-radius:14px;padding:20px 22px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+          <i class="fas fa-chart-line" style="font-size:24px;color:#60a5fa;width:32px;text-align:center;"></i>
+          <div style="text-align:left;">
+            <div id="hero-stat-xp" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,3.5vw,38px);font-weight:700;color:#ffffff;line-height:1;">6k+</div>
+            <div style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.16em;text-transform:uppercase;color:#94a3b8;margin-top:6px;">XP Earned</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:18px;background:rgba(3,6,12,0.55);border:1px solid rgba(249,115,22,0.25);border-radius:14px;padding:20px 22px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+          <i class="fas fa-clock" style="font-size:24px;color:#f97316;width:32px;text-align:center;"></i>
+          <div style="text-align:left;">
+            <div id="hero-stat-opps" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,3.5vw,38px);font-weight:700;color:#ffffff;line-height:1;">48hrs</div>
+            <div style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.16em;text-transform:uppercase;color:#94a3b8;margin-top:6px;">Avg Response</div>
+          </div>
+        </div>
       </div>
     </div>
+
+    <!-- Bottom value pills -->
     <div style="display:flex;justify-content:center;flex-wrap:wrap;gap:10px;">
-      <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Self-made growth</span>
-      <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Real opportunities</span>
-      <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Community-driven</span>
-      <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Long-term vision</span>
-      <span style="display:inline-block;border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:8px 20px;border-radius:9999px;font:500 14px/1 'Inter',sans-serif;">Pass it forward</span>
+      <span style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(45,212,160,0.35);background:rgba(3,6,12,0.5);color:#2dd4a0;padding:10px 20px;border-radius:9999px;font:600 13px/1 'Inter',sans-serif;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+        <i class="fas fa-arrow-trend-up" style="font-size:12px;"></i> Self-made growth
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(96,165,250,0.35);background:rgba(3,6,12,0.5);color:#60a5fa;padding:10px 20px;border-radius:9999px;font:600 13px/1 'Inter',sans-serif;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+        <i class="fas fa-star" style="font-size:12px;"></i> Real opportunities
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(45,212,160,0.35);background:rgba(3,6,12,0.5);color:#2dd4a0;padding:10px 20px;border-radius:9999px;font:600 13px/1 'Inter',sans-serif;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+        <i class="fas fa-shield-halved" style="font-size:12px;"></i> Built on trust
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(96,165,250,0.35);background:rgba(3,6,12,0.5);color:#60a5fa;padding:10px 20px;border-radius:9999px;font:600 13px/1 'Inter',sans-serif;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+        <i class="fas fa-eye" style="font-size:12px;"></i> Long-term vision
+      </span>
+      <span style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(249,115,22,0.35);background:rgba(3,6,12,0.5);color:#f97316;padding:10px 20px;border-radius:9999px;font:600 13px/1 'Inter',sans-serif;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);">
+        <i class="fas fa-heart" style="font-size:12px;"></i> Pass it forward
+      </span>
     </div>
+
   </div>
 </section>
 
