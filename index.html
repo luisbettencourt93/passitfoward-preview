@@ -12,12 +12,12 @@
 <link rel="canonical" href="https://passitfoward.xyz/">
 
 <!-- PWA / Stage N3a foundation -->
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#0b1118">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="PIF">
-<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 
 <meta property="og:type" content="website">
 <meta property="og:title" content="Pass It Forward | Opportunity Infrastructure">
@@ -14860,7 +14860,7 @@ async function nexarPipelineDelete(id) {
   (function() {
     if (!('serviceWorker' in navigator)) return;
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      navigator.serviceWorker.register('sw.js', { scope: './' })
         .then(function(reg) {
           // Registered. Silent in production.
         })
