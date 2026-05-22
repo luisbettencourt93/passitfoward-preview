@@ -2806,8 +2806,7 @@
 <!-- LANDING HERO — Option L-B upgrade (Earth background + metric cards + value pills) -->
 <section id="hero" style="min-height:100vh;display:flex;align-items:center;padding-top:52px;position:relative;overflow:hidden;background:#03060c;">
   <!-- Earth background layer: full-bleed, centred, behind everything else -->
-  <div aria-hidden="true" style="position:absolute;inset:0;background-image:url('earth-hero.webp');background-repeat:no-repeat;background-position:center center;background-size:cover;opacity:1;z-index:0;"></div>
-  <!-- Subtle vignette to deepen the edges and lift centre content readability -->
+  <div aria-hidden="true" style="position:absolute;inset:0;background-image:url('earth-hero.webp');background-repeat:no-repeat;background-position:center 72px;background-size:min(92vw, 1280px) auto;opacity:1;z-index:0;"></div>  <!-- Subtle vignette to deepen the edges and lift centre content readability -->
   <div aria-hidden="true" style="position:absolute;inset:0;background:radial-gradient(ellipse at center, rgba(3,6,12,0) 35%, rgba(3,6,12,0.55) 75%, rgba(3,6,12,0.85) 100%);z-index:1;pointer-events:none;"></div>
 
   <div style="position:relative;z-index:2;width:100%;padding:80px 24px;max-width:1280px;margin:0 auto;text-align:center;" class="lp-fade">
@@ -2877,7 +2876,7 @@
           <i class="fas fa-clock" style="font-size:24px;color:#f97316;width:32px;text-align:center;"></i>
           <div style="text-align:left;">
             <div id="hero-stat-opps" style="font-family:'Space Grotesk',sans-serif;font-size:clamp(28px,3.5vw,38px);font-weight:700;color:#ffffff;line-height:1;">48hrs</div>
-            <div style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.16em;text-transform:uppercase;color:#94a3b8;margin-top:6px;">Avg Response</div>
+            <div style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.16em;text-transform:uppercase;color:#94a3b8;margin-top:6px;">Live Opportunities</div>
           </div>
         </div>
       </div>
@@ -10086,7 +10085,7 @@ async function loadFeaturedPartner() {
     <div style="display:flex;justify-content:center;gap:20px;padding:20px 0;flex-wrap:wrap;">
       <div style="font-size:11px;color:#5a7a9a;display:flex;align-items:center;gap:4px;"><i class="fas fa-shield-alt" style="color:#2dd4a0;"></i> Verified by founder</div>
       <div style="font-size:11px;color:#5a7a9a;display:flex;align-items:center;gap:4px;"><i class="fas fa-users" style="color:#60a5fa;"></i> Seen by all members</div>
-      <div style="font-size:11px;color:#5a7a9a;display:flex;align-items:center;gap:4px;"><i class="fas fa-clock" style="color:#f59e0b;"></i> ${daysLeft} days left</div>
+      <div style="font-size:11px;color:#5a7a9a;display:flex;align-items:center;gap:4px;"><<i class="fas fa-briefcase" style="color:#f59e0b;"></i> ${daysLeft} days left</div>
     </div>
   `;
 }
