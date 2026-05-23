@@ -4998,10 +4998,22 @@
       <p style="font-size:0.68rem;color:#4b5563;font-style:italic;margin-bottom:0.8rem;">Payment goes directly to you — the platform never holds funds.</p>
     </div>
     <button onclick="saveProfile()" class="btn" style="width:100%;">Save Profile</button>
-    <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
-      <button type="button" onclick="changePassword()" style="width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:8px 12px;border-radius:8px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-lock" style="font-size:11px;"></i>Change password</button>
-    </div>
-    <button onclick="closeModal('profile-modal')" class="modal-cancel">Cancel</button>  </div>
+
+<!-- N3b: Push notifications section -->
+<div id="pif-push-section" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+  <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+    <i class="fas fa-bell" style="font-size:11px;color:#5a7a9a;"></i>
+    <span style="font:600 11px/1 'Inter',sans-serif;letter-spacing:0.4px;text-transform:uppercase;color:#5a7a9a;">Notifications</span>
+  </div>
+  <div id="pif-push-body" style="font-size:12px;color:#94a3b8;">
+    <div style="padding:8px 0;color:#5a7a9a;">Loading…</div>
+  </div>
+</div>
+
+<div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
+  <button type="button" onclick="changePassword()" style="width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:8px 12px;border-radius:8px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-lock" style="font-size:11px;"></i>Change password</button>
+</div>
+<button onclick="closeModal('profile-modal')" class="modal-cancel">Cancel</button>  </div>
 </div>
 
 <div id="dm-modal" class="modal">
@@ -15079,7 +15091,7 @@ async function nexarPipelineDelete(id) {
     }
   }
 
-  // --- Current device's push subscription state ---
+    // --- Current device's push subscription state ---
   async function pifPushState() {
     var support = pifPushSupport();
     if (!support.supported) return 'unsupported';
@@ -15093,6 +15105,147 @@ async function nexarPipelineDelete(id) {
       return 'not-subscribed';
     }
   }
+
+  // ============================================================
+  // UI rendering — called when Edit Profile modal opens
+  // ============================================================
+
+  async function pifRenderPushSection() {
+    var body = document.getElementById('pif-push-body');
+    if (!body) return;
+
+    var support = pifPushSupport();
+
+    // Unsupported / iOS-not-installed states
+    if (!support.supported) {
+      var msg;
+      if (support.reason === 'ios-needs-install') {
+        msg = 'Push notifications on iOS require installing PIF to your home screen first. Tap the Share button → "Add to Home Screen".';
+      } else {
+        msg = 'Push notifications aren\'t supported in this browser. Try Chrome, Edge, Firefox, or Safari 16.4+.';
+      }
+      body.innerHTML = '<div style="padding:8px 0;color:#5a7a9a;line-height:1.5;">' + msg + '</div>';
+      return;
+    }
+
+    // Permission-denied state
+    if (Notification.permission === 'denied') {
+      body.innerHTML = '<div style="padding:8px 0;color:#5a7a9a;line-height:1.5;">Push notifications are blocked in your browser settings. To re-enable, open your browser\'s site settings for this domain.</div>';
+      return;
+    }
+
+    var state = await pifPushState();
+    var subs = await pifListPushSubscriptions();
+    var thisDeviceIsSubscribed = (state === 'subscribed');
+
+    var html = '';
+
+    if (thisDeviceIsSubscribed) {
+      html += '<div style="padding:10px 12px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.25);border-radius:8px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#2dd4a0;"><i class="fas fa-check-circle" style="font-size:11px;"></i>Push enabled on this device</div>';
+      html += '<button type="button" onclick="pifHandleDisableThisDevice()" style="background:transparent;border:1px solid rgba(148,163,184,0.4);color:#94a3b8;padding:6px 12px;border-radius:6px;font:600 11px/1 \'Inter\',sans-serif;cursor:pointer;">Disable</button>';
+      html += '</div>';
+    } else {
+      html += '<div style="padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;margin-bottom:10px;">';
+      html += '<div style="font-size:12px;color:#e8f0f8;margin-bottom:4px;font-weight:600;">Get phone alerts</div>';
+      html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.45;">PIF can send pop-up notifications when you get a new message, deal, or application. Your browser will ask you to allow notifications.</div>';
+      html += '<button type="button" onclick="pifHandleEnablePush(this)" style="width:100%;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.35);color:#2dd4a0;padding:8px 12px;border-radius:6px;font:600 12px/1 \'Inter\',sans-serif;cursor:pointer;">Enable push notifications</button>';
+      html += '</div>';
+    }
+
+    // Other devices list
+    var thisEndpoint = null;
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      var sub = reg ? await reg.pushManager.getSubscription() : null;
+      thisEndpoint = sub ? sub.endpoint : null;
+    } catch (e) {}
+
+    var otherDevices = subs.filter(function(s) {
+      return s.endpoint !== thisEndpoint && s.active;
+    });
+
+    if (otherDevices.length) {
+      html += '<div style="font-size:10px;font-weight:600;color:#5a7a9a;letter-spacing:0.4px;text-transform:uppercase;margin:14px 0 6px;">Other devices</div>';
+      for (var i = 0; i < otherDevices.length; i++) {
+        var d = otherDevices[i];
+        var ua = d.user_agent || 'Unknown device';
+        if (ua.length > 50) ua = ua.slice(0, 50) + '…';
+
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(45,79,111,0.4);">';
+        html += '<div style="flex:1;min-width:0;font-size:11px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (typeof sanitize === 'function' ? sanitize(ua) : ua) + '</div>';
+        html += '<button type="button" onclick="pifHandleDisableSubscriptionId(\'' + d.id + '\')" style="flex-shrink:0;background:transparent;border:1px solid rgba(148,163,184,0.4);color:#94a3b8;padding:4px 10px;border-radius:6px;font:600 10px/1 \'Inter\',sans-serif;cursor:pointer;">Disable</button>';
+        html += '</div>';
+      }
+    }
+
+    body.innerHTML = html;
+  }
+
+  // --- UI handlers ---
+  async function pifHandleEnablePush(btn) {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Enabling…';
+    }
+
+    var result = await pifEnablePush();
+
+    if (result.ok) {
+      if (typeof showToast === 'function') showToast('Push notifications enabled');
+    } else {
+      var msg;
+      if (result.reason === 'permission-denied') msg = 'Notifications were blocked. Re-enable in browser settings.';
+      else if (result.reason === 'permission-dismissed') msg = 'Notifications permission was dismissed.';
+      else if (result.reason === 'ios-needs-install') msg = 'Install PIF to your home screen first.';
+      else if (result.reason === 'no-vapid-key') msg = 'Push not configured. Contact support.';
+      else if (result.reason === 'not-logged-in') msg = 'Please log in first.';
+      else msg = 'Could not enable push: ' + (result.reason || 'unknown');
+
+      if (typeof showToast === 'function') showToast(msg);
+    }
+
+    await pifRenderPushSection();
+  }
+
+  async function pifHandleDisableThisDevice() {
+    if (!confirm('Disable push notifications on this device?')) return;
+
+    var result = await pifDisablePushThisDevice();
+
+    if (typeof showToast === 'function') {
+      showToast(result.ok ? 'Push disabled on this device' : 'Disable failed');
+    }
+
+    await pifRenderPushSection();
+  }
+
+  async function pifHandleDisableSubscriptionId(subscriptionId) {
+    if (!confirm('Disable push notifications on this device?')) return;
+
+    var result = await pifDisablePushSubscriptionById(subscriptionId);
+
+    if (typeof showToast === 'function') {
+      showToast(result.ok ? 'Device push disabled' : 'Disable failed');
+    }
+
+    await pifRenderPushSection();
+  }
+
+  // --- Auto-render when Edit Profile modal opens ---
+  (function() {
+    if (typeof window === 'undefined') return;
+
+    var origShow = window.showProfileModal;
+
+    if (typeof origShow === 'function') {
+      window.showProfileModal = function() {
+        var r = origShow.apply(this, arguments);
+        setTimeout(pifRenderPushSection, 50);
+        return r;
+      };
+    }
+  })();
 </script>
   
 </body>
