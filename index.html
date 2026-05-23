@@ -14933,6 +14933,167 @@ async function nexarPipelineDelete(id) {
     });
   })();
 </script>
+
+<!-- PIF Push Subscription functions — Stage N3b -->
+<script>
+  // ============================================================
+  // PUBLIC VAPID KEY — safe to expose: public key by design.
+  // PRIVATE key never goes here — only in Supabase secrets.
+  // ============================================================
+  const PIF_VAPID_PUBLIC_KEY = 'BHI3HcEmhpcBJxnyixQ5khpHPFmxMoS-gbxnBm6s9PODf_50nBOFmbLRnOEbhfxshQQUGeHlI-z06vMVkJ5-hXs';
+
+  // --- Handle normalization (Option H1 — bare canonical form) ---
+  function normalizeHandle(h) {
+    if (!h) return '';
+    return String(h).replace(/^@+/, '').toLowerCase().trim();
+  }
+
+  // --- base64url → Uint8Array (required by PushManager.subscribe) ---
+  function pifUrlBase64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var rawData = atob(base64);
+    var outputArray = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // --- Capability check ---
+  function pifPushSupport() {
+    if (!('serviceWorker' in navigator)) return { supported: false, reason: 'no-sw' };
+    if (!('PushManager' in window)) return { supported: false, reason: 'no-push' };
+    if (!('Notification' in window)) return { supported: false, reason: 'no-notif' };
+    var ua = navigator.userAgent;
+    var isIOS = /iPhone|iPad|iPod/.test(ua);
+    var isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    if (isIOS && !isStandalone) return { supported: false, reason: 'ios-needs-install' };
+    return { supported: true, reason: null };
+  }
+
+  // --- List current user's subscriptions ---
+  async function pifListPushSubscriptions() {
+    if (!sb || !currentUser) return [];
+    try {
+      var handle = normalizeHandle(currentUser.handle);
+      if (!handle) return [];
+      var res = await sb.from('push_subscriptions')
+        .select('id, endpoint, user_agent, created_at, last_seen, active')
+        .eq('user_handle', handle)
+        .order('created_at', { ascending: false });
+      if (!res || !Array.isArray(res.data)) return [];
+      return res.data;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // --- Subscribe THIS browser/device to push ---
+  async function pifEnablePush() {
+    var support = pifPushSupport();
+    if (!support.supported) return { ok: false, reason: support.reason };
+    if (!sb || !currentUser) return { ok: false, reason: 'not-logged-in' };
+    if (!PIF_VAPID_PUBLIC_KEY || PIF_VAPID_PUBLIC_KEY === 'PASTE_YOUR_PUBLIC_KEY_HERE') {
+      return { ok: false, reason: 'no-vapid-key' };
+    }
+
+    try {
+      var permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        return { ok: false, reason: permission === 'denied' ? 'permission-denied' : 'permission-dismissed' };
+      }
+
+      var reg = await navigator.serviceWorker.ready;
+      if (!reg) return { ok: false, reason: 'no-registration' };
+
+      var sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: pifUrlBase64ToUint8Array(PIF_VAPID_PUBLIC_KEY)
+      });
+
+      var subJson = sub.toJSON();
+      var endpoint = subJson.endpoint;
+      var p256dh = subJson.keys && subJson.keys.p256dh;
+      var auth = subJson.keys && subJson.keys.auth;
+
+      if (!endpoint || !p256dh || !auth) {
+        return { ok: false, reason: 'subscription-incomplete' };
+      }
+
+      var handle = normalizeHandle(currentUser.handle);
+      var row = {
+        user_handle: handle,
+        endpoint: endpoint,
+        p256dh_key: p256dh,
+        auth_key: auth,
+        user_agent: navigator.userAgent || null,
+        last_seen: new Date().toISOString(),
+        active: true
+      };
+
+      var ins = await sb.from('push_subscriptions')
+        .upsert(row, { onConflict: 'endpoint' })
+        .select()
+        .single();
+
+      if (ins.error) return { ok: false, reason: 'insert-failed', error: ins.error };
+      return { ok: true, row: ins.data };
+    } catch (e) {
+      return { ok: false, reason: 'exception', error: e };
+    }
+  }
+
+  // --- Disable push on THIS device ---
+  async function pifDisablePushThisDevice() {
+    if (!sb || !currentUser) return { ok: false, reason: 'not-logged-in' };
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      var sub = reg ? await reg.pushManager.getSubscription() : null;
+      var endpoint = sub ? sub.endpoint : null;
+
+      if (sub) await sub.unsubscribe();
+
+      if (endpoint) {
+        await sb.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      }
+
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: 'exception', error: e };
+    }
+  }
+
+  // --- Disable push for a specific subscription row id ---
+  async function pifDisablePushSubscriptionById(subscriptionId) {
+    if (!sb || !currentUser || !subscriptionId) return { ok: false, reason: 'bad-input' };
+    try {
+      var handle = normalizeHandle(currentUser.handle);
+      await sb.from('push_subscriptions')
+        .delete()
+        .eq('id', subscriptionId)
+        .eq('user_handle', handle);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, reason: 'exception', error: e };
+    }
+  }
+
+  // --- Current device's push subscription state ---
+  async function pifPushState() {
+    var support = pifPushSupport();
+    if (!support.supported) return 'unsupported';
+    if (Notification.permission === 'denied') return 'permission-denied';
+
+    try {
+      var reg = await navigator.serviceWorker.ready;
+      var sub = reg ? await reg.pushManager.getSubscription() : null;
+      return sub ? 'subscribed' : 'not-subscribed';
+    } catch (e) {
+      return 'not-subscribed';
+    }
+  }
+</script>
   
 </body>
 </html>
