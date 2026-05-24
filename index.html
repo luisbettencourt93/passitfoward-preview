@@ -574,7 +574,49 @@
     .btn-sm { padding: 0.65rem 1.5rem; font-size: 0.9rem; }
 
     /* MODALS */
-    .modal { display: none; position: fixed; z-index: 4000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(5,10,20,0.96); align-items: center; justify-content: center; }
+   .modal { display: none; position: fixed; z-index: 4000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(5,10,20,0.96); align-items: center; justify-content: center; }
+
+    /* ============================================================
+       Welcome Modal V1 — W2 (multi-step guided onboarding)
+       Mobile-first; desktop = centered modal, mobile = full-screen sheet
+       ============================================================ */
+    .wm-v1-modal { display: none; position: fixed; inset: 0; z-index: 4500; background: rgba(3,6,12,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); align-items: center; justify-content: center; padding: 16px; overflow-y: auto; }
+    .wm-v1-modal.active { display: flex; }
+    .wm-v1-shell { background: linear-gradient(180deg, #0f1a2e 0%, #0a0f1e 100%); border: 1px solid rgba(45,212,160,0.20); border-radius: 20px; max-width: 560px; width: 100%; padding: 32px 28px 24px; box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(45,212,160,0.08); position: relative; font-family: 'Inter', sans-serif; color: #e8f0f8; }
+    @media (max-width: 600px) {
+      .wm-v1-modal { padding: 0; align-items: stretch; }
+      .wm-v1-shell { max-width: 100%; min-height: 100vh; border-radius: 0; border: none; padding: 28px 20px 24px; display: flex; flex-direction: column; justify-content: space-between; }
+    }
+    .wm-v1-progress { display: flex; justify-content: center; gap: 8px; margin-bottom: 28px; }
+    .wm-v1-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(148,163,184,0.25); transition: background 0.2s ease, transform 0.2s ease; }
+    .wm-v1-dot.current { background: #2dd4a0; transform: scale(1.4); box-shadow: 0 0 8px rgba(45,212,160,0.5); }
+    .wm-v1-dot.done { background: rgba(45,212,160,0.5); }
+    .wm-v1-step-container { min-height: 280px; }
+    .wm-v1-step { text-align: center; animation: wm-v1-fade-in 0.28s ease-out; }
+    .wm-v1-step[hidden] { display: none; }
+    @keyframes wm-v1-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .wm-v1-visual { width: 72px; height: 72px; border-radius: 20px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+    .wm-v1-title { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; margin: 0 0 12px; color: #ffffff; letter-spacing: -0.01em; }
+    .wm-v1-body { font-size: 14px; line-height: 1.6; color: #94a3b8; margin: 0 auto 16px; max-width: 440px; }
+    .wm-v1-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 440px; margin: 20px auto 16px; }
+    .wm-v1-action { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid rgba(45,79,111,0.6); border-radius: 10px; color: #e8f0f8; font: 600 12px/1.2 'Inter', sans-serif; cursor: pointer; text-align: left; transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease; }
+    .wm-v1-action:hover { background: rgba(45,212,160,0.06); border-color: rgba(45,212,160,0.4); }
+    .wm-v1-action:active { transform: scale(0.98); }
+    .wm-v1-action i { color: #2dd4a0; font-size: 14px; flex-shrink: 0; }
+    @media (max-width: 480px) { .wm-v1-actions { grid-template-columns: 1fr; } }
+    .wm-v1-dontshow { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; cursor: pointer; user-select: none; margin-top: 12px; }
+    .wm-v1-dontshow input { accent-color: #2dd4a0; cursor: pointer; }
+    .wm-v1-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 24px; margin-top: 24px; border-top: 1px solid rgba(45,79,111,0.4); }
+    .wm-v1-skip { background: transparent; border: none; color: #5a7a9a; font: 500 13px/1 'Inter', sans-serif; cursor: pointer; padding: 8px 4px; }
+    .wm-v1-skip:hover { color: #94a3b8; }
+    .wm-v1-counter { font: 500 11px/1 'Inter', sans-serif; color: #5a7a9a; letter-spacing: 0.3px; }
+    .wm-v1-nav { display: flex; gap: 8px; }
+    .wm-v1-back, .wm-v1-next { border: none; border-radius: 8px; padding: 10px 18px; font: 600 13px/1 'Inter', sans-serif; cursor: pointer; transition: background 0.15s ease, transform 0.1s ease; }
+    .wm-v1-back { background: rgba(255,255,255,0.04); color: #94a3b8; border: 1px solid rgba(45,79,111,0.6); }
+    .wm-v1-back:hover { background: rgba(255,255,255,0.08); }
+    .wm-v1-next { background: #2dd4a0; color: #03060c; box-shadow: 0 4px 16px rgba(45,212,160,0.3); }
+    .wm-v1-next:hover { background: #34dfaa; }
+    .wm-v1-next:active { transform: scale(0.97); }
     .modal-content { background: var(--card-bg); border: 1px solid var(--border); padding: 3rem; border-radius: 24px; width: 100%; max-width: 520px; text-align: center; max-height: 90vh; overflow-y: auto; }
     .modal-content h2 { font-family: 'Syne', sans-serif; color: white; margin-bottom: 0.8rem; font-size: 1.9rem; }
     .modal-content > p { color: #64748b; margin-bottom: 1.5rem; }
@@ -5067,6 +5109,116 @@
   </div>
 </div>
 
+
+
+<!-- ============================================================
+     Welcome to PIF — Onboarding Modal V1 (W2)
+     Multi-step guided tour. Replaces V0 single-screen modal in W2.3.
+     ============================================================ -->
+<div id="welcome-modal-v1" class="wm-v1-modal" role="dialog" aria-modal="true" aria-labelledby="wm-step-title">
+  <div class="wm-v1-shell">
+
+    <div class="wm-v1-progress" aria-hidden="true">
+      <span class="wm-v1-dot" data-step="1"></span>
+      <span class="wm-v1-dot" data-step="2"></span>
+      <span class="wm-v1-dot" data-step="3"></span>
+      <span class="wm-v1-dot" data-step="4"></span>
+      <span class="wm-v1-dot" data-step="5"></span>
+      <span class="wm-v1-dot" data-step="6"></span>
+      <span class="wm-v1-dot" data-step="7"></span>
+    </div>
+
+    <div class="wm-v1-step-container">
+
+      <div class="wm-v1-step" data-step="1">
+        <div class="wm-v1-visual" style="background:rgba(45,212,160,0.10);color:#2dd4a0;">
+          <i class="fas fa-arrow-right-arrow-left"></i>
+        </div>
+        <h3 class="wm-v1-title" id="wm-step-title">Welcome to Pass It Forward</h3>
+        <p class="wm-v1-body">A global opportunity platform where people find work, build trust, and grow real reputation. You're not alone — there's a network here ready to move.</p>
+      </div>
+
+      <div class="wm-v1-step" data-step="2" hidden>
+        <div class="wm-v1-visual" style="background:rgba(96,165,250,0.10);color:#60a5fa;">
+          <i class="fas fa-globe"></i>
+        </div>
+        <h3 class="wm-v1-title">Live Market</h3>
+        <p class="wm-v1-body">Real opportunities posted by real members. Find work, projects, collaborations, or post your own. The market runs 24/7 — opportunities come and go fast.</p>
+      </div>
+
+      <div class="wm-v1-step" data-step="3" hidden>
+        <div class="wm-v1-visual" style="background:rgba(249,115,22,0.10);color:#f97316;">
+          <i class="fas fa-handshake"></i>
+        </div>
+        <h3 class="wm-v1-title">Forged Deals</h3>
+        <p class="wm-v1-body">Lock in trusted work with another member. Both sides stake their reputation. Deliver to gain XP and trust. If a deal fails, reputation is affected — real accountability, real proof.</p>
+      </div>
+
+      <div class="wm-v1-step" data-step="4" hidden>
+        <div class="wm-v1-visual" style="background:rgba(167,139,250,0.10);color:#a78bfa;">
+          <i class="fas fa-bolt"></i>
+        </div>
+        <h3 class="wm-v1-title">NEXAR — your AI operator</h3>
+        <p class="wm-v1-body">An AI copilot that knows your profile, your goals, and your opportunities. Ask it anything. Draft messages, plan your next move, get unstuck. NEXAR moves with you.</p>
+      </div>
+
+      <div class="wm-v1-step" data-step="5" hidden>
+        <div class="wm-v1-visual" style="background:rgba(251,191,36,0.10);color:#fbbf24;">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+        <h3 class="wm-v1-title">XP, Trust, Reputation</h3>
+        <p class="wm-v1-body">Every action builds proof. XP from completed deals. Trust from delivering. Reputation that travels with you across the network. Nothing fake — only what you've actually done.</p>
+      </div>
+
+      <div class="wm-v1-step" data-step="6" hidden>
+        <div class="wm-v1-visual" style="background:rgba(16,185,129,0.10);color:#10b981;">
+          <i class="fas fa-heart"></i>
+        </div>
+        <h3 class="wm-v1-title">Grow the Network</h3>
+        <p class="wm-v1-body">PIF gets better with every new member. If you know someone who needs opportunities — or someone who can offer skills — share Pass It Forward with them. We grow together.</p>
+      </div>
+
+      <div class="wm-v1-step" data-step="7" hidden>
+        <div class="wm-v1-visual" style="background:rgba(45,212,160,0.10);color:#2dd4a0;">
+          <i class="fas fa-rocket"></i>
+        </div>
+        <h3 class="wm-v1-title">Ready to move?</h3>
+        <p class="wm-v1-body">Here are four ways to start. You can do them now or come back later — they'll always be here.</p>
+        <div class="wm-v1-actions">
+          <button type="button" class="wm-v1-action" data-action="profile">
+            <i class="fas fa-user"></i><span>Complete profile</span>
+          </button>
+          <button type="button" class="wm-v1-action" data-action="livemarket">
+            <i class="fas fa-globe"></i><span>Explore Live Market</span>
+          </button>
+          <button type="button" class="wm-v1-action" data-action="nexar">
+            <i class="fas fa-bolt"></i><span>Talk to NEXAR</span>
+          </button>
+          <button type="button" class="wm-v1-action" data-action="share">
+            <i class="fas fa-heart"></i><span>Share PIF</span>
+          </button>
+        </div>
+        <label class="wm-v1-dontshow">
+          <input type="checkbox" id="wm-v1-dontshow-checkbox" checked>
+          <span>Don't show this again</span>
+        </label>
+      </div>
+
+    </div>
+
+    <div class="wm-v1-controls">
+      <button type="button" class="wm-v1-skip" id="wm-v1-skip-btn">Skip</button>
+      <div class="wm-v1-counter" id="wm-v1-counter">Step 1 of 7</div>
+      <div class="wm-v1-nav">
+        <button type="button" class="wm-v1-back" id="wm-v1-back-btn" hidden>← Back</button>
+        <button type="button" class="wm-v1-next" id="wm-v1-next-btn">Next →</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- NEXAR PRO UPGRADE MODAL -->
 <!-- NEXAR PRO UPGRADE MODAL -->
 <div id="nexar-pro-modal" class="modal" style="display:none;">
   <div class="modal-content nexar-pro-modal-content">
@@ -9971,6 +10123,167 @@ function refreshTaskUI(){
 function welcomeTask(num){markTaskDone(num);setTimeout(()=>{closeModal('welcome-modal');setTimeout(()=>{if(num===1)switchTab('testimonials');else if(num===2)showGoalModal();else if(num===3)showPostModal();},300);},400);}
 function showWelcomeModal(){if(!currentUser)return;document.getElementById('welcome-modal').style.display='flex';localStorage.setItem('pf_welcomeShown_'+currentUser.handle,'true');}
 function closeWelcome(){closeModal('welcome-modal');}
+
+// ============================================================
+// Welcome Modal V1 — versioning + controller (W2)
+// V0 functions above are kept until W2.3 removes them entirely.
+// ============================================================
+const WELCOME_MODAL_VERSION = 'v1';
+
+function welcomeKey() {
+  if (!currentUser || !currentUser.handle) return null;
+  return 'pif_welcome_seen_version_' + normalizeHandle(currentUser.handle);
+}
+
+function shouldShowWelcomeModal() {
+  if (!currentUser) return false;
+  if (currentUser.id && String(currentUser.id).indexOf('demo-') === 0) return false;
+  var key = welcomeKey();
+  if (!key) return false;
+  try {
+    var seenVersion = localStorage.getItem(key);
+    return seenVersion !== WELCOME_MODAL_VERSION;
+  } catch (e) { return false; }
+}
+
+function markWelcomeSeen() {
+  var key = welcomeKey();
+  if (!key) return;
+  try { localStorage.setItem(key, WELCOME_MODAL_VERSION); } catch (e) {}
+}
+
+// Dev/test helpers (console-callable)
+window.pifShowWelcomeModalForce = function() {
+  var key = welcomeKey();
+  if (key) { try { localStorage.removeItem(key); } catch (e) {} }
+  if (typeof showWelcomeModalV1 === 'function') showWelcomeModalV1();
+};
+window.pifResetWelcomeModal = function() {
+  var key = welcomeKey();
+  if (!key) { console.log('Not logged in — no key to reset.'); return; }
+  try {
+    localStorage.removeItem(key);
+    console.log('Welcome modal reset. Refresh to see it on next login.');
+  } catch (e) { console.log('Storage error:', e); }
+};
+
+// Controller state
+var _wmV1State = { currentStep: 1, totalSteps: 7 };
+
+function showWelcomeModalV1() {
+  if (!currentUser) return;
+  var modal = document.getElementById('welcome-modal-v1');
+  if (!modal) return;
+  _wmV1State.currentStep = 1;
+  _wmV1RenderStep();
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeWelcomeModalV1(markSeen) {
+  var modal = document.getElementById('welcome-modal-v1');
+  if (!modal) return;
+  var dontShow = document.getElementById('wm-v1-dontshow-checkbox');
+  var userOptedOut = dontShow ? dontShow.checked : false;
+  if (markSeen || userOptedOut) markWelcomeSeen();
+  modal.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function _wmV1RenderStep() {
+  var step = _wmV1State.currentStep;
+  var total = _wmV1State.totalSteps;
+
+  var steps = document.querySelectorAll('#welcome-modal-v1 .wm-v1-step');
+  for (var i = 0; i < steps.length; i++) {
+    var s = steps[i];
+    var n = parseInt(s.getAttribute('data-step'), 10);
+    if (n === step) s.removeAttribute('hidden');
+    else s.setAttribute('hidden', '');
+  }
+
+  var dots = document.querySelectorAll('#welcome-modal-v1 .wm-v1-dot');
+  for (var j = 0; j < dots.length; j++) {
+    var d = dots[j];
+    var dn = parseInt(d.getAttribute('data-step'), 10);
+    d.classList.remove('current', 'done');
+    if (dn === step) d.classList.add('current');
+    else if (dn < step) d.classList.add('done');
+  }
+
+  var counter = document.getElementById('wm-v1-counter');
+  if (counter) counter.textContent = 'Step ' + step + ' of ' + total;
+
+  var backBtn = document.getElementById('wm-v1-back-btn');
+  if (backBtn) {
+    if (step === 1) backBtn.setAttribute('hidden', '');
+    else backBtn.removeAttribute('hidden');
+  }
+
+  var nextBtn = document.getElementById('wm-v1-next-btn');
+  if (nextBtn) nextBtn.textContent = step === total ? 'Finish' : 'Next →';
+}
+
+function _wmV1Next() {
+  if (_wmV1State.currentStep < _wmV1State.totalSteps) {
+    _wmV1State.currentStep++;
+    _wmV1RenderStep();
+  } else {
+    closeWelcomeModalV1(true);
+  }
+}
+
+function _wmV1Back() {
+  if (_wmV1State.currentStep > 1) {
+    _wmV1State.currentStep--;
+    _wmV1RenderStep();
+  }
+}
+
+function _wmV1Skip() { closeWelcomeModalV1(false); }
+
+function _wmV1ActionClick(action) {
+  console.log('Welcome Modal V1 action (W3 will wire):', action);
+  // W3 will: route to surface, close modal, mark seen
+}
+
+function _wmV1BindControls() {
+  var nextBtn = document.getElementById('wm-v1-next-btn');
+  var backBtn = document.getElementById('wm-v1-back-btn');
+  var skipBtn = document.getElementById('wm-v1-skip-btn');
+  if (nextBtn) nextBtn.addEventListener('click', _wmV1Next);
+  if (backBtn) backBtn.addEventListener('click', _wmV1Back);
+  if (skipBtn) skipBtn.addEventListener('click', _wmV1Skip);
+
+  var actions = document.querySelectorAll('#welcome-modal-v1 .wm-v1-action');
+  for (var i = 0; i < actions.length; i++) {
+    (function(btn) {
+      btn.addEventListener('click', function() {
+        _wmV1ActionClick(btn.getAttribute('data-action'));
+      });
+    })(actions[i]);
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      var modal = document.getElementById('welcome-modal-v1');
+      if (modal && modal.classList.contains('active')) _wmV1Skip();
+    }
+  });
+
+  var modal = document.getElementById('welcome-modal-v1');
+  if (modal) {
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) _wmV1Skip();
+    });
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _wmV1BindControls);
+} else {
+  _wmV1BindControls();
+}
 
 
 // -- FEATURED PARTNER -----------------------------
