@@ -5075,39 +5075,6 @@
   </div>
 </div>
 
-<div id="welcome-modal" class="modal">
-  <div class="modal-content welcome-modal-content" style="max-width:560px;">
-    <div style="font-size:2.5rem;margin-bottom:0.5rem;">👋</div>
-    <h2 id="welcome-headline" style="font-size:1.7rem;margin-bottom:0.4rem;">Welcome to Pass It Forward!</h2>
-    <p id="welcome-subtext" style="color:#64748b;font-size:0.95rem;margin-bottom:1.6rem;">You're now a verified founding member. Here are 3 quick tasks to get you started:</p>
-    <div style="background:#0a0f1e;border:1px solid var(--border);border-radius:16px;padding:1.2rem;margin-bottom:1.4rem;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem;">
-        <span style="color:#64748b;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">Getting Started</span>
-        <span id="task-progress-text" style="color:var(--primary);font-size:0.8rem;font-weight:700;">0 / 3 done</span>
-      </div>
-      <div style="background:var(--border);border-radius:999px;height:4px;margin-bottom:1.2rem;overflow:hidden;">
-        <div id="task-progress-bar" style="height:100%;background:var(--primary);border-radius:999px;width:0%;transition:width 0.4s ease;"></div>
-      </div>
-      <div id="welcome-task-1" onclick="welcomeTask(1)" class="welcome-action-btn" style="margin-bottom:0.6rem;">
-        <div id="task-check-1" style="width:22px;height:22px;border:2px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;"></div>
-        <i class="fas fa-comment-dots" style="color:var(--primary);font-size:1.2rem;"></i>
-        <div><strong style="color:white;display:block;font-size:0.95rem;">Leave a Testimonial</strong><small style="color:#64748b;">Tell the community how Pass It Forward helped you</small></div>
-      </div>
-      <div id="welcome-task-2" onclick="welcomeTask(2)" class="welcome-action-btn" style="margin-bottom:0.6rem;">
-        <div id="task-check-2" style="width:22px;height:22px;border:2px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;"></div>
-        <i class="fas fa-bullseye" style="color:var(--primary);font-size:1.2rem;"></i>
-        <div><strong style="color:white;display:block;font-size:0.95rem;">Set Your First 30-Day Goal</strong><small style="color:#64748b;">What do you want to achieve this month?</small></div>
-      </div>
-      <div id="welcome-task-3" onclick="welcomeTask(3)" class="welcome-action-btn">
-        <div id="task-check-3" style="width:22px;height:22px;border:2px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.2s;"></div>
-        <i class="fas fa-bolt" style="color:var(--primary);font-size:1.2rem;"></i>
-        <div><strong style="color:white;display:block;font-size:0.95rem;">Post an Opportunity</strong><small style="color:#64748b;">Share what you need or what you can offer</small></div>
-      </div>
-    </div>
-    <button onclick="closeWelcome()" class="btn" style="width:100%;">Let's build the future 🚀</button>
-    <button onclick="closeModal('welcome-modal')" class="modal-cancel">Skip for now</button>
-  </div>
-</div>
 
 
 
@@ -10120,13 +10087,17 @@ function refreshTaskUI(){
     if(pill&&done.includes(n)){pill.style.background='rgba(16,185,129,0.12)';pill.style.borderColor='rgba(16,185,129,0.4)';pill.style.color='var(--primary)';pill.innerHTML=pill.innerHTML.replace('✦','✓');}
   });
 }
-function welcomeTask(num){markTaskDone(num);setTimeout(()=>{closeModal('welcome-modal');setTimeout(()=>{if(num===1)switchTab('testimonials');else if(num===2)showGoalModal();else if(num===3)showPostModal();},300);},400);}
-function showWelcomeModal(){if(!currentUser)return;document.getElementById('welcome-modal').style.display='flex';localStorage.setItem('pf_welcomeShown_'+currentUser.handle,'true');}
-function closeWelcome(){closeModal('welcome-modal');}
+function welcomeTask(num){
+  markTaskDone(num);
+  setTimeout(function(){
+    if(num===1) switchTab('testimonials');
+    else if(num===2) showGoalModal();
+    else if(num===3) showPostModal();
+  },300);
+}
 
 // ============================================================
-// Welcome Modal V1 — versioning + controller (W2)
-// V0 functions above are kept until W2.3 removes them entirely.
+// Welcome Modal V1 — versioning + controller
 // ============================================================
 const WELCOME_MODAL_VERSION = 'v1';
 
