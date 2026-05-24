@@ -10231,9 +10231,63 @@ function _wmV1Back() {
 
 function _wmV1Skip() { closeWelcomeModalV1(false); }
 
+// ============================================================
+// Welcome Modal V1 — Step 9 action button wiring (W3)
+// Each action: close modal + mark seen + route to surface after 200ms
+// ============================================================
 function _wmV1ActionClick(action) {
-  console.log('Welcome Modal V1 action (W3 will wire):', action);
-  // W3 will: route to surface, close modal, mark seen
+  // Close modal and mark V1 as seen (user engaged — they're done with onboarding)
+  closeWelcomeModalV1(true);
+
+  // Route to the chosen surface after a small delay (polish, avoids visual snap)
+  setTimeout(function() {
+    if (action === 'profile') {
+      if (typeof showProfileModal === 'function') showProfileModal();
+    } else if (action === 'livemarket') {
+      // Internal tab id is 'livefeed' (UI label is "Live Market")
+      if (typeof switchTab === 'function') switchTab('livefeed');
+    } else if (action === 'nexar') {
+      if (typeof switchTab === 'function') switchTab('nexar');
+    } else if (action === 'share') {
+      _wmV1SharePIF();
+    }
+  }, 200);
+}
+
+// ============================================================
+// Welcome Modal V1 — Share PIF helper (Web Share API + clipboard fallback)
+// ============================================================
+function _wmV1SharePIF() {
+  var shareData = {
+    title: 'Pass It Forward',
+    text: 'Find work, build trust, and grow your reputation on PIF — a global opportunity platform for builders, founders, and operators.',
+    url: 'https://passitfoward.xyz/'
+  };
+
+  // Preferred: Web Share API (mobile-first, opens native share sheet)
+  if (navigator.share && typeof navigator.share === 'function') {
+    try {
+      navigator.share(shareData).catch(function() {
+        // User cancelled or share failed — silent. They already passed onboarding.
+      });
+      return;
+    } catch (e) {
+      // Some browsers throw synchronously on bad invocations — fall through to clipboard
+    }
+  }
+
+  // Fallback: copy URL to clipboard with toast confirmation
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareData.url).then(function() {
+      if (typeof showToast === 'function') showToast('PIF link copied to clipboard');
+    }).catch(function() {
+      if (typeof showToast === 'function') showToast('Could not copy link');
+    });
+    return;
+  }
+
+  // Last resort: show URL in toast (very old browsers without clipboard API)
+  if (typeof showToast === 'function') showToast('Share: ' + shareData.url);
 }
 
 function _wmV1BindControls() {
