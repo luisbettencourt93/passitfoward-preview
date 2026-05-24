@@ -6125,9 +6125,9 @@ if (pn) pn.textContent = xIdentity;
   renderNotifBell();
   renderXpProgress();
   updateMemberCount();
-  if (!localStorage.getItem('pf_welcomeShown_' + currentUser.handle)) {
-    setTimeout(() => showWelcomeModal(), 900);
-  }
+if (shouldShowWelcomeModal()) {
+  setTimeout(function() { showWelcomeModalV1(); }, 900);
+}
 }
 
 // -- TABS ----------------------------------------------------------
