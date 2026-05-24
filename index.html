@@ -5086,14 +5086,16 @@
   <div class="wm-v1-shell">
 
     <div class="wm-v1-progress" aria-hidden="true">
-      <span class="wm-v1-dot" data-step="1"></span>
-      <span class="wm-v1-dot" data-step="2"></span>
-      <span class="wm-v1-dot" data-step="3"></span>
-      <span class="wm-v1-dot" data-step="4"></span>
-      <span class="wm-v1-dot" data-step="5"></span>
-      <span class="wm-v1-dot" data-step="6"></span>
-      <span class="wm-v1-dot" data-step="7"></span>
-    </div>
+  <span class="wm-v1-dot" data-step="1"></span>
+  <span class="wm-v1-dot" data-step="2"></span>
+  <span class="wm-v1-dot" data-step="3"></span>
+  <span class="wm-v1-dot" data-step="4"></span>
+  <span class="wm-v1-dot" data-step="5"></span>
+  <span class="wm-v1-dot" data-step="6"></span>
+  <span class="wm-v1-dot" data-step="7"></span>
+  <span class="wm-v1-dot" data-step="8"></span>
+  <span class="wm-v1-dot" data-step="9"></span>
+</div>
 
     <div class="wm-v1-step-container">
 
@@ -5120,8 +5122,22 @@
         <h3 class="wm-v1-title">Forged Deals</h3>
         <p class="wm-v1-body">Lock in trusted work with another member. Both sides stake their reputation. Deliver to gain XP and trust. If a deal fails, reputation is affected — real accountability, real proof.</p>
       </div>
+             <div class="wm-v1-step" data-step="4" hidden>
+        <div class="wm-v1-visual" style="background:rgba(96,165,250,0.10);color:#60a5fa;">
+          <i class="fas fa-calendar-day"></i>
+        </div>
+        <h3 class="wm-v1-title">Events</h3>
+        <p class="wm-v1-body">Discover launches, live sessions, workshops, and major platform updates. Events give members a direct way to learn, build visibility, and move on real opportunities.</p>
+      </div>
 
-      <div class="wm-v1-step" data-step="4" hidden>
+      <div class="wm-v1-step" data-step="5" hidden>
+        <div class="wm-v1-visual" style="background:rgba(244,114,182,0.10);color:#f472b6;">
+          <i class="fas fa-bullhorn"></i>
+        </div>
+        <h3 class="wm-v1-title">Ads &amp; Promotion</h3>
+        <p class="wm-v1-body">Promote your service, offer, or opportunity inside PIF. A simple visibility layer for members who want their work seen by the right people.</p>
+      </div>
+      <div class="wm-v1-step" data-step="6" hidden>
         <div class="wm-v1-visual" style="background:rgba(167,139,250,0.10);color:#a78bfa;">
           <i class="fas fa-bolt"></i>
         </div>
@@ -5129,7 +5145,7 @@
         <p class="wm-v1-body">An AI copilot that knows your profile, your goals, and your opportunities. Ask it anything. Draft messages, plan your next move, get unstuck. NEXAR moves with you.</p>
       </div>
 
-      <div class="wm-v1-step" data-step="5" hidden>
+      <div class="wm-v1-step" data-step="7" hidden>
         <div class="wm-v1-visual" style="background:rgba(251,191,36,0.10);color:#fbbf24;">
           <i class="fas fa-shield-halved"></i>
         </div>
@@ -5137,7 +5153,7 @@
         <p class="wm-v1-body">Every action builds proof. XP from completed deals. Trust from delivering. Reputation that travels with you across the network. Nothing fake — only what you've actually done.</p>
       </div>
 
-      <div class="wm-v1-step" data-step="6" hidden>
+      <div class="wm-v1-step" data-step="8" hidden>
         <div class="wm-v1-visual" style="background:rgba(16,185,129,0.10);color:#10b981;">
           <i class="fas fa-heart"></i>
         </div>
@@ -5145,7 +5161,7 @@
         <p class="wm-v1-body">PIF gets better with every new member. If you know someone who needs opportunities — or someone who can offer skills — share Pass It Forward with them. We grow together.</p>
       </div>
 
-      <div class="wm-v1-step" data-step="7" hidden>
+      <div class="wm-v1-step" data-step="9" hidden>
         <div class="wm-v1-visual" style="background:rgba(45,212,160,0.10);color:#2dd4a0;">
           <i class="fas fa-rocket"></i>
         </div>
@@ -5175,7 +5191,7 @@
 
     <div class="wm-v1-controls">
       <button type="button" class="wm-v1-skip" id="wm-v1-skip-btn">Skip</button>
-      <div class="wm-v1-counter" id="wm-v1-counter">Step 1 of 7</div>
+      <div class="wm-v1-counter" id="wm-v1-counter">Step 1 of 9</div>
       <div class="wm-v1-nav">
         <button type="button" class="wm-v1-back" id="wm-v1-back-btn" hidden>← Back</button>
         <button type="button" class="wm-v1-next" id="wm-v1-next-btn">Next →</button>
@@ -10141,7 +10157,7 @@ window.pifResetWelcomeModal = function() {
 };
 
 // Controller state
-var _wmV1State = { currentStep: 1, totalSteps: 7 };
+var _wmV1State = { currentStep: 1, totalSteps: 9 };
 
 function showWelcomeModalV1() {
   if (!currentUser) return;
