@@ -10132,7 +10132,9 @@ const WELCOME_MODAL_VERSION = 'v1';
 
 function welcomeKey() {
   if (!currentUser || !currentUser.handle) return null;
-  return 'pif_welcome_seen_version_' + normalizeHandle(currentUser.handle);
+  var handle = String(currentUser.handle).replace(/^@+/, '').toLowerCase().trim();
+  if (!handle) return null;
+  return 'pif_welcome_seen_version_' + handle;
 }
 
 function shouldShowWelcomeModal() {
