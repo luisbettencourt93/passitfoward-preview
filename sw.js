@@ -1,8 +1,8 @@
-// PIF Service Worker — Stage N3b (push handler activated)
+// PIF Service Worker — Stage N3d.1 (push click routing activated)
 // N3a left push as no-op. N3b activates real notification display.
-// N3d will add full click routing. Click currently focuses/opens PIF.
+// N3d.1 adds type-aware notification click routing.
 
-const SW_VERSION = 'pif-n3b-v1';
+const SW_VERSION = 'pif-n3d-v1';
 
 // --- Install: take over immediately on first install ---
 self.addEventListener('install', function(event) {
@@ -18,7 +18,7 @@ self.addEventListener('activate', function(event) {
 // Important: no fetch listener, no caching, no page interception.
 
 // --- Push: display notification.
-// N3c will later send pushes with JSON payload:
+// Push payload shape:
 // { title, body, icon?, badge?, data? }
 self.addEventListener('push', function(event) {
   var payload = {
@@ -56,22 +56,53 @@ self.addEventListener('push', function(event) {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// --- Notification click: minimal N3b behaviour.
-// N3d will add type-aware routing later.
+// --- Notification click: N3d.1 — type-aware routing ---
+// Two paths converge in the client:
+//   (a) PIF tab open  → focus + postMessage with routing data
+//   (b) PIF tab closed → openWindow with pif_* URL params; client reads on load
+// Either path ends up calling pifRouteFromNotification(data) in index.html.
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
 
+  var data = event.notification.data || {};
+
+  // Build URL params for the closed-app fallback path
+  function buildUrlWithParams(baseUrl) {
+    try {
+      var url = new URL(baseUrl);
+      if (data.notification_id) url.searchParams.set('pif_notif_id', String(data.notification_id));
+      if (data.type) url.searchParams.set('pif_type', String(data.type));
+      if (data.target_type) url.searchParams.set('pif_target_type', String(data.target_type));
+      if (data.target_id) url.searchParams.set('pif_target_id', String(data.target_id));
+      if (data.actor_handle) url.searchParams.set('pif_actor', String(data.actor_handle));
+      return url.href;
+    } catch (e) {
+      return baseUrl;
+    }
+  }
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      // Path (a): existing PIF tab → focus + postMessage routing intent
       for (var i = 0; i < clientList.length; i++) {
         var c = clientList[i];
         if (c.url.indexOf(self.location.host) !== -1) {
-          return c.focus();
+          var focusPromise = c.focus();
+
+          try {
+            c.postMessage({ type: 'pif-notif-click', data: data });
+          } catch (e) {
+            // postMessage should not fail, but never let SW crash on it
+          }
+
+          return focusPromise;
         }
       }
 
+      // Path (b): no open tab → open new window with routing params
       var scopeUrl = self.registration && self.registration.scope ? self.registration.scope : '/';
-      return clients.openWindow(scopeUrl);
+      var targetUrl = buildUrlWithParams(scopeUrl);
+      return clients.openWindow(targetUrl);
     })
   );
 });
