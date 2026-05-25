@@ -10968,6 +10968,34 @@ function renderNotifBell(){
          + '</div>';
   }).join('');
 }
+// ============================================================
+// pifRouteFromNotification — N3d.1
+// Universal routing for notification clicks. Called by:
+//   (1) readNotif (in-app bell click) — existing N1b flow
+//   (2) SW postMessage handler (push click, app open)
+//   (3) URL param reader on page load (push click, app closed)
+// All three paths converge here. Same routing, three triggers.
+//
+// Accepts a normalized data object:
+//   { notification_id?, type, target_type?, target_id?, actor_handle? }
+// ============================================================
+function pifRouteFromNotification(data) {
+  if (!data || typeof data !== 'object') return;
+
+  var type = data.type;
+  var actor = data.actor_handle;
+
+  if (type === 'new_message' && actor) {
+    if (typeof openDmWith === 'function') openDmWith(actor);
+  } else if (type === 'deal_received' || type === 'deal_accepted' || type === 'deal_rejected') {
+    if (typeof showMyForgedDeals === 'function') showMyForgedDeals();
+  } else if (type === 'founder_application') {
+    if (typeof showApplicationsModal === 'function') showApplicationsModal();
+  } else if (type === 'new_opportunity') {
+    if (typeof switchTab === 'function') switchTab('livefeed');
+  }
+  // null / legacy / unknown → no route. Caller already handled mark-read / focus.
+}
 // readNotif — N1b
 // Marks the clicked notification read, closes the panel, and routes by type.
 function readNotif(id){
@@ -10992,14 +11020,14 @@ function readNotif(id){
   // Re-render badge/list
   renderNotifBell();
 
-  // Route to destination
-  if(n.type === 'new_message' && n.actor_handle){
-  if(typeof openDmWith === 'function') openDmWith(n.actor_handle);
-} else if(n.type === 'deal_received' || n.type === 'deal_accepted' || n.type === 'deal_rejected'){
-  if(typeof showMyForgedDeals === 'function') showMyForgedDeals();
-} else if(n.type === 'founder_application'){
-  if(typeof showApplicationsModal === 'function') showApplicationsModal();
-}
+    // Route to destination (N3d.1: delegated to pifRouteFromNotification)
+  pifRouteFromNotification({
+    notification_id: n.id,
+    type: n.type,
+    target_type: n.target_type,
+    target_id: n.target_id,
+    actor_handle: n.actor_handle
+  });
 }
 
 // clearAllNotifs — N1b
@@ -15301,7 +15329,73 @@ async function nexarPipelineDelete(id) {
     });
   })();
 </script>
+<!-- PIF Notification Click Bridge — N3d.1 -->
+<!-- Two paths to route a push click into the app:
+     (1) SW postMessage when PIF tab is open
+     (2) URL params (pif_*) on page load when PIF tab was closed
+     Both converge on pifRouteFromNotification(). -->
+<script>
+  (function() {
+    if (!('serviceWorker' in navigator)) return;
 
+    // Path 1: listen for SW postMessage on push click
+    try {
+      navigator.serviceWorker.addEventListener('message', function(event) {
+        if (!event || !event.data) return;
+        if (event.data.type !== 'pif-notif-click') return;
+        if (typeof pifRouteFromNotification === 'function') {
+          // Defer slightly: ensures routing happens after focus settles
+          setTimeout(function() {
+            pifRouteFromNotification(event.data.data);
+          }, 60);
+        }
+      });
+    } catch (e) {
+      // Silent — postMessage listener errors must not break page
+    }
+
+    // Path 2: read pif_* URL params on page load (closed-app open path)
+    window.addEventListener('load', function() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        if (!params.has('pif_type')) return;
+
+        var data = {
+          notification_id: params.get('pif_notif_id'),
+          type: params.get('pif_type'),
+          target_type: params.get('pif_target_type'),
+          target_id: params.get('pif_target_id'),
+          actor_handle: params.get('pif_actor')
+        };
+
+        // Strip pif_* params from URL so refresh doesn't re-route
+        var keep = [];
+        params.forEach(function(value, key) {
+          if (key.indexOf('pif_') !== 0) keep.push([key, value]);
+        });
+
+        var newSearch = keep.length
+          ? '?' + keep.map(function(kv) {
+              return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]);
+            }).join('&')
+          : '';
+
+        try {
+          window.history.replaceState({}, '', window.location.pathname + newSearch + window.location.hash);
+        } catch (e) {}
+
+        // Route after a small delay — lets currentUser hydrate from auth
+        setTimeout(function() {
+          if (typeof pifRouteFromNotification === 'function') {
+            pifRouteFromNotification(data);
+          }
+        }, 1200);
+      } catch (e) {
+        // Silent — URL param parsing errors must not break page
+      }
+    });
+  })();
+</script>
 <!-- PIF Push Subscription functions — Stage N3b -->
 <script>
   // ============================================================
