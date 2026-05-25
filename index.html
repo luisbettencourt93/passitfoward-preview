@@ -11670,10 +11670,18 @@ async function sendNewDm() {
   // HN-A: normalize to bare canonical form (was: prepend @ to bare input)
   handle = pifNormalizeHandle(handle);
   if (!handle) return showToast("Enter a valid handle");
-  let sentMsgId = null;
-  if (sb && !currentUser.id.startsWith('demo-')) {
+ let sentMsgId = null;
+
+const fromHandleNorm = pifNormalizeHandle(currentUser.handle);
+const toHandleNorm = pifNormalizeHandle(handle);
+
+if (!fromHandleNorm || !toHandleNorm) {
+  return showToast("Invalid sender or recipient handle");
+}
+
+if (sb && !currentUser.id.startsWith('demo-')) {
   const { data, error } = await sb.from('messages')
-    .insert({ from_handle: currentUser.handle, to_handle: handle, body: msg, read: false })
+    .insert({ from_handle: fromHandleNorm, to_handle: toHandleNorm, body: msg, read: false })
     .select()
     .single();
 
