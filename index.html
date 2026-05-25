@@ -5907,9 +5907,22 @@ async function handleSignup() {
   }
 }
 
+// ============================================================
+// pifNormalizeHandle — HN-A (handle normalization hotfix)
+// Bare canonical form: strip leading @, lowercase, trim.
+// Top-level so addNotif / sendNewDm / sendDmMsg / loadCurrentUser
+// can all reach it. Mirrors the IIFE-scoped normalizeHandle in N3b.
+// ============================================================
+function pifNormalizeHandle(h) {
+  if (!h) return '';
+  return String(h).replace(/^@+/, '').toLowerCase().trim();
+}
+
 async function loadCurrentUser(user) {
   if (!user) return;
-  let handle = '@' + user.email.split('@')[0];
+  // HN-A: new signups derive a normalized bare handle.
+  // Existing profiles keep their stored handle until the post-20-June migration.
+  let handle = pifNormalizeHandle(user.email.split('@')[0]);
   if (sb) {
     const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
@@ -10855,18 +10868,27 @@ function saveNotifs(n){localStorage.setItem('pf_notifs_'+(currentUser?.handle||'
 // metadata is preserved for cross-device sync via loadNotifsFromSupabase).
 function addNotif(text, targetHandle, meta){
   meta = meta || {};
+
+  // HN-A: normalize handles to bare canonical form at the write boundary.
+  // All addNotif callsites benefit from this single chokepoint.
+  var normTarget = pifNormalizeHandle(targetHandle);
+  var normSelf = pifNormalizeHandle(currentUser?.handle);
+  var normActor = pifNormalizeHandle(meta.actor_handle);
+
   // N1a safety fallback: any older 2-arg "New message from" call becomes typed
   if(!meta.type && typeof text === 'string' && text.indexOf('New message from') !== -1){
     meta.type = 'new_message';
     meta.target_type = 'message';
     meta.target_id = null;
     meta.actor_handle = currentUser?.handle || null;
+    normActor = pifNormalizeHandle(meta.actor_handle);
   }
+
   // Save to Supabase if targeting another user
-  if(targetHandle && targetHandle !== currentUser?.handle){
+  if(normTarget && normTarget !== normSelf){
     if(sb) {
       var row = {
-        handle: targetHandle,
+        handle: normTarget,
         text: text,
         created_at: new Date().toISOString(),
         read: false
@@ -10874,7 +10896,7 @@ function addNotif(text, targetHandle, meta){
       if(meta.type) row.type = meta.type;
       if(meta.target_type) row.target_type = meta.target_type;
       if(meta.target_id != null) row.target_id = String(meta.target_id);
-      if(meta.actor_handle) row.actor_handle = meta.actor_handle;
+      if(normActor) row.actor_handle = normActor;
       sb.from('notifications').insert(row).then(function(){});
     }
     return;
@@ -11594,12 +11616,16 @@ async function sendDmMsg() {
   const text = inp.value.trim(); if (!text) return;
   inp.value = '';
 
+  // HN-A: normalize handles to bare canonical form at the write boundary
+  const fromHandleNorm = pifNormalizeHandle(currentUser.handle);
+  const toHandleNorm = pifNormalizeHandle(activeDmHandle);
+
   const time = new Date().toISOString();
-  const newMsg = { from_handle: currentUser.handle, to_handle: activeDmHandle, body: text, created_at: time, read: false };
+  const newMsg = { from_handle: fromHandleNorm, to_handle: toHandleNorm, body: text, created_at: time, read: false };
 
   if (sb && !currentUser.id.startsWith('demo-')) {
     const { data, error } = await sb.from('messages')
-      .insert({ from_handle: currentUser.handle, to_handle: activeDmHandle, body: text, read: false })
+      .insert({ from_handle: fromHandleNorm, to_handle: toHandleNorm, body: text, read: false })
       .select().single();
     if (error) { console.error('Send DM:', error.message); showToast("Error sending message"); return; }
     newMsg.id = data.id;
@@ -11641,7 +11667,9 @@ async function sendNewDm() {
   const msg = document.getElementById('dm-msg-inp').value.trim();
   if (!handle) return showToast("Enter a handle");
   if (!msg) return showToast("Write a message");
-  if (!handle.startsWith('@')) handle = '@' + handle;
+  // HN-A: normalize to bare canonical form (was: prepend @ to bare input)
+  handle = pifNormalizeHandle(handle);
+  if (!handle) return showToast("Enter a valid handle");
   let sentMsgId = null;
   if (sb && !currentUser.id.startsWith('demo-')) {
   const { data, error } = await sb.from('messages')
