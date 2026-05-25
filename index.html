@@ -910,8 +910,10 @@
     .notif-scroll { max-height:280px; overflow-y:auto; scrollbar-width:thin; }
     .notif-row { padding:0.75rem 1rem; border-bottom:1px solid var(--border); display:flex; gap:8px; cursor:pointer; transition:background 0.12s; }
     .notif-row:last-child { border-bottom:none; }
-    .notif-row.unread { background:rgba(16,185,129,0.04); }
-    .notif-row:hover { background:rgba(16,185,129,0.07); }
+    .notif-row.unread { background:rgba(16,185,129,0.06); border-left:3px solid #10b981; padding-left:calc(1rem - 3px); }
+    .notif-row.read { opacity:0.62; }
+    .notif-row:hover { background:rgba(16,185,129,0.09); }
+    .notif-row.read:hover { opacity:0.88; }
     .nr-dot { width:7px; height:7px; border-radius:50%; background:var(--primary); flex-shrink:0; margin-top:5px; }
     .nr-dot.read { background:var(--border); }
     .nr-icon { width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:11px; margin-top:1px; }
@@ -926,6 +928,27 @@
     body.light .nr-text { color:#475569; }
     body.light .nr-text strong { color:#0f172a; }
     .nr-time { color:#4b5563; font-size:0.68rem; display:block; margin-top:2px; }
+    /* N3d.2a — Bell clarity polish */
+   .nr-text-line { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+   .nr-new-pill {
+  display:inline-block;
+  font-size:0.6rem;
+  font-weight:700;
+  letter-spacing:0.4px;
+  padding:2px 6px;
+  border-radius:4px;
+  background:#10b981;
+  color:#03060c;
+  text-transform:uppercase;
+  flex-shrink:0;
+}
+.nr-meta { color:#5a7a9a; font-size:0.68rem; display:block; margin-top:3px; }
+.nr-state { color:#10b981; font-weight:600; }
+.nr-state-unread { color:#10b981; }
+
+body.light .nr-meta { color:#64748b; }
+body.light .nr-new-pill { background:#10b981; color:white; }
+body.light .nr-state-unread { color:#059669; }
     .notif-empty { padding:1.5rem; text-align:center; color:#4b5563; font-size:0.82rem; }
 
     /* == LEADERBOARD == */
@@ -10925,7 +10948,45 @@ async function loadNotifsFromSupabase(){
 // renderNotifBell — N1b
 // Renders bell badge + dropdown list with per-type icons. Click handler routes
 // to the right destination based on notification type.
-function renderNotifBell(){
+  // ============================================================
+// pifFormatNotifTime — N3d.2a
+// Returns a relative time label from a created_at string.
+//   < 30s  → "Just now"
+//   < 60m  → "Nm ago"
+//   < 24h  → "Hh ago"
+//   < 7d   → "Dd ago"
+//   else   → absolute local date (e.g. "May 22")
+// Returns empty string on missing/invalid input so caller can fall back.
+// ============================================================
+function pifFormatNotifTime(createdAt) {
+  if (!createdAt) return '';
+  var t;
+  try { t = new Date(createdAt).getTime(); } catch (e) { return ''; }
+  if (!t || isNaN(t)) return '';
+
+  var now = Date.now();
+  var diff = now - t;
+  if (diff < 0) diff = 0;
+
+  var sec = Math.floor(diff / 1000);
+  if (sec < 30) return 'Just now';
+
+  var min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ago';
+
+  var hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h ago';
+
+  var day = Math.floor(hr / 24);
+  if (day < 7) return day + 'd ago';
+
+  try {
+    return new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch (e) {
+    return '';
+  }
+}
+  function renderNotifBell(){
   var notifs = getNotifs().sort(function(a,b){
   var at = a.created_at ? new Date(a.created_at).getTime() : Number(a.id) || 0;
   var bt = b.created_at ? new Date(b.created_at).getTime() : Number(b.id) || 0;
@@ -10958,15 +11019,32 @@ function renderNotifBell(){
 };
 
   list.innerHTML = notifs.map(function(n){
-    var typeClass = (n.type && iconMap[n.type]) ? n.type : 'legacy';
-    var iconClass = (n.type && iconMap[n.type]) ? iconMap[n.type] : 'fa-bell';
-    var idAttr = (typeof n.id === 'string') ? "'" + n.id + "'" : n.id;
+  var typeClass = (n.type && iconMap[n.type]) ? n.type : 'legacy';
+  var iconClass = (n.type && iconMap[n.type]) ? iconMap[n.type] : 'fa-bell';
+  var idAttr = (typeof n.id === 'string') ? "'" + n.id + "'" : n.id;
+  var isUnread = !n.read;
 
-    return '<div class="notif-row ' + (n.read ? '' : 'unread') + '" onclick="readNotif(' + idAttr + ')">'
-         + '<div class="nr-icon ' + typeClass + '"><i class="fas ' + iconClass + '"></i></div>'
-         + '<div class="nr-text">' + sanitize(n.text) + '<span class="nr-time">' + sanitize(n.time) + '</span></div>'
-         + '</div>';
-  }).join('');
+  // Relative time at render — always fresh, falls back to stored 'time' for legacy rows
+  var timeLabel = pifFormatNotifTime(n.created_at) || sanitize(n.time) || '';
+  var stateLabel = isUnread
+    ? '<span class="nr-state nr-state-unread">Unread</span>'
+    : '';
+  var newBadge = isUnread
+    ? '<span class="nr-new-pill">NEW</span>'
+    : '';
+
+  var metaLine = timeLabel || stateLabel
+    ? '<span class="nr-meta">' + timeLabel + (timeLabel && stateLabel ? ' · ' : '') + stateLabel + '</span>'
+    : '';
+
+  return '<div class="notif-row ' + (isUnread ? 'unread' : 'read') + '" onclick="readNotif(' + idAttr + ')">'
+       + '<div class="nr-icon ' + typeClass + '"><i class="fas ' + iconClass + '"></i></div>'
+       + '<div class="nr-text">'
+       +   '<div class="nr-text-line">' + sanitize(n.text) + newBadge + '</div>'
+       +   metaLine
+       + '</div>'
+       + '</div>';
+}).join('');
 }
 // ============================================================
 // pifRouteFromNotification — N3d.1
