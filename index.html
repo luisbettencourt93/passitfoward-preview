@@ -6050,7 +6050,28 @@ function copyCode(code, btn) {
     setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
   });
 }
-  async function logout() {
+    async function logout() {
+  // PUSH-HARDEN-1: deactivate THIS device's push subscription BEFORE signOut.
+  // Must run while still authenticated — the push_subscriptions UPDATE RLS policy
+  // requires user_handle = current_bare_handle(), which is null after signOut().
+  // Marks active=false (not delete) so the row stays auditable; the dispatcher
+  // only sends to active=true rows, so this stops pushes to this device.
+  // Fully guarded: logout must always proceed even if push cleanup fails.
+  try {
+    if (sb && currentUser && ('serviceWorker' in navigator) && ('PushManager' in window)) {
+      var phReg = await navigator.serviceWorker.ready;
+      var phSub = phReg ? await phReg.pushManager.getSubscription() : null;
+      if (phSub && phSub.endpoint) {
+        await sb.from('push_subscriptions')
+          .update({ active: false })
+          .eq('endpoint', phSub.endpoint)
+          .eq('user_handle', pifNormalizeHandleKey(currentUser.handle));
+      }
+    }
+  } catch (phErr) {
+    // Silent — push cleanup failure must never block logout.
+  }
+
   if (sb) await sb.auth.signOut();
   currentUser = null;
   localStorage.removeItem('pf_demo_user');
@@ -15722,6 +15743,60 @@ async function nexarPipelineDelete(id) {
     }
   }
 
+    // --- PUSH-HARDEN-1 (Part 3): minimal push-ownership diagnostic ---
+  // Console-callable: pifPushOwnershipDiag()
+  // Reports this device's push-ownership state. Uses RLS behavior as the
+  // stale-ownership signal: if the browser HAS a push subscription (endpoint)
+  // but the SELECT for that endpoint returns no visible row, RLS has hidden it
+  // because it belongs to a DIFFERENT user_handle — i.e. stale ownership.
+  // (DX1 will later formalize this into the full debug dump.)
+  async function pifPushOwnershipDiag() {
+    var out = {
+      current_user: currentUser ? normalizeHandle(currentUser.handle) : null,
+      notification_permission: (typeof Notification !== 'undefined') ? Notification.permission : 'n/a',
+      endpoint: null,
+      this_endpoint_row: null,
+      my_active_rows: [],
+      endpoint_owned_by_other: false
+    };
+    try {
+      if (('serviceWorker' in navigator) && ('PushManager' in window)) {
+        var dReg = await navigator.serviceWorker.ready;
+        var dSub = dReg ? await dReg.pushManager.getSubscription() : null;
+        out.endpoint = dSub ? dSub.endpoint : null;
+      }
+
+      if (sb && currentUser) {
+        var myHandle = normalizeHandle(currentUser.handle);
+
+        var mine = await sb.from('push_subscriptions')
+          .select('id, endpoint, user_handle, active, user_agent, last_seen')
+          .eq('user_handle', myHandle)
+          .eq('active', true);
+        out.my_active_rows = (mine && Array.isArray(mine.data)) ? mine.data : [];
+
+        if (out.endpoint) {
+          var er = await sb.from('push_subscriptions')
+            .select('id, user_handle, active')
+            .eq('endpoint', out.endpoint)
+            .maybeSingle();
+          out.this_endpoint_row = (er && er.data) ? er.data : null;
+          // Browser has a subscription but RLS shows no row for it -> owned by another handle.
+          if (!out.this_endpoint_row) {
+            out.endpoint_owned_by_other = true;
+          }
+        }
+      }
+    } catch (dErr) {
+      out.error = String(dErr);
+    }
+    if (typeof console !== 'undefined') console.log('[PIF push ownership]', out);
+    return out;
+  }
+  if (typeof window !== 'undefined') {
+    window.pifPushOwnershipDiag = pifPushOwnershipDiag;
+  }
+
   // --- Subscribe THIS browser/device to push ---
   async function pifEnablePush() {
     var support = pifPushSupport();
@@ -15765,6 +15840,13 @@ async function nexarPipelineDelete(id) {
         active: true
       };
 
+      // PUSH-HARDEN-1 (Part 2): this upsert intentionally CLAIMS endpoint ownership
+      // for the current user. Because push_subscriptions.endpoint is UNIQUE
+      // (push_subscriptions_endpoint_key), onConflict:'endpoint' overwrites
+      // user_handle + reactivates the row for whoever is enabling now. So if a
+      // device was previously registered to another account, enabling as the
+      // current user reassigns that single endpoint row to them — no duplicate,
+      // no stale ownership. No extra reconciliation write is needed.
       var ins = await sb.from('push_subscriptions')
         .upsert(row, { onConflict: 'endpoint' })
         .select()
