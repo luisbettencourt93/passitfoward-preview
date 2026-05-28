@@ -15750,45 +15750,31 @@ async function nexarPipelineDelete(id) {
   // but the SELECT for that endpoint returns no visible row, RLS has hidden it
   // because it belongs to a DIFFERENT user_handle — i.e. stale ownership.
   // (DX1 will later formalize this into the full debug dump.)
-  async function pifPushOwnershipDiag() {
+    async function pifPushOwnershipDiag() {
+    // PUSH-HARDEN-1b: built on the shared pifComputePushStatus() so the
+    // diagnostic and the UI status always agree (single source of truth).
+    var core = await pifComputePushStatus();
     var out = {
       current_user: currentUser ? normalizeHandle(currentUser.handle) : null,
       notification_permission: (typeof Notification !== 'undefined') ? Notification.permission : 'n/a',
-      endpoint: null,
-      this_endpoint_row: null,
+      status: core.status,
+      endpoint: core.endpoint,
+      this_endpoint_row: core.this_endpoint_row,
       my_active_rows: [],
-      endpoint_owned_by_other: false
+      endpoint_owned_by_other: core.endpoint_owned_by_other
     };
+    if (core.error) out.error = core.error;
     try {
-      if (('serviceWorker' in navigator) && ('PushManager' in window)) {
-        var dReg = await navigator.serviceWorker.ready;
-        var dSub = dReg ? await dReg.pushManager.getSubscription() : null;
-        out.endpoint = dSub ? dSub.endpoint : null;
-      }
-
       if (sb && currentUser) {
         var myHandle = normalizeHandle(currentUser.handle);
-
         var mine = await sb.from('push_subscriptions')
           .select('id, endpoint, user_handle, active, user_agent, last_seen')
           .eq('user_handle', myHandle)
           .eq('active', true);
         out.my_active_rows = (mine && Array.isArray(mine.data)) ? mine.data : [];
-
-        if (out.endpoint) {
-          var er = await sb.from('push_subscriptions')
-            .select('id, user_handle, active')
-            .eq('endpoint', out.endpoint)
-            .maybeSingle();
-          out.this_endpoint_row = (er && er.data) ? er.data : null;
-          // Browser has a subscription but RLS shows no row for it -> owned by another handle.
-          if (!out.this_endpoint_row) {
-            out.endpoint_owned_by_other = true;
-          }
-        }
       }
     } catch (dErr) {
-      out.error = String(dErr);
+      if (!out.error) out.error = String(dErr);
     }
     if (typeof console !== 'undefined') console.log('[PIF push ownership]', out);
     return out;
@@ -15894,7 +15880,10 @@ async function nexarPipelineDelete(id) {
     }
   }
 
-    // --- Current device's push subscription state ---
+      // --- Current device's push subscription state (browser-only legacy) ---
+  // NOTE: pifPushState reports ONLY the browser PushSubscription. It does NOT
+  // know DB delivery state. Use pifComputePushStatus() for the true two-factor
+  // status (browser sub AND active DB row). Kept for any legacy callers.
   async function pifPushState() {
     var support = pifPushSupport();
     if (!support.supported) return 'unsupported';
@@ -15907,6 +15896,76 @@ async function nexarPipelineDelete(id) {
     } catch (e) {
       return 'not-subscribed';
     }
+  }
+
+  // --- PUSH-HARDEN-1b: TRUE two-factor push status (shared by UI + diagnostic) ---
+  // Delivery requires BOTH: (1) a browser PushSubscription, AND (2) an active
+  // push_subscriptions row for THIS endpoint visible to the current user.
+  // These can diverge (e.g. after logout the browser sub persists but the DB
+  // row is active=false), which is the PUSH-HARDEN-1b bug this resolves.
+  // RLS-respecting: if the browser has an endpoint but the row query returns
+  // nothing, RLS has hidden a row owned by another user -> treat as inactive.
+  // Returns:
+  //   {
+  //     status: 'unsupported'|'permission-denied'|'enabled'|'inactive'|'not-subscribed',
+  //     endpoint: string|null,
+  //     this_endpoint_row: {id,user_handle,active}|null,
+  //     endpoint_owned_by_other: boolean
+  //   }
+  async function pifComputePushStatus() {
+    var result = {
+      status: 'not-subscribed',
+      endpoint: null,
+      this_endpoint_row: null,
+      endpoint_owned_by_other: false
+    };
+
+    var support = pifPushSupport();
+    if (!support.supported) { result.status = 'unsupported'; return result; }
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      result.status = 'permission-denied';
+      return result;
+    }
+
+    try {
+      if (('serviceWorker' in navigator) && ('PushManager' in window)) {
+        var csReg = await navigator.serviceWorker.ready;
+        var csSub = csReg ? await csReg.pushManager.getSubscription() : null;
+        result.endpoint = csSub ? csSub.endpoint : null;
+      }
+
+      // No browser subscription -> not subscribed on this device
+      if (!result.endpoint) { result.status = 'not-subscribed'; return result; }
+
+      // Browser has a subscription. Now check DB delivery truth for this endpoint.
+      if (sb && currentUser) {
+        var csRow = await sb.from('push_subscriptions')
+          .select('id, user_handle, active')
+          .eq('endpoint', result.endpoint)
+          .maybeSingle();
+        result.this_endpoint_row = (csRow && csRow.data) ? csRow.data : null;
+
+        if (result.this_endpoint_row && result.this_endpoint_row.active === true) {
+          result.status = 'enabled';
+        } else if (result.this_endpoint_row && result.this_endpoint_row.active === false) {
+          result.status = 'inactive';
+        } else {
+          // No visible row: missing OR RLS-hidden (owned by another user).
+          result.status = 'inactive';
+          result.endpoint_owned_by_other = true;
+        }
+      } else {
+        // Can't verify DB (not logged in / no sb): browser sub exists but
+        // delivery unverifiable -> treat as inactive (safer than false 'enabled').
+        result.status = 'inactive';
+      }
+    } catch (csErr) {
+      // On error, fall back to a safe non-'enabled' state rather than lying.
+      result.status = result.endpoint ? 'inactive' : 'not-subscribed';
+      result.error = String(csErr);
+    }
+
+    return result;
   }
 
   // ============================================================
@@ -15937,17 +15996,26 @@ async function nexarPipelineDelete(id) {
       return;
     }
 
-    var state = await pifPushState();
+     // PUSH-HARDEN-1b: use TRUE two-factor status (browser sub AND active DB row),
+    // not the browser-only pifPushState(). This stops the UI saying "enabled"
+   // when delivery is actually off (e.g. after logout the DB row is active=false).
+    var pushStatus = await pifComputePushStatus();
     var subs = await pifListPushSubscriptions();
-    var thisDeviceIsSubscribed = (state === 'subscribed');
 
     var html = '';
 
-    if (thisDeviceIsSubscribed) {
+    if (pushStatus.status === 'enabled') {
       html += '<div style="padding:10px 12px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.25);border-radius:8px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;">';
       html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#2dd4a0;"><i class="fas fa-check-circle" style="font-size:11px;"></i>Push enabled on this device</div>';
       html += '<button type="button" onclick="pifHandleDisableThisDevice()" style="background:transparent;border:1px solid rgba(148,163,184,0.4);color:#94a3b8;padding:6px 12px;border-radius:6px;font:600 11px/1 \'Inter\',sans-serif;cursor:pointer;">Disable</button>';
       html += '</div>';
+    } else if (pushStatus.status === 'inactive') {
+      html += '<div style="padding:10px 12px;background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.3);border-radius:8px;margin-bottom:10px;">';
+      html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#fbbf24;margin-bottom:4px;font-weight:600;"><i class="fas fa-exclamation-circle" style="font-size:11px;"></i>Push is off on this device</div>';
+      html += '<div style="font-size:11px;color:#94a3b8;margin-bottom:10px;line-height:1.45;">Notifications are set up in your browser but turned off for your account here. Re-enable to start getting pop-ups again.</div>';
+      html += '<button type="button" onclick="pifHandleEnablePush(this)" style="width:100%;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.35);color:#2dd4a0;padding:8px 12px;border-radius:6px;font:600 12px/1 \'Inter\',sans-serif;cursor:pointer;">Re-enable push</button>';
+      html += '</div>';
+   
     } else {
       html += '<div style="padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;margin-bottom:10px;">';
       html += '<div style="font-size:12px;color:#e8f0f8;margin-bottom:4px;font-weight:600;">Get phone alerts</div>';
