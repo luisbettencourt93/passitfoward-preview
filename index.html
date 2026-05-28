@@ -5845,9 +5845,18 @@ async function handleSignup() {
   if (password.length < 6) return showToast("Password needs 6+ characters");
   if (password !== confirm) return showToast("Passwords don't match");
 
-  const cleanHandle = handle.startsWith('@') ? handle : '@' + handle;
+  // HN1.2: canonical bare-lower handle (root-cause fix — was '@' + raw casing).
+  // profiles.handle and invite_codes.used_by both store canonical form.
   const btn = document.getElementById('signup-submit-btn');
-
+  const cleanHandle = pifNormalizeHandleKey(handle);
+if (!cleanHandle) { 
+  if (btn) { 
+    btn.textContent = 'Create Account'; 
+    btn.disabled = false; 
+  } 
+  return showToast("Enter a valid X handle"); 
+}
+  
   // DEMO MODE (Supabase not loaded)
   if (!sb) {
     currentUser = { id: 'demo-' + cleanHandle, email, handle: cleanHandle };
@@ -5909,11 +5918,14 @@ async function handleSignup() {
 
 async function loadCurrentUser(user) {
   if (!user) return;
-  let handle = '@' + user.email.split('@')[0];
+  // HN1.2: derive a canonical fallback handle (bare lower) from email.
+  let handle = pifNormalizeHandleKey(user.email.split('@')[0]);
   if (sb) {
     const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
     if (data) {
-      currentUser = { ...data, email: user.email };
+      // HN1.2: force session handle canonical even if a stale mixed row exists.
+      // Post-HN1.1 migration this is already canonical; this guarantees it.
+      currentUser = { ...data, handle: pifNormalizeHandleKey(data.handle), email: user.email };
       // Hydrate XP + locked XP from the live profile row.
       // Use ?? not || so 0 still gets cached (|| treats 0 as falsy and skips).
       localStorage.setItem('pf_xp_' + data.handle, data.xp ?? 0);
@@ -10864,23 +10876,29 @@ function addNotif(text, targetHandle, meta){
     meta.actor_handle = currentUser?.handle || null;
   }
 
-  // Save to Supabase if targeting another user
-  if(targetHandle && targetHandle !== currentUser?.handle){
-    if(sb) {
-      var row = {
-        handle: targetHandle,
-        text: text,
-        created_at: new Date().toISOString(),
-        read: false
-      };
-      if(meta.type) row.type = meta.type;
-      if(meta.target_type) row.target_type = meta.target_type;
-      if(meta.target_id != null) row.target_id = String(meta.target_id);
-      if(meta.actor_handle) row.actor_handle = meta.actor_handle;
-      sb.from('notifications').insert(row).then(function(){});
-    }
-    return;
+  // HN1.2: normalize handles at the notification write chokepoint (belt-and-braces).
+// 'system' sentinel and null pass through pifNormalizeHandleKey safely.
+var normTarget = pifNormalizeHandleKey(targetHandle);
+var normSelf = pifNormalizeHandleKey(currentUser?.handle);
+var normActor = meta.actor_handle === 'system' ? 'system' : pifNormalizeHandleKey(meta.actor_handle);
+
+// Save to Supabase if targeting another user
+if(normTarget && normTarget !== normSelf){
+  if(sb) {
+    var row = {
+      handle: normTarget,
+      text: text,
+      created_at: new Date().toISOString(),
+      read: false
+    };
+    if(meta.type) row.type = meta.type;
+    if(meta.target_type) row.target_type = meta.target_type;
+    if(meta.target_id != null) row.target_id = String(meta.target_id);
+    if(normActor) row.actor_handle = normActor;
+    sb.from('notifications').insert(row).then(function(){});
   }
+  return;
+}
   if(!currentUser)return;
   const notifs=getNotifs();
   const t=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
@@ -11643,8 +11661,9 @@ async function sendNewDm() {
   const msg = document.getElementById('dm-msg-inp').value.trim();
   if (!handle) return showToast("Enter a handle");
   if (!msg) return showToast("Write a message");
-  if (!handle.startsWith('@')) handle = '@' + handle;
-
+  // HN1.2: canonical bare-lower recipient (was prepend '@'). Matches migrated messages/profiles.
+    handle = pifNormalizeHandleKey(handle);
+   if (!handle) return showToast("Enter a valid handle");
   let sentMsgId = null;
 
   if (sb && !currentUser.id.startsWith('demo-')) {
