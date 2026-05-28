@@ -5901,20 +5901,37 @@ if (!cleanHandle) {
       last_seen: new Date().toISOString()
     });
 
-    await sb.from('invite_codes')
-      .update({
-        used_by: cleanHandle,
-        used_at: new Date().toISOString()
-      })
-      .eq('code', code);
+   // INVITE-TRACK-1: redeem invite code via SECURITY DEFINER RPC.
+// Old direct .update() was silently blocked by founder-only RLS.
+// The RPC validates + marks atomically server-side and returns a result.
+var inviteResult = null;
 
-    if (pErr) console.warn('Profile create:', pErr.message);
+try {
+  const { data: rpcData, error: rpcErr } = await sb.rpc('redeem_invite_code', {
+    p_code: code,
+    p_handle: cleanHandle
+  });
 
-    await loadCurrentUser(data.user);
-    closeModal('login-modal');
-    showToast("✅ Check your email and confirm your account before logging in!");
+  if (rpcErr) {
+    console.warn('Invite redeem RPC error:', rpcErr.message);
+  } else {
+    inviteResult = rpcData;
   }
+} catch (e) {
+  console.warn('Invite redeem call failed:', e);
 }
+
+if (pErr) console.warn('Profile create:', pErr.message);
+
+// Surface invite redemption outcome.
+// Account is already created by this point, so this is logged for diagnosis.
+if (inviteResult && inviteResult.ok === false) {
+  console.warn('Invite not marked used:', inviteResult.error);
+}
+
+await loadCurrentUser(data.user);
+closeModal('login-modal');
+showToast("✅ Account created! You can log in now.");
 
 async function loadCurrentUser(user) {
   if (!user) return;
