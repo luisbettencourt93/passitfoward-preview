@@ -5932,8 +5932,9 @@ if (inviteResult && inviteResult.ok === false) {
 await loadCurrentUser(data.user);
 closeModal('login-modal');
 showToast("✅ Account created! You can log in now.");
-
-async function loadCurrentUser(user) {
+}
+}
+ async function loadCurrentUser(user) {
   if (!user) return;
   // HN1.2: derive a canonical fallback handle (bare lower) from email.
   let handle = pifNormalizeHandleKey(user.email.split('@')[0]);
