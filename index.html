@@ -4848,7 +4848,27 @@ body.light .nr-state-unread { color:#059669; }
   <div class="modal-content" style="max-width:420px;">
     <h2>New Message 💬</h2>
     <p style="color:#64748b;margin-bottom:1.2rem;">Start a private conversation with any member.</p>
-    <input id="dm-to-inp" aria-label="Recipient handle" type="text" placeholder="X Handle (e.g. @BuilderMindset)" class="form-input" style="margin-bottom:0.8rem;">
+    <div id="dm-picker-wrap" style="position:relative;margin-bottom:0.8rem;">
+  <input
+    id="dm-to-inp"
+    aria-label="Recipient handle"
+    type="text"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    placeholder="Search members by name or @handle"
+    class="form-input"
+    style="margin-bottom:0;"
+    oninput="pifDmPickerInput()"
+    onfocus="pifDmPickerInput()"
+  >
+  <div
+    id="dm-picker-list"
+    role="listbox"
+    style="display:none;position:absolute;top:100%;left:0;right:0;z-index:80;background:#0d1526;border:1px solid #2d4460;border-radius:0 0 12px 12px;box-shadow:0 12px 30px rgba(0,0,0,0.35);max-height:240px;overflow-y:auto;"
+  ></div>
+</div>
     <textarea id="dm-msg-inp" aria-label="Type a message" placeholder="Write your first message..." class="form-input" style="height:90px;resize:vertical;margin-bottom:1rem;"></textarea>
     <button onclick="sendNewDm()" class="btn" style="width:100%;">Send Message</button>
     <button onclick="closeModal('new-dm-modal')" class="modal-cancel">Cancel</button>
@@ -11670,8 +11690,130 @@ if (sb && !currentUser.id.startsWith('demo-')) {
 
 function showNewDmModal() {
   if (!currentUser) return showToast("Login first");
+
+  // HN1a: reset picker state each time the compose modal opens.
+  pifDmPickerSelected = null;
+
+  var dmList = document.getElementById('dm-picker-list');
+  if (dmList) {
+    dmList.style.display = 'none';
+    dmList.innerHTML = '';
+  }
+
   document.getElementById('new-dm-modal').style.display = 'flex';
 }
+
+// ============================================================
+// HN1a — DM recipient picker / autocomplete
+// Reads the in-memory pifProfileNamesCache.
+// Canonical rule preserved: selection stores bare-lower handles.
+// ============================================================
+var pifDmPickerSelected = null;
+
+function pifDmPickerInput() {
+  var inp = document.getElementById('dm-to-inp');
+  var list = document.getElementById('dm-picker-list');
+  if (!inp || !list) return;
+
+  // Any manual typing invalidates a prior selection.
+  pifDmPickerSelected = null;
+
+  var raw = String(inp.value || '').trim();
+  var q = pifNormalizeHandleKey(raw);
+
+  if (!q) {
+    list.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+
+  var selfKey = pifNormalizeHandleKey(currentUser && currentUser.handle);
+  var matches = [];
+
+  pifProfileNamesCache.forEach(function(entry, key) {
+    if (!key || key === selfKey) return;
+
+    var displayName = (entry.display_name || '').toLowerCase();
+    var handleMatch = key.indexOf(q) !== -1;
+    var nameMatch = displayName && displayName.indexOf(q) !== -1;
+
+    if (handleMatch || nameMatch) {
+      matches.push({
+        key: key,
+        handle: entry.handle,
+        display_name: entry.display_name
+      });
+    }
+  });
+
+  matches.sort(function(a, b) {
+    var ap = a.key.indexOf(q) === 0 ? 0 : 1;
+    var bp = b.key.indexOf(q) === 0 ? 0 : 1;
+
+    if (ap !== bp) return ap - bp;
+    if (a.key < b.key) return -1;
+    if (a.key > b.key) return 1;
+    return 0;
+  });
+
+  matches = matches.slice(0, 6);
+
+  if (matches.length === 0) {
+    list.innerHTML = '<div style="padding:0.75rem 0.9rem;color:#94a3b8;font-size:0.9rem;">No members found</div>';
+    list.style.display = 'block';
+    return;
+  }
+
+  var html = '';
+
+  for (var i = 0; i < matches.length; i++) {
+    var m = matches[i];
+    var canon = pifNormalizeHandleKey(m.handle);
+    var safeCanon = pifEscapeHTML(canon);
+    var safeName = m.display_name ? pifEscapeHTML(m.display_name) : '';
+
+    html +=
+      '<div role="option" tabindex="0" ' +
+      'onclick="pifDmPickerPick(\'' + canon.replace(/'/g, "\\'") + '\')" ' +
+      'style="padding:0.75rem 0.9rem;cursor:pointer;border-bottom:1px solid rgba(45,68,96,0.65);min-height:44px;display:flex;flex-direction:column;justify-content:center;background:#0d1526;" ' +
+      'onmouseover="this.style.background=\'#111827\'" onmouseout="this.style.background=\'#0d1526\'">' +
+      (safeName ? '<span style="font-weight:700;color:#e2e8f0;font-size:0.92rem;">' + safeName + '</span>' : '') +
+      '<span style="color:#10b981;font-size:0.85rem;">@' + safeCanon + '</span>' +
+      '</div>';
+  }
+
+  list.innerHTML = html;
+  list.style.display = 'block';
+}
+
+function pifDmPickerPick(canonHandle) {
+  var inp = document.getElementById('dm-to-inp');
+  var list = document.getElementById('dm-picker-list');
+  var canon = pifNormalizeHandleKey(canonHandle);
+
+  if (inp) inp.value = canon;
+
+  pifDmPickerSelected = canon;
+
+  if (list) {
+    list.style.display = 'none';
+    list.innerHTML = '';
+  }
+
+  var msg = document.getElementById('dm-msg-inp');
+  if (msg) msg.focus();
+}
+
+document.addEventListener('click', function(e) {
+  var wrap = document.getElementById('dm-picker-wrap');
+  var list = document.getElementById('dm-picker-list');
+
+  if (!wrap || !list) return;
+
+  if (!wrap.contains(e.target)) {
+    list.style.display = 'none';
+  }
+});
 
 async function sendNewDm() {
   if (rateLimited('new_dm', 3000)) return;
@@ -11718,7 +11860,17 @@ async function sendNewDm() {
 
   document.getElementById('dm-to-inp').value = '';
   document.getElementById('dm-msg-inp').value = '';
-  closeModal('new-dm-modal');
+
+// HN1a: clear picker state after send.
+pifDmPickerSelected = null;
+
+var dmPickList = document.getElementById('dm-picker-list');
+if (dmPickList) {
+  dmPickList.style.display = 'none';
+  dmPickList.innerHTML = '';
+}
+
+closeModal('new-dm-modal');
   activeDmHandle = handle;
   renderDmSidebar();
   openThread(handle);
