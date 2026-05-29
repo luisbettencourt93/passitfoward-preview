@@ -10357,23 +10357,30 @@ async function pifDebugDump(opts) {
     }
   } catch (e) { dump.push.error = String(e); }
 
-  // --- realtime ---
+    // --- realtime ---
   try {
+    // DX1 fix: read window._rtChannels, not the bare let-binding.
+    // Bare _rtChannels can throw TDZ ReferenceError if called before initialization.
+    var rtCh = (typeof window !== 'undefined' && window._rtChannels && window._rtChannels.forEach)
+      ? window._rtChannels
+      : [];
+
     var chNames = [];
     try {
-      if (typeof _rtChannels !== 'undefined' && _rtChannels && _rtChannels.forEach) {
-        _rtChannels.forEach(function(ch){
-          var t = (ch && (ch.topic || ch.subTopic)) ? (ch.topic || ch.subTopic) : 'channel';
-          chNames.push(t);
-        });
-      }
+      rtCh.forEach(function(ch){
+        var t = (ch && (ch.topic || ch.subTopic)) ? (ch.topic || ch.subTopic) : 'channel';
+        chNames.push(t);
+      });
     } catch(e4){}
+
     dump.realtime = {
-      enabled_flag: (typeof window.REALTIME_ENABLED !== 'undefined') ? window.REALTIME_ENABLED : null,
-      channel_count: (typeof _rtChannels !== 'undefined' && _rtChannels) ? _rtChannels.length : 0,
+      enabled_flag: (typeof window !== 'undefined' && typeof window.REALTIME_ENABLED !== 'undefined') ? window.REALTIME_ENABLED : null,
+      channel_count: rtCh.length,
       channel_names: chNames
     };
-  } catch (e) { dump.realtime.error = String(e); }
+  } catch (e) {
+    dump.realtime = { error: String(e) };
+  }
 
   // --- notifications (types + counts only — NO bodies in safe mode) ---
   try {
@@ -12507,6 +12514,9 @@ function renderDashboardPaymentNudge() {
 // so no new render code is introduced.
 window.REALTIME_ENABLED = true;
 let _rtChannels = [];
+// DX1: mirror onto window so the debug dump can read realtime state
+// without hitting the let/const temporal-dead-zone.
+if (typeof window !== 'undefined') { window._rtChannels = _rtChannels; }
 
 function setupRealtimeSubscriptions() {
   if (!window.REALTIME_ENABLED) {
@@ -12525,6 +12535,8 @@ function setupRealtimeSubscriptions() {
   // Tear down any existing channels (defensive — shouldn't happen on a single init)
   try { _rtChannels.forEach(ch => sb.removeChannel(ch)); } catch(_) {}
   _rtChannels = [];
+  // DX1: keep window mirror pointing at the current array after reassignment.
+  if (typeof window !== 'undefined') { window._rtChannels = _rtChannels; }
 
   // -- 1. OPPORTUNITIES — live market feed --
   // Any insert / update / delete on opportunities → reload the feed.
