@@ -10210,6 +10210,253 @@ function welcomeTask(num){
 // Welcome Modal V1 — versioning + controller
 // ============================================================
 const WELCOME_MODAL_VERSION = 'v1';
+// DX1: build marker for diagnostics. Bump this string on each deploy you want to track.
+const PIF_BUILD = '2026-05-29-dx1';
+
+// ============================================================
+// DX1 — Diagnostic Dump / Debug Pack
+// Console-callable: pifDebugDump()  /  pifDebugDump({ copy: true })  /  pifDebugDump({ safe: false })
+// Founder-gated. READ-ONLY (no writes, no push enable/disable, no realtime mutation).
+// Default safe mode is "safe to paste to Claude": NO raw email/user_id/endpoint,
+// NO crypto keys, NO tokens, NO notification bodies. Explicit allowlist only —
+// never a blanket localStorage dump (pf_profile_* contains email).
+// ============================================================
+async function pifDebugDump(opts) {
+  opts = opts || {};
+  var safe = (opts.safe !== false); // default true
+  var doCopy = !!opts.copy;
+
+  // Founder gate (redaction is the real boundary; this keeps the tool to its purpose)
+  if (typeof isFounder === 'function' && !isFounder()) {
+    var denied = { error: 'founder only', hint: 'pifDebugDump is a founder/developer diagnostic.' };
+    if (typeof console !== 'undefined') console.log('[PIF debug dump]', denied);
+    return denied;
+  }
+
+  function present(v) { return (v !== null && v !== undefined && v !== '') ? 'present' : 'absent'; }
+  function shortHash(str) {
+    // tiny non-crypto hash, just enough to compare endpoints across dumps w/o exposing them
+    if (!str) return null;
+    var h = 0, i, c;
+    for (i = 0; i < str.length; i++) { c = str.charCodeAt(i); h = ((h << 5) - h) + c; h |= 0; }
+    return 'sha:' + (h >>> 0).toString(16);
+  }
+  function canonOf(h) {
+    if (typeof pifNormalizeHandleKey === 'function') return pifNormalizeHandleKey(h);
+    return String(h || '').replace(/^@+/, '').toLowerCase().trim();
+  }
+
+  var dump = {
+    meta: {}, environment: {}, auth: {}, profile: {},
+    push: {}, realtime: {}, notifications: {}, storage: {}
+  };
+
+  // --- meta ---
+  try {
+    dump.meta = {
+      generated_at: new Date().toISOString(),
+      safe_mode: safe,
+      is_founder: (typeof isFounder === 'function') ? isFounder() : null,
+      build: (typeof PIF_BUILD !== 'undefined') ? PIF_BUILD : 'unknown',
+      welcome_modal_version: (typeof WELCOME_MODAL_VERSION !== 'undefined') ? WELCOME_MODAL_VERSION : 'unknown'
+    };
+  } catch (e) { dump.meta.error = String(e); }
+
+  // --- environment ---
+  try {
+    var swCtrl = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+    var swUrl = null;
+    try {
+      if (navigator.serviceWorker) {
+        var reg = await navigator.serviceWorker.ready;
+        swUrl = (reg && reg.active && reg.active.scriptURL) ? reg.active.scriptURL : null;
+      }
+    } catch (e2) {}
+    dump.environment = {
+      url: safe ? (location.origin + location.pathname) : location.href,
+      origin: location.origin,
+      user_agent: navigator.userAgent,
+      platform: navigator.platform || null,
+      language: navigator.language || null,
+      online: navigator.onLine,
+      standalone_display: (typeof matchMedia === 'function') ? matchMedia('(display-mode: standalone)').matches : null,
+      navigator_standalone: (typeof navigator.standalone !== 'undefined') ? navigator.standalone : null,
+      service_worker_supported: ('serviceWorker' in navigator),
+      push_manager_supported: ('PushManager' in window),
+      notification_permission: (typeof Notification !== 'undefined') ? Notification.permission : 'n/a',
+      sw_controller: swCtrl,
+      sw_script_url: swUrl
+    };
+  } catch (e) { dump.environment.error = String(e); }
+
+  // --- auth ---
+  try {
+    var h = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.handle : null;
+    dump.auth = {
+      logged_in: !!(typeof currentUser !== 'undefined' && currentUser),
+      handle: h ? canonOf(h) : null,
+      handle_is_canonical: h ? (h === canonOf(h)) : null,
+      role: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.role || null) : null,
+      is_demo: !!(typeof currentUser !== 'undefined' && currentUser && currentUser.id && String(currentUser.id).indexOf('demo-') === 0),
+      user_id: safe ? present(currentUser && currentUser.id) : ((currentUser && currentUser.id) || null),
+      email: safe ? present(currentUser && currentUser.email) : ((currentUser && currentUser.email) || null),
+      pf_current_handle_ls: (function(){ try { return localStorage.getItem('pf_current_handle'); } catch(e){ return null; } })(),
+      pf_demo_user_present: (function(){ try { return !!localStorage.getItem('pf_demo_user'); } catch(e){ return null; } })()
+    };
+  } catch (e) { dump.auth.error = String(e); }
+
+  // --- profile / cache ---
+  try {
+    var selfKey = (typeof currentUser !== 'undefined' && currentUser) ? canonOf(currentUser.handle) : null;
+    var cacheSize = (typeof pifProfileNamesCache !== 'undefined' && pifProfileNamesCache) ? pifProfileNamesCache.size : null;
+    var cacheHasSelf = false;
+    try { if (selfKey && typeof pifProfileNamesCache !== 'undefined' && pifProfileNamesCache.has) cacheHasSelf = pifProfileNamesCache.has(selfKey); } catch(e){}
+    dump.profile = {
+      cache_size: cacheSize,
+      cache_has_self: cacheHasSelf,
+      display_name: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.display_name || null) : null,
+      xp: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.xp ?? null) : null,
+      locked_xp: (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.locked_xp ?? null) : null
+    };
+  } catch (e) { dump.profile.error = String(e); }
+
+  // --- push (REUSE pifComputePushStatus — no duplicate logic) ---
+  try {
+    var ps = (typeof pifComputePushStatus === 'function') ? await pifComputePushStatus() : null;
+    if (ps) {
+      var devices = [];
+      // my_active_rows isn't returned by pifComputePushStatus; fetch UA snippets only, RLS-scoped, no keys
+      try {
+        if (typeof sb !== 'undefined' && sb && typeof currentUser !== 'undefined' && currentUser) {
+          var myH = canonOf(currentUser.handle);
+          var mine = await sb.from('push_subscriptions')
+            .select('user_agent, active, last_seen')
+            .eq('user_handle', myH)
+            .eq('active', true);
+          if (mine && Array.isArray(mine.data)) {
+            devices = mine.data.map(function(r){
+              var ua = r.user_agent || 'unknown';
+              return (ua.length > 40) ? ua.slice(0,40) + '…' : ua;
+            });
+          }
+        }
+      } catch (e3) {}
+      dump.push = {
+        status: ps.status,
+        has_browser_subscription: !!ps.endpoint,
+        endpoint: ps.endpoint ? (safe ? ('present (' + shortHash(ps.endpoint) + ')') : ps.endpoint) : null,
+        this_endpoint_row: ps.this_endpoint_row
+          ? { user_handle: ps.this_endpoint_row.user_handle, active: ps.this_endpoint_row.active }
+          : null,
+        endpoint_owned_by_other: !!ps.endpoint_owned_by_other,
+        my_active_subscription_count: devices.length,
+        my_active_devices: devices
+      };
+    } else {
+      dump.push = { status: 'unavailable' };
+    }
+  } catch (e) { dump.push.error = String(e); }
+
+  // --- realtime ---
+  try {
+    var chNames = [];
+    try {
+      if (typeof _rtChannels !== 'undefined' && _rtChannels && _rtChannels.forEach) {
+        _rtChannels.forEach(function(ch){
+          var t = (ch && (ch.topic || ch.subTopic)) ? (ch.topic || ch.subTopic) : 'channel';
+          chNames.push(t);
+        });
+      }
+    } catch(e4){}
+    dump.realtime = {
+      enabled_flag: (typeof window.REALTIME_ENABLED !== 'undefined') ? window.REALTIME_ENABLED : null,
+      channel_count: (typeof _rtChannels !== 'undefined' && _rtChannels) ? _rtChannels.length : 0,
+      channel_names: chNames
+    };
+  } catch (e) { dump.realtime.error = String(e); }
+
+  // --- notifications (types + counts only — NO bodies in safe mode) ---
+  try {
+    var notifs = (typeof getNotifs === 'function') ? getNotifs() : [];
+    if (!Array.isArray(notifs)) notifs = [];
+    var unread = notifs.filter(function(n){ return n && !n.read; }).length;
+    var recentTypes = notifs.slice(0, 10).map(function(n){ return (n && n.type) ? n.type : (n && n.text ? 'untyped' : 'unknown'); });
+    var mostRecent = null;
+    for (var i = 0; i < notifs.length; i++) {
+      if (notifs[i] && notifs[i].created_at) { mostRecent = notifs[i].created_at; break; }
+    }
+    dump.notifications = {
+      bell_cache_count: notifs.length,
+      unread_count: unread,
+      recent_types: recentTypes,
+      most_recent_at: mostRecent
+      // bodies intentionally omitted (could contain handles / context)
+    };
+  } catch (e) { dump.notifications.error = String(e); }
+
+  // --- storage (CURATED allowlist — never blanket dump) ---
+  try {
+    function lsGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+    var selfHandle = (typeof currentUser !== 'undefined' && currentUser) ? canonOf(currentUser.handle) : null;
+    var welcomeSeen = null;
+    try {
+      if (selfHandle) welcomeSeen = present(lsGet('pif_welcome_seen_version_' + selfHandle));
+    } catch(e){}
+    // key NAMES only for the rest (values omitted — pf_profile_* holds email, etc.)
+    var keyNames = [];
+    try {
+      for (var j = 0; j < localStorage.length; j++) {
+        var key = localStorage.key(j);
+        if (key && (key.indexOf('pf_') === 0 || key.indexOf('pif_') === 0)) keyNames.push(key);
+      }
+    } catch(e){}
+    dump.storage = {
+      active_tab: lsGet('pf_active_tab'),
+      theme: lsGet('pf_theme'),
+      welcome_seen: welcomeSeen,
+      ios_hint_dismissed: present(lsGet('pif_ios_install_hint_dismissed')),
+      keys_present: keyNames  // names only, no values
+    };
+  } catch (e) { dump.storage.error = String(e); }
+
+  // --- console summary (grouped) ---
+  try {
+    if (typeof console !== 'undefined') {
+      console.log('%c[PIF debug dump]', 'font-weight:bold', dump.meta.build, safe ? '(safe)' : '(UNSAFE — do not paste)');
+      console.log('  auth:', dump.auth.handle, '| role:', dump.auth.role, '| logged_in:', dump.auth.logged_in);
+      console.log('  push:', dump.push.status, '| owned_by_other:', dump.push.endpoint_owned_by_other, '| active devices:', dump.push.my_active_subscription_count);
+      console.log('  realtime:', dump.realtime.channel_count, 'channels', dump.realtime.channel_names);
+      console.log('  notifs:', dump.notifications.bell_cache_count, 'cached /', dump.notifications.unread_count, 'unread');
+      console.log('  cache size:', dump.profile.cache_size);
+      console.log('  full object ↓', dump);
+    }
+  } catch (e) {}
+
+  // --- optional clipboard (safe mode only) ---
+  if (doCopy) {
+    if (!safe) {
+      if (typeof console !== 'undefined') console.warn('[PIF debug dump] copy refused in UNSAFE mode — unsafe dumps stay console-only.');
+    } else {
+      try {
+        var json = JSON.stringify(dump, null, 2);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(json);
+          if (typeof showToast === 'function') showToast('Debug dump copied (safe mode)');
+          else if (typeof console !== 'undefined') console.log('[PIF debug dump] copied to clipboard (safe mode)');
+        }
+      } catch (e) {
+        if (typeof console !== 'undefined') console.warn('[PIF debug dump] clipboard copy failed:', String(e));
+      }
+    }
+  }
+
+  return dump;
+}
+if (typeof window !== 'undefined') {
+  window.pifPushOwnershipDiag = pifPushOwnershipDiag;
+  // DX1: expose the two-factor push status so the top-level debug dump can reuse it.
+  window.pifComputePushStatus = pifComputePushStatus;
+}
 
 function welcomeKey() {
   if (!currentUser || !currentUser.handle) return null;
