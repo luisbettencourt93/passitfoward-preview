@@ -10459,11 +10459,6 @@ async function pifDebugDump(opts) {
 
   return dump;
 }
-if (typeof window !== 'undefined') {
-  window.pifPushOwnershipDiag = pifPushOwnershipDiag;
-  // DX1: expose the two-factor push status so the top-level debug dump can reuse it.
-  window.pifComputePushStatus = pifComputePushStatus;
-}
 
 function welcomeKey() {
   if (!currentUser || !currentUser.handle) return null;
@@ -16039,8 +16034,10 @@ async function nexarPipelineDelete(id) {
     return out;
   }
   if (typeof window !== 'undefined') {
-    window.pifPushOwnershipDiag = pifPushOwnershipDiag;
-  }
+  window.pifPushOwnershipDiag = pifPushOwnershipDiag;
+  // DX1: expose the two-factor push status so the top-level debug dump can reuse it.
+  window.pifComputePushStatus = pifComputePushStatus;
+}
 
   // --- Subscribe THIS browser/device to push ---
   async function pifEnablePush() {
