@@ -6478,51 +6478,157 @@ function switchTab(tabId) {
 // -- LIVE FEED (opportunities + forged deals) ----------------------
 async function loadLiveFeed(opts) {
   const silent = opts && opts.silent === true;
-  renderLiveFeedFilters();
-  // Track polish — skip the loading spinner during silent (auto-refresh) calls.
-  // Manual calls (tab switch, post-publish, click) keep the spinner so users get visual feedback.
-  if (!silent) setLoading('livefeed-opps', 'Loading opportunities…');
-  if (sb) {
-    const { data, error } = await sb.from('opportunities').select('*').order('created_at', { ascending: false });
-    if (!error && data) {
- opportunities = data.map(r => ({
-  id: r.id,
-  title: r.title,
-  desc: r.description || 'No description',
-  category: r.category,
-  interest: r.interest,
-  poster: r.poster_handle,
-  poster_id: r.poster_id,
-  budget: r.budget || '',
-  type: r.type || 'need',
-  location: r.location || '',
-  created_at: r.created_at || '',
 
-  // N4a.0b fields preserved from Supabase
-  engagement_type: r.engagement_type || null,
-  delivery_mode: r.delivery_mode || 'remote',
-  city: r.city || null,
-  country: r.country || null,
-  status: r.status || 'open',
-  expires_at: r.expires_at || null
-}));
-    }
-    // Load active forged deals to lock opportunities
-    const { data: activeDeals } = await sb.from('forged_deals').select('opportunity_id').in('status',['pending','pending_acceptance','active','disputed']);
-    window._activeForgeOppIds = new Set((activeDeals||[]).filter(d=>d.opportunity_id).map(d=>String(d.opportunity_id)));
-    const { data: completedDeals } = await sb.from('forged_deals').select('opportunity_id').eq('status','settled').eq('outcome','delivered');
-    window._completedForgeOppIds = new Set((completedDeals||[]).filter(d=>d.opportunity_id).map(d=>String(d.opportunity_id)));
-   window._fulfilledOppIds = window._completedForgeOppIds;
+  renderLiveFeedFilters();
+
+  if (!silent) {
+    setLoading('livefeed-opps', 'Loading opportunities…');
   }
-  renderLiveFeedOpps();
-  renderTrendingOpps();
-  await renderLiveFeedForges({ silent });
-  await loadDealBoard();
-  updateLfStats();
-  loadLfTicker();
-  // Update "Updated just now" text
-  const upd = document.getElementById('lf-last-update');
-  if(upd) upd.textContent = 'Updated just now';
+
+  if (!CATEGORIES.includes(activeFilter)) {
+    activeFilter = 'All';
+  }
+
+  if (!sb) {
+    opportunities = [];
+    window._activeForgeOppIds = new Set();
+    window._completedForgeOppIds = new Set();
+    window._fulfilledOppIds = window._completedForgeOppIds;
+
+    renderLiveFeedOpps();
+    renderTrendingOpps();
+    updateLfStats();
+
+    const ticker = document.getElementById('lf-ticker-inner');
+    if (ticker) {
+      ticker.innerHTML = '<span class="lf-ticker-item"><span style="color:#f87171;">●</span> Live Market unavailable — Supabase is not connected.</span>';
+    }
+
+    return;
+  }
+
+  try {
+    const { data, error } = await sb
+      .from('opportunities')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Live Market opportunities load failed:', error);
+
+      const feed = document.getElementById('livefeed-opps');
+      if (feed) {
+        feed.innerHTML = `<div style="padding:2.5rem;text-align:center;color:#f87171;font-size:0.95rem;">Could not load opportunities: ${sanitize(error.message || 'Unknown error')}</div>`;
+      }
+
+      const ticker = document.getElementById('lf-ticker-inner');
+      if (ticker) {
+        ticker.innerHTML = '<span class="lf-ticker-item"><span style="color:#f87171;">●</span> Opportunity feed failed to load.</span>';
+      }
+
+      return;
+    }
+
+    opportunities = (data || []).map(r => ({
+      id: r.id,
+      title: r.title,
+      desc: r.description || 'No description',
+      category: r.category || 'Other',
+      interest: r.interest || 1,
+      poster: r.poster_handle || '',
+      poster_id: r.poster_id || null,
+      budget: r.budget || '',
+      type: r.type || 'need',
+      location: r.location || '',
+      created_at: r.created_at || '',
+
+      // N4a.0b fields preserved from Supabase
+      engagement_type: r.engagement_type || null,
+      delivery_mode: r.delivery_mode || 'remote',
+      city: r.city || null,
+      country: r.country || null,
+      status: r.status || 'open',
+      expires_at: r.expires_at || null
+    }));
+
+    try {
+      const { data: activeDeals, error: activeDealsError } = await sb
+        .from('forged_deals')
+        .select('opportunity_id')
+        .in('status', ['pending', 'pending_acceptance', 'active', 'disputed']);
+
+      if (activeDealsError) {
+        console.warn('Live Market active deals load failed:', activeDealsError);
+      }
+
+      window._activeForgeOppIds = new Set(
+        (activeDeals || [])
+          .filter(d => d.opportunity_id)
+          .map(d => String(d.opportunity_id))
+      );
+    } catch (e) {
+      console.warn('Live Market active deals load crashed:', e);
+      window._activeForgeOppIds = new Set();
+    }
+
+    try {
+      const { data: completedDeals, error: completedDealsError } = await sb
+        .from('forged_deals')
+        .select('opportunity_id')
+        .eq('status', 'settled')
+        .eq('outcome', 'delivered');
+
+      if (completedDealsError) {
+        console.warn('Live Market completed deals load failed:', completedDealsError);
+      }
+
+      window._completedForgeOppIds = new Set(
+        (completedDeals || [])
+          .filter(d => d.opportunity_id)
+          .map(d => String(d.opportunity_id))
+      );
+    } catch (e) {
+      console.warn('Live Market completed deals load crashed:', e);
+      window._completedForgeOppIds = new Set();
+    }
+
+    window._fulfilledOppIds = window._completedForgeOppIds || new Set();
+
+    renderLiveFeedOpps();
+    renderTrendingOpps();
+    updateLfStats();
+    loadLfTicker();
+
+    try {
+      await renderLiveFeedForges({ silent });
+    } catch (e) {
+      console.warn('Live Market forged feed render failed:', e);
+    }
+
+    try {
+      await loadDealBoard();
+    } catch (e) {
+      console.warn('Live Market deal board failed:', e);
+    }
+
+    const upd = document.getElementById('lf-last-update');
+    if (upd) {
+      upd.textContent = 'Updated just now';
+      upd._ts = Date.now();
+    }
+  } catch (e) {
+    console.warn('Live Market load crashed:', e);
+
+    const feed = document.getElementById('livefeed-opps');
+    if (feed) {
+      feed.innerHTML = `<div style="padding:2.5rem;text-align:center;color:#f87171;font-size:0.95rem;">Live Market crashed while loading: ${sanitize(e.message || 'Unknown error')}</div>`;
+    }
+
+    const ticker = document.getElementById('lf-ticker-inner');
+    if (ticker) {
+      ticker.innerHTML = '<span class="lf-ticker-item"><span style="color:#f87171;">●</span> Live Market load error.</span>';
+    }
+  }
 }
 
 function renderLiveFeedFilters() {
