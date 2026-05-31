@@ -6643,8 +6643,7 @@ const expiryLabel = (() => {
       ${o.category ? `<span style="font-size:10px;color:#5a7a9a;">${sanitize(o.category)}</span>` : ''}
       ${engagementLabel ? `<span style="font-size:10px;color:#a5b4fc;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);padding:1px 6px;border-radius:999px;font-weight:700;">${sanitize(engagementLabel)}</span>` : ''}
      </div>
-      ${expiryLabel ? `<div style="font-size:10px;color:${expiryLabel === 'Expired' ? '#f87171' : '#fbbf24'};margin-bottom:6px;font-weight:700;">⏳ ${sanitize(expiryLabel)}</div>` : ''}
-      <div style="display:flex;justify-content:space-between;align-items:center;">
+${expiryLabel ? `<div style="display:inline-flex;align-items:center;width:fit-content;background:${expiryLabel === 'Expired' ? 'rgba(248,113,113,0.10)' : 'rgba(245,158,11,0.10)'};border:1px solid ${expiryLabel === 'Expired' ? 'rgba(248,113,113,0.25)' : 'rgba(245,158,11,0.25)'};color:${expiryLabel === 'Expired' ? '#f87171' : '#fbbf24'};padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;margin-bottom:6px;">⏳ ${sanitize(expiryLabel)}</div>` : ''}      <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:10px;color:#5a7a9a;">by <span style="color:#2dd4a0;">${sanitize(o.poster)}</span></span>
         <span style="font-size:10px;color:#3d5a7a;">${ago}</span>
       </div>
