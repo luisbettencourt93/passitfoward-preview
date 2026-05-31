@@ -2259,6 +2259,66 @@ body.light .nr-state-unread { color:#059669; }
   text-align: center !important;
 }
 
+/* ── PassItForward Opportunity Intent Selector ── */
+.pif-intent-seg {
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 1rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(45, 68, 96, 0.95);
+  border-radius: 12px;
+  background: #0a0f1e;
+  overflow: hidden;
+}
+
+.pif-intent-seg-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.pif-intent-seg-btn:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.pif-intent-seg-btn:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.55);
+  outline-offset: 2px;
+}
+
+.pif-intent-seg-btn.seg-active-need {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+}
+
+.pif-intent-seg-btn.is-offer.seg-active-offer {
+  background: rgba(45, 212, 160, 0.13);
+  border-color: rgba(45, 212, 160, 0.45);
+  color: #2dd4a0;
+}
+
 
 </style>
 
@@ -4967,9 +5027,9 @@ body.light .nr-state-unread { color:#059669; }
     <h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
                                      
-<div style="display:flex;justify-content:center;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
-  <button type="button" id="tog-need" onclick="setOppType('need')" class="opp-pick-btn selected">I need something</button>
-  <button type="button" id="tog-offer" onclick="setOppType('offer')" class="opp-pick-btn">I'm offering something</button>
+<div class="pif-intent-seg" role="group" aria-label="Opportunity intent">
+  <button type="button" id="tog-need" onclick="setOppType('need')" class="pif-intent-seg-btn seg-active-need" aria-pressed="true">I need something</button>
+  <button type="button" id="tog-offer" onclick="setOppType('offer')" class="pif-intent-seg-btn is-offer" aria-pressed="false">I'm offering something</button>
 </div>
         <!-- N4a.0b: Engagement type (required) -->
     <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">What kind of opportunity?</label>
@@ -7107,8 +7167,11 @@ function setOppType(type) {
 
   if (!needBtn || !offerBtn) return;
 
-  needBtn.classList.toggle('selected', type === 'need');
-  offerBtn.classList.toggle('selected', type === 'offer');
+  needBtn.classList.toggle('seg-active-need', type === 'need');
+  needBtn.setAttribute('aria-pressed', String(type === 'need'));
+
+  offerBtn.classList.toggle('seg-active-offer', type === 'offer');
+  offerBtn.setAttribute('aria-pressed', String(type === 'offer'));
 }
 
 
