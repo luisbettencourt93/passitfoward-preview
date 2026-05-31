@@ -6967,8 +6967,34 @@ const filtered = activeFilter === 'All' ? visible : visible.filter(o => o.catego
            
             ${opp.type==='need'?`<span style="background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">I need</span>`:`<span style="background:rgba(16,185,129,0.08);color:#34d399;border:1px solid rgba(16,185,129,0.2);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">I offer</span>`}
             ${opp.budget?`<span style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);color:#10b981;padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">${sanitize(opp.budget)}</span>`:''}
-            ${opp.location?`<span style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);color:#60a5fa;padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">📍 ${sanitize(opp.location)}</span>`:''}
-           <span>• by <span onclick="viewMemberProfile('${sanitize(opp.poster)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(opp.poster)}</span></span>
+${opp.location?`<span style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);color:#60a5fa;padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">📍 ${sanitize(opp.location)}</span>`:''}
+${(() => {
+  if (!opp.expires_at) {
+    return `<span style="background:rgba(148,163,184,0.08);border:1px solid rgba(148,163,184,0.18);color:#94a3b8;padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">⏳ No expiry</span>`;
+  }
+
+  const expiryDate = new Date(opp.expires_at);
+  if (Number.isNaN(expiryDate.getTime())) return '';
+
+  const diffMs = expiryDate.getTime() - Date.now();
+  const diffDays = Math.ceil(diffMs / 86400000);
+
+  let expiryText = 'Expired';
+  let expiryStyle = 'background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.25);color:#f87171;';
+
+  if (diffDays > 1) {
+    expiryText = `Expires in ${diffDays} days`;
+    expiryStyle = 'background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:#fbbf24;';
+  } else if (diffDays === 1) {
+    expiryText = 'Expires tomorrow';
+    expiryStyle = 'background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:#fbbf24;';
+  } else if (diffDays === 0) {
+    expiryText = 'Expires today';
+    expiryStyle = 'background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:#fbbf24;';
+  }
+
+  return `<span style="${expiryStyle}padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">⏳ ${sanitize(expiryText)}</span>`;
+})()}           <span>• by <span onclick="viewMemberProfile('${sanitize(opp.poster)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(opp.poster)}</span></span>
             </div>
             <div class="opp-meta" style="margin-top:4px;">
             <span>${sanitize(opp.desc)}</span>
