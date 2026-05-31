@@ -7111,6 +7111,7 @@ function setOppType(type) {
   oppType = type;
   const needBtn = document.getElementById('tog-need');
   const offerBtn = document.getElementById('tog-offer');
+  if (!needBtn || !offerBtn) return;
   if(type === 'need') {
     needBtn.style.background = '#3b82f6'; needBtn.style.color = 'white';
     offerBtn.style.background = '#111827'; offerBtn.style.color = '#e2e8f0';
