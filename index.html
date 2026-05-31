@@ -7050,7 +7050,14 @@ async function postOpportunity() {
   if (sb && !currentUser.id.startsWith('demo-')) {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return showToast("Session expired — please log in again");
+    const normalizedDeliveryMode = oppDelivery || 'remote';
+   let normalizedCity = document.getElementById('opp-city')?.value?.trim() || null;
+   let normalizedCountry = document.getElementById('opp-country')?.value?.trim() || null;
 
+    if (normalizedDeliveryMode === 'remote') {
+    normalizedCity = null;
+    normalizedCountry = null;
+}
     const insertObj = {
       title,
       description: newOpp.desc,
@@ -7061,19 +7068,20 @@ async function postOpportunity() {
       poster_handle: currentUser.handle,
       poster_id: session.user.id,
       engagement_type: oppEngagement,
-      delivery_mode: oppDelivery,
+      delivery_mode: normalizedDeliveryMode,
+      city: normalizedCity,
+      country: normalizedCountry,
       status: 'open'
     };
 
     if (location) insertObj.location = location;
-    if (oppCity) insertObj.city = oppCity;
-    if (oppCountry) insertObj.country = oppCountry;
+   
     if (expiresAt) insertObj.expires_at = expiresAt;
-  const { data, error } = await sb.from('opportunities').insert(insertObj).select().single();
+    const { data, error } = await sb.from('opportunities').insert(insertObj).select().single();
 
-  if (error) return showToast("Error: " + error.message);
-  newOpp.id = data.id;
-} else {
+   if (error) return showToast("Error: " + error.message);
+   newOpp.id = data.id;
+ } else {
   newOpp.id = Date.now();
 }
 
