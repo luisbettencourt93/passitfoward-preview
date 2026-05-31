@@ -6450,11 +6450,27 @@ async function loadLiveFeed(opts) {
   if (sb) {
     const { data, error } = await sb.from('opportunities').select('*').order('created_at', { ascending: false });
     if (!error && data) {
-      opportunities = data.map(r => ({
-        id: r.id, title: r.title, desc: r.description, category: r.category,
-        interest: r.interest, poster: r.poster_handle, poster_id: r.poster_id,
-        budget: r.budget || '', type: r.type || 'need', location: r.location || '', created_at: r.created_at || ''
-      }));
+ opportunities = data.map(r => ({
+  id: r.id,
+  title: r.title,
+  desc: r.description || 'No description',
+  category: r.category,
+  interest: r.interest,
+  poster: r.poster_handle,
+  poster_id: r.poster_id,
+  budget: r.budget || '',
+  type: r.type || 'need',
+  location: r.location || '',
+  created_at: r.created_at || '',
+
+  // N4a.0b fields preserved from Supabase
+  engagement_type: r.engagement_type || null,
+  delivery_mode: r.delivery_mode || 'remote',
+  city: r.city || null,
+  country: r.country || null,
+  status: r.status || 'open',
+  expires_at: r.expires_at || null
+}));
     }
     // Load active forged deals to lock opportunities
     const { data: activeDeals } = await sb.from('forged_deals').select('opportunity_id').in('status',['pending','pending_acceptance','active','disputed']);
@@ -6610,7 +6626,8 @@ function renderLiveFeedOpps() {
       b: o.budget,
       ty: o.type,
       l: o.location,
-      ca: o.created_at
+      ca: o.created_at,
+      exp: o.expires_at
     }))
   });
  const liveFeedIsLoading = feed.querySelector('.fa-spinner');
@@ -6931,11 +6948,26 @@ async function loadOpportunitiesAndRender() {
   if (sb) {
     const { data, error } = await sb.from('opportunities').select('*').order('created_at', { ascending: false });
     if (!error && data) {
-     opportunities = data.map(r => ({
-  id: r.id, title: r.title, desc: r.description, category: r.category,
-  interest: r.interest, poster: r.poster_handle, poster_id: r.poster_id,
-  budget: r.budget || '', type: r.type || 'need', location: r.location || '',
-  created_at: r.created_at || ''
+  opportunities = data.map(r => ({
+  id: r.id,
+  title: r.title,
+  desc: r.description || 'No description',
+  category: r.category,
+  interest: r.interest,
+  poster: r.poster_handle,
+  poster_id: r.poster_id,
+  budget: r.budget || '',
+  type: r.type || 'need',
+  location: r.location || '',
+  created_at: r.created_at || '',
+
+  // N4a.0b fields preserved from Supabase
+  engagement_type: r.engagement_type || null,
+  delivery_mode: r.delivery_mode || 'remote',
+  city: r.city || null,
+  country: r.country || null,
+  status: r.status || 'open',
+  expires_at: r.expires_at || null
 }));
     }
    // Load active forged deals (in-progress lock — shows "Deal in Progress" badge)
