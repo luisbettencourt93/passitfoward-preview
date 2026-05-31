@@ -2243,8 +2243,21 @@ body.light .nr-state-unread { color:#059669; }
   border-color: #3b82f6;
 }
 
+.opp-intent-toggle {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+}
 
-
+.opp-intent-toggle button {
+  width: 50% !important;
+  flex: 1 1 50% !important;
+  min-width: 0 !important;
+  display: block !important;
+  white-space: normal !important;
+  text-align: center !important;
+}
 
 
 </style>
@@ -4954,7 +4967,7 @@ body.light .nr-state-unread { color:#059669; }
     <h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
                                      
-<div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;">
+<div class="opp-intent-toggle" style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;width:100%;">
   <button id="tog-need" onclick="setOppType('need')" style="flex:1;padding:8px 16px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#3b82f6;color:white;font-family:'DM Sans',sans-serif;">I need something</button>
   <button id="tog-offer" onclick="setOppType('offer')" style="flex:1;padding:8px 16px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#111827;color:#e2e8f0;font-family:'DM Sans',sans-serif;">I'm offering something</button>
 </div>
