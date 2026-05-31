@@ -2242,50 +2242,73 @@ body.light .nr-state-unread { color:#059669; }
   color: white;
   border-color: #3b82f6;
 }
-.post-opportunity-content {
-  width: min(92vw, 520px);
-  max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  overflow-x: hidden;
+.modal-content.post-opportunity-content {
+  width: min(92vw, 520px) !important;
+  max-width: 520px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  overflow-x: hidden !important;
 }
 
-.post-opportunity-content > h2,
-.post-opportunity-content > p,
-.post-opportunity-content > label,
-.post-opportunity-content > input,
-.post-opportunity-content > select,
-.post-opportunity-content > textarea,
-.post-opportunity-content > button,
-.post-opportunity-content > div {
-  width: 100%;
-  box-sizing: border-box;
+.modal-content.post-opportunity-content > * {
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 0 0 auto !important;
+  box-sizing: border-box !important;
 }
 
-.post-opportunity-content #opp-engagement-row,
-.post-opportunity-content #opp-delivery-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  width: 100%;
-  margin-bottom: 1rem;
+.modal-content.post-opportunity-content > h2,
+.modal-content.post-opportunity-content > p {
+  text-align: center !important;
 }
 
-.post-opportunity-content .opp-pick-btn {
-  width: auto;
-  flex: 0 0 auto;
+.modal-content.post-opportunity-content #opp-engagement-row,
+.modal-content.post-opportunity-content #opp-delivery-row {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0.4rem !important;
+  width: 100% !important;
+  margin-bottom: 1rem !important;
 }
 
-.post-opportunity-content #opp-location-block > div:last-child {
-  display: flex;
-  gap: 0.5rem;
-  width: 100%;
+.modal-content.post-opportunity-content .opp-pick-btn {
+  width: auto !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+}
+.modal-content.post-opportunity-content {
+  width: min(92vw, 520px) !important;
+  max-width: 520px !important;
+  display: block !important;
+  overflow-x: hidden !important;
+}
+.modal-content.post-opportunity-content input,
+.modal-content.post-opportunity-content select,
+.modal-content.post-opportunity-content textarea,
+.modal-content.post-opportunity-content .form-input,
+.modal-content.post-opportunity-content .form-select {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  display: block !important;
 }
 
-.post-opportunity-content #opp-location-block input {
-  min-width: 0;
+.modal-content.post-opportunity-content #opp-location-block > div:last-child {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
+}
+
+.modal-content.post-opportunity-content #opp-location-block input {
+  min-width: 0 !important;
 }
 </style>
 
