@@ -4967,18 +4967,10 @@ body.light .nr-state-unread { color:#059669; }
     <h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
                                      
-<table role="presentation" style="display:table !important;width:100% !important;table-layout:fixed !important;border-collapse:separate !important;border-spacing:0 !important;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;">
-  <tbody style="display:table-row-group !important;">
-    <tr style="display:table-row !important;">
-      <td id="tog-need" role="button" tabindex="0" onclick="setOppType('need')" style="display:table-cell !important;width:50% !important;box-sizing:border-box !important;padding:10px 8px;font-size:0.85rem;line-height:1.2;font-weight:700;cursor:pointer;background:#3b82f6;color:white;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;vertical-align:middle;">
-        I need something
-      </td>
-      <td id="tog-offer" role="button" tabindex="0" onclick="setOppType('offer')" style="display:table-cell !important;width:50% !important;box-sizing:border-box !important;padding:10px 8px;font-size:0.85rem;line-height:1.2;font-weight:700;cursor:pointer;background:#111827;color:#e2e8f0;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;vertical-align:middle;">
-        I'm offering something
-      </td>
-    </tr>
-  </tbody>
-</table>
+<div style="display:flex;justify-content:center;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+  <button type="button" id="tog-need" onclick="setOppType('need')" class="opp-pick-btn selected">I need something</button>
+  <button type="button" id="tog-offer" onclick="setOppType('offer')" class="opp-pick-btn">I'm offering something</button>
+</div>
         <!-- N4a.0b: Engagement type (required) -->
     <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">What kind of opportunity?</label>
     <div id="opp-engagement-row" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1rem;">
@@ -7109,16 +7101,15 @@ function updatePostedCount() {
 let oppType = 'need';
 function setOppType(type) {
   oppType = type;
+
   const needBtn = document.getElementById('tog-need');
   const offerBtn = document.getElementById('tog-offer');
+
   if (!needBtn || !offerBtn) return;
-  if(type === 'need') {
-    needBtn.style.background = '#3b82f6'; needBtn.style.color = 'white';
-    offerBtn.style.background = '#111827'; offerBtn.style.color = '#e2e8f0';
-  } else {
-    offerBtn.style.background = '#10b981'; offerBtn.style.color = '#0a0f1e';
-    needBtn.style.background = '#111827'; needBtn.style.color = '#e2e8f0';
-  }
+
+  needBtn.classList.toggle('selected', type === 'need');
+  offerBtn.classList.toggle('selected', type === 'offer');
+}
 }
 
 // N4a.0b: engagement_type state (required)
