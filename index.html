@@ -4924,11 +4924,62 @@ body.light .nr-state-unread { color:#059669; }
 <div id="post-modal" class="modal">
   <div class="modal-content">
     <h2>Post an Opportunity</h2>
-<p>Share what you need or what you can offer</p>
+<p>Share what you need or what you can offer</p
+ <style>
+  .opp-pick-btn {
+    padding: 7px 13px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: #111827;
+    color: #cbd5e1;
+    border-radius: 999px;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.12s ease;
+  }
+
+  .opp-pick-btn:hover {
+    border-color: #3b82f6;
+    color: #e2e8f0;
+  }
+
+  .opp-pick-btn.selected {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+  }
+</style>                                             
 <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;">
   <button id="tog-need" onclick="setOppType('need')" style="flex:1;padding:8px 16px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#3b82f6;color:white;font-family:'DM Sans',sans-serif;">I need something</button>
   <button id="tog-offer" onclick="setOppType('offer')" style="flex:1;padding:8px 16px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#111827;color:#e2e8f0;font-family:'DM Sans',sans-serif;">I'm offering something</button>
 </div>
+        <!-- N4a.0b: Engagement type (required) -->
+    <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">What kind of opportunity?</label>
+    <div id="opp-engagement-row" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1rem;">
+      <button type="button" data-engagement="job" onclick="setOppEngagement('job')" class="opp-pick-btn">Job</button>
+      <button type="button" data-engagement="gig" onclick="setOppEngagement('gig')" class="opp-pick-btn">Gig</button>
+      <button type="button" data-engagement="service" onclick="setOppEngagement('service')" class="opp-pick-btn">Service</button>
+      <button type="button" data-engagement="partnership" onclick="setOppEngagement('partnership')" class="opp-pick-btn">Partnership</button>
+      <button type="button" data-engagement="collaboration" onclick="setOppEngagement('collaboration')" class="opp-pick-btn">Collaboration</button>
+    </div>
+
+    <!-- N4a.0b: Delivery mode (drives smart location) -->
+    <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">Where does it happen?</label>
+    <div id="opp-delivery-row" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1rem;">
+      <button type="button" data-delivery="remote" onclick="setOppDelivery('remote')" class="opp-pick-btn">🌐 Remote / Digital</button>
+      <button type="button" data-delivery="local" onclick="setOppDelivery('local')" class="opp-pick-btn">📍 Local / In-person</button>
+      <button type="button" data-delivery="hybrid" onclick="setOppDelivery('hybrid')" class="opp-pick-btn">🔀 Hybrid</button>
+    </div>
+
+    <!-- N4a.0b: Smart location — shown only for local/hybrid -->
+    <div id="opp-location-block" style="display:none;margin-bottom:1rem;">
+      <div id="opp-location-hint" style="font-size:0.74rem;color:#60a5fa;margin-bottom:0.4rem;">📍 Add a location so the right people find this.</div>
+      <div style="display:flex;gap:0.5rem;">
+        <input id="opp-city" aria-label="City" type="text" placeholder="City (e.g. London)" class="form-input" style="flex:1;margin-bottom:0;">
+        <input id="opp-country" aria-label="Country" type="text" placeholder="Country (e.g. UK)" class="form-input" style="flex:1;margin-bottom:0;">
+      </div>
+    </div>
     <input id="opp-title" aria-label="Opportunity title" type="text" placeholder="Opportunity title" class="form-input" style="margin-bottom:0.8rem;">
     <select id="opp-category" aria-label="Category" class="form-input form-select" style="margin-bottom:0.8rem;">
       <option value="">Select a category</option>
@@ -4937,9 +4988,20 @@ body.light .nr-state-unread { color:#059669; }
     </select>
     <textarea id="opp-desc" aria-label="Description and details" placeholder="Description & details" class="form-input" style="height:110px; resize:vertical;"></textarea>
    <input id="opp-budget" aria-label="Budget or pay" type="text" placeholder="Budget / Pay (optional — e.g. $500, $50/hr, Revenue share)" class="form-input" style="margin-bottom:0.8rem;">
-   <input id="opp-location" aria-label="Location" type="text" placeholder="📍 Location (optional — e.g. London, UK or Remote)" class="form-input" style="margin-bottom:0.8rem;">
-    <div class="x-toggle" id="x-toggle-opp" onclick="toggleXPost()" style="margin:0.8rem 0;">
-      <div class="x-toggle-left"><i class="fab fa-x-twitter"></i> Also share this on X (Twitter)</div>
+    <!-- N4a.0b: Listing duration -> expires_at -->
+    <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">How long should this stay live?</label>
+    <select id="opp-duration" aria-label="Listing duration" onchange="onOppDurationChange()" class="form-input form-select" style="margin-bottom:0.8rem;">
+      <option value="none">No expiry — keep it live</option>
+      <option value="24h">24 hours</option>
+      <option value="3d">3 days</option>
+      <option value="7d">7 days</option>
+      <option value="14d">14 days</option>
+      <option value="custom">Custom date…</option>
+    </select>
+    <input id="opp-expiry-date" aria-label="Custom expiry date" type="datetime-local" class="form-input" style="display:none;margin-bottom:0.8rem;">
+
+   <div class="x-toggle" id="x-toggle-opp" onclick="toggleXPost()" style="margin:0.8rem 0;">
+   <div class="x-toggle-left"><i class="fab fa-x-twitter"></i> Also share this on X (Twitter)</div>
       <div class="x-toggle-switch" id="x-switch"></div>
     </div>
     <button onclick="postOpportunity()" class="btn" style="width:100%;">Post Now</button>
@@ -6860,6 +6922,19 @@ async function postOpportunity() {
   const category = document.getElementById('opp-category').value;
   if (!title) return showToast("Please add a title");
   if (!category) return showToast("Please select a category");
+    // N4a.0b: engagement_type is required
+  if (!oppEngagement) return showToast("Please pick what kind of opportunity this is");
+
+  // N4a.0b: soft-encourage location for local opportunities
+  if (oppDelivery === 'local') {
+    const _city = (document.getElementById('opp-city')?.value || '').trim();
+    const _country = (document.getElementById('opp-country')?.value || '').trim();
+
+    if (!_city && !_country && !window._oppLocationWarned) {
+      window._oppLocationWarned = true;
+      return showToast("Tip: add a city/country for local opportunities — tap Post again to continue");
+    }
+  }
   const shouldPostToX = postToX;
 
   if (shouldPostToX) {
@@ -6867,24 +6942,54 @@ async function postOpportunity() {
     shareOnX(tweet);
   }
 
-  const budget = document.getElementById('opp-budget')?.value.trim() || '';
-  const location = document.getElementById('opp-location')?.value.trim() || '';
-const newOpp = { title, desc: desc||'No description', category, budget, location, type: oppType, interest: 1, poster: currentUser.handle, poster_id: currentUser.id };
+   const budget = document.getElementById('opp-budget')?.value.trim() || '';
 
- if (sb && !currentUser.id.startsWith('demo-')) {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) return showToast("Session expired — please log in again");
-  const insertObj = {
+  // N4a.0b: structured location + composed legacy label
+  const oppCity = (document.getElementById('opp-city')?.value || '').trim();
+  const oppCountry = (document.getElementById('opp-country')?.value || '').trim();
+  const location = composeOppLocation();
+  const expiresAt = computeOppExpiresAt();
+
+  const newOpp = {
     title,
-    description: newOpp.desc,
+    desc: desc || 'No description',
     category,
-    budget: newOpp.budget,
-    type: newOpp.type,
+    budget,
+    location,
+    type: oppType,
     interest: 1,
-    poster_handle: currentUser.handle,
-    poster_id: session.user.id
+    poster: currentUser.handle,
+    poster_id: currentUser.id,
+    engagement_type: oppEngagement,
+    delivery_mode: oppDelivery,
+    city: oppCity || null,
+    country: oppCountry || null,
+    status: 'open',
+    expires_at: expiresAt
   };
-  if(location) insertObj.location = location;
+
+  if (sb && !currentUser.id.startsWith('demo-')) {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return showToast("Session expired — please log in again");
+
+    const insertObj = {
+      title,
+      description: newOpp.desc,
+      category,
+      budget: newOpp.budget,
+      type: newOpp.type,
+      interest: 1,
+      poster_handle: currentUser.handle,
+      poster_id: session.user.id,
+      engagement_type: oppEngagement,
+      delivery_mode: oppDelivery,
+      status: 'open'
+    };
+
+    if (location) insertObj.location = location;
+    if (oppCity) insertObj.city = oppCity;
+    if (oppCountry) insertObj.country = oppCountry;
+    if (expiresAt) insertObj.expires_at = expiresAt;
   const { data, error } = await sb.from('opportunities').insert(insertObj).select().single();
 
   if (error) return showToast("Error: " + error.message);
@@ -6901,8 +7006,24 @@ const newOpp = { title, desc: desc||'No description', category, budget, location
   try { renderTrendingOpps(); } catch(_) {}
   updatePostedCount();
   closeModal('post-modal');
- ['opp-title','opp-desc','opp-budget','opp-location'].forEach(id => { const e = document.getElementById(id); if(e) e.value=''; });
-  const oc = document.getElementById('opp-category'); if(oc) oc.value='';
+['opp-title','opp-desc','opp-budget','opp-city','opp-country'].forEach(id => {
+  const e = document.getElementById(id);
+  if (e) e.value = '';
+});
+
+const oc = document.getElementById('opp-category');
+if (oc) oc.value = '';
+
+// N4a.0b: reset new selectors/duration after post
+oppEngagement = null;
+setOppEngagement(null);
+setOppDelivery('remote');
+
+const _dur = document.getElementById('opp-duration');
+if (_dur) _dur.value = 'none';
+
+onOppDurationChange();
+window._oppLocationWarned = false;
   postToX = false;
   const sw = document.getElementById('x-switch'); if(sw) sw.classList.remove('on');
   markTaskDone(3);
@@ -6970,12 +7091,111 @@ function setOppType(type) {
     needBtn.style.background = '#111827'; needBtn.style.color = '#e2e8f0';
   }
 }
+
+// N4a.0b: engagement_type state (required)
+let oppEngagement = null;
+function setOppEngagement(val) {
+  oppEngagement = val;
+  document.querySelectorAll('#opp-engagement-row .opp-pick-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.engagement === val);
+  });
+}
+
+// N4a.0b: delivery_mode state (drives smart location)
+let oppDelivery = 'remote';
+function setOppDelivery(val) {
+  oppDelivery = val;
+  document.querySelectorAll('#opp-delivery-row .opp-pick-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.delivery === val);
+  });
+
+  const block = document.getElementById('opp-location-block');
+  if (block) {
+    block.style.display = (val === 'local' || val === 'hybrid') ? 'block' : 'none';
+  }
+}
+
+// N4a.0b: duration picker -> reveals custom date when "custom"
+function onOppDurationChange() {
+  const sel = document.getElementById('opp-duration');
+  const dateInput = document.getElementById('opp-expiry-date');
+  if (!sel || !dateInput) return;
+
+  dateInput.style.display = (sel.value === 'custom') ? 'block' : 'none';
+}
+
+// N4a.0b: compute expires_at ISO string from the duration choice
+function computeOppExpiresAt() {
+  const sel = document.getElementById('opp-duration');
+  if (!sel) return null;
+
+  const v = sel.value;
+  if (v === 'none') return null;
+
+  if (v === 'custom') {
+    const d = document.getElementById('opp-expiry-date');
+    if (!d || !d.value) return null;
+
+    const parsed = new Date(d.value);
+    if (Number.isNaN(parsed.getTime())) return null;
+
+    return parsed.toISOString();
+  }
+
+  const map = {
+    '24h': 86400000,
+    '3d': 259200000,
+    '7d': 604800000,
+    '14d': 1209600000
+  };
+
+  const ms = map[v];
+  if (!ms) return null;
+
+  return new Date(Date.now() + ms).toISOString();
+}
+
+// N4a.0b: compose legacy location display string from structured fields
+function composeOppLocation() {
+  if (oppDelivery === 'remote') return 'Remote';
+
+  const city = (document.getElementById('opp-city')?.value || '').trim();
+  const country = (document.getElementById('opp-country')?.value || '').trim();
+  const parts = [city, country].filter(Boolean);
+
+  let label = parts.join(', ');
+
+  if (oppDelivery === 'hybrid') {
+    label = label ? `${label} / Hybrid` : 'Hybrid';
+  }
+
+  return label || (oppDelivery === 'local' ? 'Local' : 'Remote');
+}
 function showPostModal() {
   if (!currentUser) return showToast("Login first");
+
   oppType = 'need';
   setOppType('need');
-  const locEl = document.getElementById('opp-location');
-  if(locEl && currentUser.city && !locEl.value) locEl.value = currentUser.city;
+
+  // N4a.0b: reset new selectors to defaults
+  oppEngagement = null;
+  setOppEngagement(null);
+
+  setOppDelivery('remote');
+
+  const durSel = document.getElementById('opp-duration');
+  if (durSel) durSel.value = 'none';
+
+  onOppDurationChange();
+
+  window._oppLocationWarned = false;
+
+  // Carry old convenience: prefill city from profile if available
+  const cityEl = document.getElementById('opp-city');
+  if (cityEl && currentUser.city && !cityEl.value) {
+    cityEl.value = currentUser.city;
+  }
+
   document.getElementById('post-modal').style.display = 'flex';
 }
 
