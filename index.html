@@ -2242,6 +2242,51 @@ body.light .nr-state-unread { color:#059669; }
   color: white;
   border-color: #3b82f6;
 }
+.post-opportunity-content {
+  width: min(92vw, 520px);
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: hidden;
+}
+
+.post-opportunity-content > h2,
+.post-opportunity-content > p,
+.post-opportunity-content > label,
+.post-opportunity-content > input,
+.post-opportunity-content > select,
+.post-opportunity-content > textarea,
+.post-opportunity-content > button,
+.post-opportunity-content > div {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.post-opportunity-content #opp-engagement-row,
+.post-opportunity-content #opp-delivery-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.post-opportunity-content .opp-pick-btn {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.post-opportunity-content #opp-location-block > div:last-child {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.post-opportunity-content #opp-location-block input {
+  min-width: 0;
+}
 </style>
 
 
@@ -4944,7 +4989,8 @@ body.light .nr-state-unread { color:#059669; }
 </div>
 
 <div id="post-modal" class="modal">
-<div class="modal-content" style="width:min(92vw,520px);max-width:520px;display:flex;flex-direction:column;align-items:stretch;gap:0;">    <h2>Post an Opportunity</h2>
+<div class="modal-content post-opportunity-content">
+<h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
                                      
 <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;">
