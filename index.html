@@ -7165,6 +7165,13 @@ if (normalizedCountry && normalizedCountry.length <= 3) {
 
    if (error) return showToast("Error: " + error.message);
    newOpp.id = data.id;
+   newOpp.expires_at = data.expires_at || insertObj.expires_at || null;
+   newOpp.location = data.location || insertObj.location || newOpp.location;
+   newOpp.engagement_type = data.engagement_type || insertObj.engagement_type || newOpp.engagement_type;
+   newOpp.delivery_mode = data.delivery_mode || insertObj.delivery_mode || newOpp.delivery_mode;
+   newOpp.city = data.city || insertObj.city || null;
+   newOpp.country = data.country || insertObj.country || null;
+   newOpp.status = data.status || insertObj.status || 'open';
  } else {
   newOpp.id = Date.now();
 }
