@@ -2259,73 +2259,64 @@ body.light .nr-state-unread { color:#059669; }
   text-align: center !important;
 }
 
-/* ── PIF INTENT SEGMENTED CONTROL — HARD SCOPED ── */
+/* ── PassItForward Opportunity Intent Selector ── */
 .pif-intent-seg {
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  box-sizing: border-box !important;
-  gap: 4px !important;
-  padding: 4px !important;
-  margin: 0 0 1rem !important;
-  border: 1px solid #2d4460 !important;
-  border-radius: 12px !important;
-  background: #0a0f1e !important;
-  overflow: hidden !important;
+  width: 100%;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+  padding: 4px;
+  margin: 0 0 1rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(45, 68, 96, 0.95);
+  border-radius: 12px;
+  background: #0a0f1e;
+  overflow: hidden;
 }
 
-.pif-intent-seg > #tog-need.pif-intent-seg-btn,
-.pif-intent-seg > #tog-offer.pif-intent-seg-btn {
-  appearance: none !important;
-  -webkit-appearance: none !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: 100% !important;
-  height: auto !important;
-  min-height: 34px !important;
-  box-sizing: border-box !important;
-  margin: 0 !important;
-  padding: 9px 6px !important;
-  border: 1.5px solid transparent !important;
-  border-radius: 8px !important;
-  background: rgba(15, 23, 42, 0.92) !important;
-  color: #94a3b8 !important;
-  font-family: 'Inter', sans-serif !important;
-  font-size: 0.76rem !important;
-  font-weight: 800 !important;
-  line-height: 1.15 !important;
-  text-align: center !important;
-  white-space: normal !important;
-  overflow-wrap: anywhere !important;
-  box-shadow: none !important;
-  float: none !important;
-  cursor: pointer !important;
-  transform: none !important;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+.pif-intent-seg-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
-.pif-intent-seg > #tog-need.pif-intent-seg-btn:hover,
-.pif-intent-seg > #tog-offer.pif-intent-seg-btn:hover {
-  background: rgba(30, 41, 59, 0.95) !important;
-  color: #e2e8f0 !important;
+.pif-intent-seg-btn:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.04);
 }
 
-.pif-intent-seg > #tog-need.pif-intent-seg-btn.seg-active-need {
-  background: linear-gradient(135deg, #2563eb, #38bdf8) !important;
-  border-color: rgba(96, 165, 250, 0.65) !important;
-  color: #ffffff !important;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25) !important;
+.pif-intent-seg-btn:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.55);
+  outline-offset: 2px;
 }
 
-.pif-intent-seg > #tog-offer.pif-intent-seg-btn.seg-active-offer {
-  background: linear-gradient(135deg, #16a34a, #22c55e) !important;
-  border-color: rgba(74, 222, 128, 0.6) !important;
-  color: #ffffff !important;
-  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.22) !important;
+.pif-intent-seg-btn.seg-active-need {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: #60a5fa;
+}
+
+.pif-intent-seg-btn.is-offer.seg-active-offer {
+  background: rgba(45, 212, 160, 0.13);
+  border-color: rgba(45, 212, 160, 0.45);
+  color: #2dd4a0;
 }
 
 </style>
