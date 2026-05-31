@@ -2219,7 +2219,29 @@ body.light .nr-state-unread { color:#059669; }
   cursor: pointer;
   font-size: 12px;
 }
+.opp-pick-btn {
+  padding: 7px 13px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: #111827;
+  color: #cbd5e1;
+  border-radius: 999px;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.12s ease;
+}
 
+.opp-pick-btn:hover {
+  border-color: #3b82f6;
+  color: #e2e8f0;
+}
+
+.opp-pick-btn.selected {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
 </style>
 
 
@@ -4925,31 +4947,7 @@ body.light .nr-state-unread { color:#059669; }
   <div class="modal-content">
     <h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
- <style>
-  .opp-pick-btn {
-    padding: 7px 13px;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    border: 1px solid var(--border);
-    background: #111827;
-    color: #cbd5e1;
-    border-radius: 999px;
-    font-family: 'DM Sans', sans-serif;
-    transition: all 0.12s ease;
-  }
-
-  .opp-pick-btn:hover {
-    border-color: #3b82f6;
-    color: #e2e8f0;
-  }
-
-  .opp-pick-btn.selected {
-    background: #3b82f6;
-    color: white;
-    border-color: #3b82f6;
-  }
-</style>                                             
+                                     
 <div style="display:flex;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;">
   <button id="tog-need" onclick="setOppType('need')" style="flex:1;padding:8px 16px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#3b82f6;color:white;font-family:'DM Sans',sans-serif;">I need something</button>
   <button id="tog-offer" onclick="setOppType('offer')" style="flex:1;padding:8px 16px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#111827;color:#e2e8f0;font-family:'DM Sans',sans-serif;">I'm offering something</button>
