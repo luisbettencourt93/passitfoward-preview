@@ -7050,13 +7050,29 @@ async function postOpportunity() {
   if (sb && !currentUser.id.startsWith('demo-')) {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) return showToast("Session expired — please log in again");
-    const normalizedDeliveryMode = oppDelivery || 'remote';
-   let normalizedCity = document.getElementById('opp-city')?.value?.trim() || null;
-   let normalizedCountry = document.getElementById('opp-country')?.value?.trim() || null;
+   const normalizedDeliveryMode = oppDelivery || 'remote';
 
-    if (normalizedDeliveryMode === 'remote') {
-    normalizedCity = null;
-    normalizedCountry = null;
+let normalizedCity = document.getElementById('opp-city')?.value?.trim() || null;
+let normalizedCountry = document.getElementById('opp-country')?.value?.trim() || null;
+
+if (normalizedDeliveryMode === 'remote') {
+  normalizedCity = null;
+  normalizedCountry = null;
+} else if (normalizedCity && normalizedCity.includes(',')) {
+  const locationParts = normalizedCity
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean);
+
+  normalizedCity = locationParts[0] || null;
+
+  if (!normalizedCountry && locationParts.length > 1) {
+    normalizedCountry = locationParts[locationParts.length - 1];
+  }
+}
+
+if (normalizedCountry && normalizedCountry.length <= 3) {
+  normalizedCountry = normalizedCountry.toUpperCase();
 }
     const insertObj = {
       title,
@@ -7074,7 +7090,15 @@ async function postOpportunity() {
       status: 'open'
     };
 
-    if (location) insertObj.location = location;
+    if (normalizedDeliveryMode === 'remote') {
+  insertObj.location = 'Remote';
+} else if (normalizedCity && normalizedCountry) {
+  insertObj.location = `${normalizedCity}, ${normalizedCountry}${normalizedDeliveryMode === 'hybrid' ? ' / Hybrid' : ''}`;
+} else if (normalizedCity) {
+  insertObj.location = `${normalizedCity}${normalizedDeliveryMode === 'hybrid' ? ' / Hybrid' : ''}`;
+} else if (location) {
+  insertObj.location = location;
+}
    
     if (expiresAt) insertObj.expires_at = expiresAt;
     const { data, error } = await sb.from('opportunities').insert(insertObj).select().single();
