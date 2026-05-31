@@ -7212,6 +7212,13 @@ window._oppLocationWarned = false;
 
 async function deleteOpportunity(id) {
   if (!confirm("Delete this opportunity?")) return;
+console.log('PIF POST ROUTE CHECK', {
+  hasSupabase: !!sb,
+  currentUserId: currentUser?.id,
+  isDemoUser: currentUser?.id?.startsWith('demo-'),
+  title,
+  expiresAt
+});
   if (sb && !currentUser.id.startsWith('demo-')) {
     let result;
     if(isFounder()) {
