@@ -558,8 +558,43 @@
     .opp-item:hover { border-color: rgba(45,212,160,0.25); transform: translateY(-1px); }
     .opp-item:last-child { border-bottom: 1px solid #2d4f6f; }
     .opp-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
-    .opp-meta { font-size: 0.8rem; color: #64748b; margin-top: 0.3rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-    .opp-category { background: rgba(16,185,129,0.12); color: var(--primary); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+.opp-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opp-top > div:first-child {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opp-title-text {
+  display: block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.opp-desc-text {
+  display: block;
+  max-width: 100%;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}    .opp-category { background: rgba(16,185,129,0.12); color: var(--primary); padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
     .opp-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
     .interest-btn { background: transparent; color: var(--primary); border: 2px solid var(--primary); padding: 0.4rem 1rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.2s; font-family: 'DM Sans', sans-serif; }
     .interest-btn:hover { background: var(--primary); color: #0a0f1e; }
@@ -6658,7 +6693,7 @@ window._lfOppsFingerprint = fingerprint;
     div.innerHTML = `
       <div class="opp-top">
         <div>
-          <strong style="color:white;font-size:0.97rem;">${sanitize(opp.title)}</strong>
+         <strong class="opp-title-text" style="color:white;font-size:0.97rem;">${sanitize(opp.title)}</strong>
           <div class="opp-meta">
             ${opp.category ? `<span class="opp-category">${sanitize(opp.category)}</span>` : ''}
             ${opp.type==='need'?`<span style="background:rgba(59,130,246,0.12);color:#60a5fa;border:1px solid rgba(59,130,246,0.25);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">I need</span>`:`<span style="background:rgba(16,185,129,0.08);color:#34d399;border:1px solid rgba(16,185,129,0.2);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">I offer</span>`}
@@ -6701,7 +6736,7 @@ ${(() => {
 })()}           <span>• by <span onclick="viewMemberProfile('${sanitize(opp.poster)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(opp.poster)}</span></span>
            ${ago ? `<span style="color:#374151;">• ${ago}</span>` : ''}
           </div>
-          <div class="opp-meta" style="margin-top:4px;"><span>${sanitize(opp.desc)}</span></div>
+          <div class="opp-desc-text">${sanitize(opp.desc)}</div>
         </div>
         <div class="opp-actions">
           <button onclick="expressInterest('${opp.id}')" class="interest-btn"><i class="fas fa-fire" style="font-size:0.72rem;margin-right:3px;"></i>${opp.interest}</button>
