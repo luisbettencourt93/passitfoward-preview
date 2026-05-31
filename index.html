@@ -4967,9 +4967,13 @@ body.light .nr-state-unread { color:#059669; }
     <h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
                                      
-<div class="opp-intent-toggle" style="display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;gap:0;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;width:100%;">
-  <button id="tog-need" onclick="setOppType('need')" style="width:50% !important;max-width:50% !important;flex:0 0 50% !important;min-width:0 !important;display:block !important;padding:8px 10px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#3b82f6;color:white;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;">I need something</button>
-  <button id="tog-offer" onclick="setOppType('offer')" style="width:50% !important;max-width:50% !important;flex:0 0 50% !important;min-width:0 !important;display:block !important;padding:8px 10px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#111827;color:#e2e8f0;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;">I'm offering something</button>
+<div class="opp-intent-toggle" style="display:grid;grid-template-columns:1fr 1fr;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;width:100%;">
+  <div id="tog-need" role="button" tabindex="0" onclick="setOppType('need')" style="padding:8px 10px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#3b82f6;color:white;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;">
+    I need something
+  </div>
+  <div id="tog-offer" role="button" tabindex="0" onclick="setOppType('offer')" style="padding:8px 10px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#111827;color:#e2e8f0;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;">
+    I'm offering something
+  </div>
 </div>
         <!-- N4a.0b: Engagement type (required) -->
     <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">What kind of opportunity?</label>
