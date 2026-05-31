@@ -7176,8 +7176,16 @@ if (normalizedCountry && normalizedCountry.length <= 3) {
   newOpp.id = Date.now();
 }
 
-  opportunities.unshift(newOpp);
-  renderOpportunities();
+newOpp.expires_at = newOpp.expires_at || expiresAt || insertObj.expires_at || null;
+newOpp.location = newOpp.location || insertObj.location || location || '';
+newOpp.engagement_type = newOpp.engagement_type || insertObj.engagement_type || oppEngagement || null;
+newOpp.delivery_mode = newOpp.delivery_mode || insertObj.delivery_mode || oppDelivery || 'remote';
+newOpp.city = newOpp.city || insertObj.city || null;
+newOpp.country = newOpp.country || insertObj.country || null;
+newOpp.status = newOpp.status || insertObj.status || 'open';
+
+opportunities.unshift(newOpp);
+renderOpportunities();
   // Also keep Live Market + Trending in sync when posting (even if user is on
   // dashboard — they may switch to Live Market right after).
   try { renderLiveFeedOpps(); } catch(_) {}
