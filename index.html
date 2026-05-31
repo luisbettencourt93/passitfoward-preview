@@ -4967,13 +4967,12 @@ body.light .nr-state-unread { color:#059669; }
     <h2>Post an Opportunity</h2>
 <p>Share what you need or what you can offer</p
                                      
-<div class="opp-intent-toggle" style="display:grid;grid-template-columns:1fr 1fr;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;width:100%;">
-  <div id="tog-need" role="button" tabindex="0" onclick="setOppType('need')" style="padding:8px 10px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#3b82f6;color:white;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;">
+<div style="display:table !important;table-layout:fixed !important;width:100% !important;margin-bottom:1rem;border:1px solid var(--border);border-radius:999px;overflow:hidden;">
+  <span id="tog-need" role="button" tabindex="0" onclick="setOppType('need')" style="display:table-cell !important;width:50% !important;box-sizing:border-box !important;padding:10px 8px !important;font-size:0.85rem !important;line-height:1.2 !important;font-weight:700 !important;cursor:pointer !important;background:#3b82f6 !important;color:white !important;font-family:'DM Sans', sans-serif !important;text-align:center !important;white-space:nowrap !important;vertical-align:middle !important;">
     I need something
-  </div>
-  <div id="tog-offer" role="button" tabindex="0" onclick="setOppType('offer')" style="padding:8px 10px;font-size:0.85rem;font-weight:700;cursor:pointer;border:none;background:#111827;color:#e2e8f0;font-family:'DM Sans', sans-serif;text-align:center;white-space:nowrap;">
+  </span><span id="tog-offer" role="button" tabindex="0" onclick="setOppType('offer')" style="display:table-cell !important;width:50% !important;box-sizing:border-box !important;padding:10px 8px !important;font-size:0.85rem !important;line-height:1.2 !important;font-weight:700 !important;cursor:pointer !important;background:#111827 !important;color:#e2e8f0 !important;font-family:'DM Sans', sans-serif !important;text-align:center !important;white-space:nowrap !important;vertical-align:middle !important;">
     I'm offering something
-  </div>
+  </span>
 </div>
         <!-- N4a.0b: Engagement type (required) -->
     <label style="display:block;font-size:0.78rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;">What kind of opportunity?</label>
