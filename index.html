@@ -6682,6 +6682,7 @@ function renderTrendingOpps() {
   const fulfilledIds = window._fulfilledOppIds || new Set();
   const scored = opportunities.filter(o => {
     if (fulfilledIds.has(String(o.id))) return false;
+    if (o.expires_at) { const _expMs = new Date(o.expires_at).getTime(); if (!Number.isNaN(_expMs) && _expMs < now) return false; }
     const age = now - new Date(o.created_at || Date.now()).getTime();
     return age < h24;
   }).map(o => {
