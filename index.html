@@ -7170,9 +7170,11 @@ function setFilter(cat) { activeFilter = cat; renderFilters(); renderOpportuniti
 
 function renderOpportunities() {
   // Always update the dashboard count
- const fulfilledIds = window._fulfilledOppIds || new Set();
+const fulfilledIds = window._fulfilledOppIds || new Set();
 const visible = opportunities.filter(o => !fulfilledIds.has(String(o.id)));
 const filtered = activeFilter === 'All' ? visible : visible.filter(o => o.category === activeFilter);
+const _isExp = o => { const m = o.expires_at ? new Date(o.expires_at).getTime() : NaN; return !Number.isNaN(m) && m < Date.now(); };
+filtered.sort((a, b) => (_isExp(a) ? 1 : 0) - (_isExp(b) ? 1 : 0));
   const oc = document.getElementById('opp-count');
   if (oc) oc.textContent = opportunities.length;
   updatePostedCount();
