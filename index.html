@@ -6819,8 +6819,11 @@ window._lfOppsFingerprint = fingerprint;
     const isMine = currentUser && (opp.poster === currentUser.handle || String(opp.poster_id) === String(currentUser.id));
     const isNew = opp.created_at && new Date(opp.created_at).getTime() > fiveMinAgo;
     const ago = opp.created_at ? timeAgo(opp.created_at) : '';
+    const _lfExpMs = opp.expires_at ? new Date(opp.expires_at).getTime() : NaN;
+    const isExpired = !Number.isNaN(_lfExpMs) && _lfExpMs < Date.now();
     const div = document.createElement('div');
     div.className = 'opp-item' + (isNew ? ' lf-new-item' : '');
+    if (isExpired) div.style.opacity = '0.6';
     div.innerHTML = `
       <div class="opp-top">
         <div>
