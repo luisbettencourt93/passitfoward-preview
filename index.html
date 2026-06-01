@@ -6871,7 +6871,7 @@ ${(() => {
         </div>
         <div class="opp-actions">
           <button onclick="expressInterest('${opp.id}')" class="interest-btn"><i class="fas fa-fire" style="font-size:0.72rem;margin-right:3px;"></i>${opp.interest}</button>
-                     </button>
+                    
             ${(() => {
               const _oppExpMs = opp.expires_at ? new Date(opp.expires_at).getTime() : NaN;
               return !Number.isNaN(_oppExpMs) && _oppExpMs < Date.now();
