@@ -6766,10 +6766,14 @@ function renderLiveFeedOpps() {
   const feed = document.getElementById('livefeed-opps'); if (!feed) return;
   let filtered = activeFilter === 'All' ? opportunities : opportunities.filter(o => o.category === activeFilter);
   filtered = filtered.filter(o => !window._completedForgeOppIds?.has(String(o.id)));
-  if(window._lfLocationFilter && currentUser?.city) {
+    if(window._lfLocationFilter && currentUser?.city) {
     const myCity = currentUser.city.toLowerCase().trim();
     filtered = filtered.filter(o => o.location && o.location.toLowerCase().trim().includes(myCity));
   }
+
+  // N4a.0c-3b — expired opportunities sort below active (after filtering, before fingerprint)
+  const _isExp = o => { const m = o.expires_at ? new Date(o.expires_at).getTime() : NaN; return !Number.isNaN(m) && m < Date.now(); };
+  filtered.sort((a, b) => (_isExp(a) ? 1 : 0) - (_isExp(b) ? 1 : 0));
 
   // Track polish — change-aware re-render.
   // Build a fingerprint of what we're about to render. If it matches the last
