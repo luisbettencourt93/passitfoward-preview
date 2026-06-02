@@ -7254,7 +7254,7 @@ ${(() => {
             <button onclick="expressInterest('${opp.id}')" class="interest-btn">
               <i class="fas fa-fire" style="font-size:0.72rem;margin-right:3px;"></i>${opp.interest}
             </button>
-                        ${isExpired ? `<button data-dm-poster="${attrSafe(opp.poster)}" data-dm-title="${attrSafe(opp.title)}" onclick="showDmModal(this.dataset.dmPoster, this.dataset.dmTitle)" title="This opportunity has expired — message the poster to ask if it's still open" style="background:rgba(148,163,184,0.10);color:#cbd5e1;border:1.5px solid rgba(148,163,184,0.30);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">💬 Ask if still open</button>` : window._activeForgeOppIds?.has(String(opp.id)) ? `<span title="This opportunity is currently being fulfilled — no further deals can be forged" style="background:rgba(245,158,11,0.08);color:#f59e0b;border:1.5px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:default;">🔒 Deal in Progress</span>` : `<button data-forge-id="${opp.id}" data-forge-title="${attrSafe(opp.title)}" data-forge-poster="${attrSafe(opp.poster)}" onclick="showForgeModal(this.dataset.forgeId, this.dataset.forgeTitle, this.dataset.forgePoster)" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1.5px solid rgba(139,92,246,0.3);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔨 Forge Deal</button>`}
+             ${isExpired ? (isMine ? `<button onclick="reopenOpportunity('${opp.id}')" title="Reopen this opportunity for 7 more days" style="background:rgba(16,185,129,0.12);color:#34d399;border:1.5px solid rgba(16,185,129,0.30);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">♻️ Reopen</button>` : `<button data-dm-poster="${attrSafe(opp.poster)}" data-dm-title="${attrSafe(opp.title)}" onclick="showDmModal(this.dataset.dmPoster, this.dataset.dmTitle)" title="This opportunity has expired — message the poster to ask if it's still open" style="background:rgba(148,163,184,0.10);color:#cbd5e1;border:1.5px solid rgba(148,163,184,0.30);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">💬 Ask if still open</button>`) : window._activeForgeOppIds?.has(String(opp.id)) ? `<span title="This opportunity is currently being fulfilled — no further deals can be forged" style="background:rgba(245,158,11,0.08);color:#f59e0b;border:1.5px solid rgba(245,158,11,0.2);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:default;">🔒 Deal in Progress</span>` : `<button data-forge-id="${opp.id}" data-forge-title="${attrSafe(opp.title)}" data-forge-poster="${attrSafe(opp.poster)}" onclick="showForgeModal(this.dataset.forgeId, this.dataset.forgeTitle, this.dataset.forgePoster)" style="background:rgba(139,92,246,0.12);color:#a78bfa;border:1.5px solid rgba(139,92,246,0.3);padding:4px 12px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;">🔨 Forge Deal</button>`}
             <button data-dm-poster="${attrSafe(opp.poster)}" data-dm-title="${attrSafe(opp.title)}" onclick="showDmModal(this.dataset.dmPoster, this.dataset.dmTitle)" class="dm-btn">
               <i class="fas fa-paper-plane" style="font-size:0.75rem;margin-right:3px;"></i>DM
             </button>
@@ -7446,6 +7446,35 @@ async function deleteOpportunity(id) {
   renderTrendingOpps();
   updatePostedCount();
   showToast("Deleted");
+}
+
+async function reopenOpportunity(id) {
+  const opp = opportunities.find(o => String(o.id) === String(id));
+  if (!opp) return;
+
+  const newExpiry = new Date(Date.now() + 604800000).toISOString();
+
+  if (sb && !currentUser.id.startsWith('demo-')) {
+    const result = await sb
+      .from('opportunities')
+      .update({ expires_at: newExpiry, status: 'open' })
+      .eq('id', id)
+      .eq('poster_id', currentUser.id);
+
+    if (result.error) {
+      showToast("Reopen failed: " + result.error.message);
+      return;
+    }
+  }
+
+  opp.expires_at = newExpiry;
+  opp.status = 'open';
+
+  renderOpportunities();
+  renderLiveFeedOpps();
+  renderTrendingOpps();
+
+  showToast("Reopened for 7 days ♻️");
 }
 
 async function expressInterest(id) {
