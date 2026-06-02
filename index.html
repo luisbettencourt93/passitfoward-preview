@@ -7449,32 +7449,42 @@ async function deleteOpportunity(id) {
 }
 
 async function reopenOpportunity(id) {
-  const opp = opportunities.find(o => String(o.id) === String(id));
-  if (!opp) return;
+  reopenOpportunity._inFlight = reopenOpportunity._inFlight || new Set();
 
-  const newExpiry = new Date(Date.now() + 604800000).toISOString();
+  if (reopenOpportunity._inFlight.has(String(id))) return;
 
-  if (sb && !currentUser.id.startsWith('demo-')) {
-    const result = await sb
-      .from('opportunities')
-      .update({ expires_at: newExpiry, status: 'open' })
-      .eq('id', id)
-      .eq('poster_id', currentUser.id);
+  reopenOpportunity._inFlight.add(String(id));
 
-    if (result.error) {
-      showToast("Reopen failed: " + result.error.message);
-      return;
+  try {
+    const opp = opportunities.find(o => String(o.id) === String(id));
+    if (!opp) return;
+
+    const newExpiry = new Date(Date.now() + 604800000).toISOString();
+
+    if (sb && !currentUser.id.startsWith('demo-')) {
+      const result = await sb
+        .from('opportunities')
+        .update({ expires_at: newExpiry, status: 'open' })
+        .eq('id', id)
+        .eq('poster_id', currentUser.id);
+
+      if (result.error) {
+        showToast("Reopen failed: " + result.error.message);
+        return;
+      }
     }
+
+    opp.expires_at = newExpiry;
+    opp.status = 'open';
+
+    renderOpportunities();
+    renderLiveFeedOpps();
+    renderTrendingOpps();
+
+    showToast("Reopened for 7 days ♻️");
+  } finally {
+    reopenOpportunity._inFlight.delete(String(id));
   }
-
-  opp.expires_at = newExpiry;
-  opp.status = 'open';
-
-  renderOpportunities();
-  renderLiveFeedOpps();
-  renderTrendingOpps();
-
-  showToast("Reopened for 7 days ♻️");
 }
 
 async function expressInterest(id) {
