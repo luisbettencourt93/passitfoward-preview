@@ -3720,7 +3720,7 @@ body.light .nr-state-unread { color:#059669; }
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
              <i class="fas fa-bullseye" style="font-size:12px;color:#5a7a9a;width:13px;"></i>
             <span style="font-size:11px;color:#5a7a9a;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">Posted Opportunities</span>
-             <button onclick="toggleMyOppsPanel()" style="margin-left:auto;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;">Manage</button>
+             <button onclick="toggleMyOppsPanel(this)" style="margin-left:auto;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:3px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit;">Manage</button>
             </div>
                <div id="cc-opps-body">
               <div style="font-size:13px;color:#5a7a9a;">Loading…</div>
@@ -7532,16 +7532,16 @@ function setMyOppsFilter(f) {
   renderMyOppsPanel();
 }
 
-function toggleMyOppsPanel() {
+function toggleMyOppsPanel(btn) {
   const panel = document.getElementById('my-opps-panel');
   if (!panel) return;
 
-  if (panel.style.display !== 'none') {
-    panel.style.display = 'none';
-  } else {
-    panel.style.display = 'block';
-    renderMyOppsPanel();
-  }
+  const opening = panel.style.display === 'none';
+  panel.style.display = opening ? 'block' : 'none';
+
+  if (btn) btn.textContent = opening ? 'Hide' : 'Manage';
+
+  if (opening) renderMyOppsPanel();
 }
 
 async function reopenOpportunity(id) {
