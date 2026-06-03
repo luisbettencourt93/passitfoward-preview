@@ -7463,16 +7463,9 @@ let _myOppsFilter = 'active';
 function renderMyOppsPanel() {
   const panel = document.getElementById('my-opps-panel');
   if (!panel) return;
-  if (!currentUser) {
-    panel.innerHTML = '<div style="font-size:13px;color:#5a7a9a;padding:10px;">Login to manage your opportunities.</div>';
-    return;
-  }
+  if (!currentUser) { panel.innerHTML = '<div style="font-size:13px;color:#5a7a9a;padding:14px 4px;text-align:center;">Login to manage your opportunities.</div>'; return; }
 
-  const _isExp = o => {
-    const m = o.expires_at ? new Date(o.expires_at).getTime() : NaN;
-    return !Number.isNaN(m) && m < Date.now();
-  };
-
+  const _isExp = o => { const m = o.expires_at ? new Date(o.expires_at).getTime() : NaN; return !Number.isNaN(m) && m < Date.now(); };
   const expLabel = o => {
     if (!o.expires_at) return 'No expiry';
     const ms = new Date(o.expires_at).getTime();
@@ -7483,22 +7476,25 @@ function renderMyOppsPanel() {
     return days <= 1 ? 'Expires tomorrow' : 'Expires in ' + days + ' days';
   };
 
-  const mine = opportunities.filter(o =>
-    o.poster === currentUser.handle || String(o.poster_id) === String(currentUser.id)
-  );
+  const mine = opportunities.filter(o => o.poster === currentUser.handle || String(o.poster_id) === String(currentUser.id));
+  const activeCount = mine.filter(o => !_isExp(o)).length;
+  const counts = { active: activeCount, expired: mine.length - activeCount, all: mine.length };
+  const list = _myOppsFilter === 'active' ? mine.filter(o => !_isExp(o))
+             : _myOppsFilter === 'expired' ? mine.filter(o => _isExp(o))
+             : mine;
 
-  const list = _myOppsFilter === 'active'
-    ? mine.filter(o => !_isExp(o))
-    : _myOppsFilter === 'expired'
-      ? mine.filter(o => _isExp(o))
-      : mine;
+  const chip = (key, label) => {
+    const on = _myOppsFilter === key;
+    return `<button onclick="setMyOppsFilter('${key}')" style="display:inline-flex;align-items:center;gap:5px;background:${on?'rgba(45,212,160,0.12)':'rgba(255,255,255,0.02)'};color:${on?'#2dd4a0':'#94a3b8'};border:1px solid ${on?'rgba(45,212,160,0.4)':'#2d4f6f'};padding:4px 11px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${label}<span style="font-size:10px;font-weight:700;padding:0 6px;border-radius:999px;background:${on?'rgba(45,212,160,0.2)':'rgba(255,255,255,0.05)'};color:${on?'#2dd4a0':'#7a96b4'};">${counts[key]}</span></button>`;
+  };
 
-  const chip = (key, label) => `<button onclick="setMyOppsFilter('${key}')" style="background:${_myOppsFilter===key?'rgba(45,212,160,0.12)':'rgba(255,255,255,0.02)'};color:${_myOppsFilter===key?'#2dd4a0':'#94a3b8'};border:1px solid ${_myOppsFilter===key?'rgba(45,212,160,0.4)':'#2d4f6f'};padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${label}</button>`;
-
-  let html = `<div style="display:flex;gap:6px;margin:10px 0;">${chip('active','Active')}${chip('expired','Expired')}${chip('all','All')}</div>`;
+  let html = `<div style="display:flex;gap:6px;margin:12px 0;">${chip('active','Active')}${chip('expired','Expired')}${chip('all','All')}</div>`;
 
   if (!list.length) {
-    html += `<div style="font-size:13px;color:#5a7a9a;padding:10px;">No ${_myOppsFilter === 'all' ? '' : _myOppsFilter + ' '}opportunities.</div>`;
+    const emptyMsg = _myOppsFilter === 'active' ? (mine.length ? 'No active opportunities — reopen an expired one below.' : "You haven't posted any opportunities yet.")
+                   : _myOppsFilter === 'expired' ? "Nothing expired — you're all current."
+                   : "You haven't posted any opportunities yet.";
+    html += `<div style="font-size:12.5px;color:#5a7a9a;padding:18px 12px;text-align:center;border:1px dashed #2d4f6f;border-radius:8px;background:rgba(255,255,255,0.015);">${emptyMsg}</div>`;
     panel.innerHTML = html;
     return;
   }
@@ -7506,25 +7502,19 @@ function renderMyOppsPanel() {
   html += list.map(o => {
     const expired = _isExp(o);
     const typeLabel = (o.type === 'offer') ? 'I offer' : 'I need';
-    const meta = [typeLabel, o.category, o.engagement_type, o.budget, o.location]
-      .filter(Boolean)
-      .map(x => sanitize(String(x)))
-      .join(' · ');
-
-    const reopenBtn = expired
-      ? `<button onclick="reopenOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.30);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">♻️ Reopen</button>`
-      : '';
-
-    const delBtn = `<button onclick="deleteOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(239,68,68,0.10);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🗑 Delete</button>`;
-
-    return `<div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 12px;margin-bottom:8px;${expired?'opacity:0.7;':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-        <div style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;">${sanitize(o.title || 'Untitled')}</div>
-        <span style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;${expired?'background:rgba(239,68,68,0.10);color:#f87171;border:1px solid rgba(239,68,68,0.25);':'background:rgba(45,212,160,0.10);color:#2dd4a0;border:1px solid rgba(45,212,160,0.25);'}">${expired?'Expired':'Active'}</span>
+    const meta = [typeLabel, o.category, o.engagement_type, o.budget, o.location].filter(Boolean).map(x => sanitize(String(x))).join('\u2002·\u2002');
+    const reopenBtn = expired ? `<button onclick="reopenOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.30);padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">♻️ Reopen</button>` : '';
+    const delBtn = `<button onclick="deleteOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(239,68,68,0.10);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🗑 Delete</button>`;
+    return `<div style="background:rgba(255,255,255,0.035);border:1px solid ${expired?'#3a4a5a':'#34587a'};border-radius:9px;padding:11px 13px;margin-bottom:9px;${expired?'opacity:0.78;':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:7px;">
+        <div style="font-size:13.5px;font-weight:700;color:#e8f0f8;line-height:1.35;">${sanitize(o.title || 'Untitled')}</div>
+        <span style="flex-shrink:0;font-size:9.5px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;padding:3px 9px;border-radius:999px;${expired?'background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.3);':'background:rgba(45,212,160,0.12);color:#2dd4a0;border:1px solid rgba(45,212,160,0.3);'}">${expired?'Expired':'Active'}</span>
       </div>
-      <div style="font-size:11px;color:#5a7a9a;margin-top:5px;">${meta}</div>
-      <div style="font-size:11px;color:#5a7a9a;margin-top:3px;">⏳ ${expLabel(o)} · 🔥 ${o.interest || 0}</div>
-      <div style="display:flex;gap:6px;margin-top:8px;">${reopenBtn}${delBtn}</div>
+      <div style="font-size:11px;color:#8ba6c4;margin-bottom:4px;">${meta}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:11px;color:#5a7a9a;">⏳ ${expLabel(o)}&nbsp;&nbsp;·&nbsp;&nbsp;🔥 ${o.interest || 0}</div>
+        <div style="display:flex;gap:6px;">${reopenBtn}${delBtn}</div>
+      </div>
     </div>`;
   }).join('');
 
