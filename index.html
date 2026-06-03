@@ -7499,10 +7499,16 @@ function renderMyOppsPanel() {
     return;
   }
 
-  html += list.map(o => {
+   html += list.map(o => {
     const expired = _isExp(o);
     const typeLabel = (o.type === 'offer') ? 'I offer' : 'I need';
-    const meta = [typeLabel, o.category, o.engagement_type, o.budget, o.location].filter(Boolean).map(x => sanitize(String(x))).join('\u2002·\u2002');
+    const engagementLabels = { job: 'Job', gig: 'Gig', service: 'Service', partnership: 'Partnership', collaboration: 'Collaboration' };
+    const cleanMeta = v => { const s = (v == null ? '' : String(v)).trim(); return (s && s.toLowerCase() !== 'null' && s.toLowerCase() !== 'undefined') ? s : ''; };
+    const _eng = cleanMeta(o.engagement_type);
+    const engLabel = _eng ? (engagementLabels[_eng.toLowerCase()] || (_eng.charAt(0).toUpperCase() + _eng.slice(1))) : '';
+    const _budget = cleanMeta(o.budget);
+    const budgetLabel = _budget ? 'Budget: ' + _budget : '';
+    const meta = [typeLabel, cleanMeta(o.category), engLabel, budgetLabel, cleanMeta(o.location)].filter(Boolean).map(x => sanitize(String(x))).join('\u2002·\u2002');
     const reopenBtn = expired ? `<button onclick="reopenOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.30);padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">♻️ Reopen</button>` : '';
     const delBtn = `<button onclick="deleteOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(239,68,68,0.10);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:5px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🗑 Delete</button>`;
     return `<div style="background:rgba(255,255,255,0.035);border:1px solid ${expired?'#3a4a5a':'#34587a'};border-radius:9px;padding:11px 13px;margin-bottom:9px;${expired?'opacity:0.78;':''}">
