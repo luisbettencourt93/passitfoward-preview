@@ -9468,12 +9468,37 @@ function ccComputeNextAction(user) {
     };
   }
 
-  if (workExamples.length === 0) {
+    if (workExamples.length === 0) {
     return {
       id: 'add-work',
       title: 'Add a work example',
       subtext: 'Members trust profiles that show real work.',
       buttonLabel: 'Add example'
+    };
+  }
+
+  // Owner opportunity recovery — outranks cosmetic profile nudges (v1, 48h window)
+  const _ccMyOpps = (Array.isArray(opportunities) ? opportunities : []).filter(o => o.poster === user.handle || String(o.poster_id) === String(user.id));
+  const _ccNow = Date.now();
+  const _ccExpMs = o => { const m = o.expires_at ? new Date(o.expires_at).getTime() : NaN; return Number.isNaN(m) ? null : m; };
+  const _ccExpired = _ccMyOpps.filter(o => { const m = _ccExpMs(o); return m !== null && m < _ccNow; }).length;
+  const _ccExpiring = _ccMyOpps.filter(o => { const m = _ccExpMs(o); return m !== null && m >= _ccNow && (m - _ccNow) <= 172800000; }).length;
+
+  if (_ccExpired > 0) {
+    return {
+      id: 'reopen-expired',
+      title: _ccExpired === 1 ? 'Reopen an expired opportunity' : 'Reopen ' + _ccExpired + ' expired opportunities',
+      subtext: 'Expired listings stop attracting responses — reopen to bring them back.',
+      buttonLabel: 'Manage opportunities'
+    };
+  }
+
+  if (_ccExpiring > 0) {
+    return {
+      id: 'review-expiring',
+      title: _ccExpiring === 1 ? 'An opportunity is expiring soon' : _ccExpiring + ' opportunities expiring soon',
+      subtext: 'Expiring within 48 hours — review or extend before they lapse.',
+      buttonLabel: 'Manage opportunities'
     };
   }
 
@@ -9495,12 +9520,12 @@ function ccComputeNextAction(user) {
     };
   }
 
-  // Default — nothing pressing, browse opportunities
+  // Default — nothing pressing, hand off to NEXAR
   return {
-    id: 'browse-opps',
-    title: 'Check the Live Market',
-    subtext: 'See what opportunities are active right now.',
-    buttonLabel: 'Open Live Market'
+    id: 'ask-nexar',
+    title: 'Ask NEXAR what to focus on',
+    subtext: 'You\'re all set — let NEXAR suggest your next best move.',
+    buttonLabel: 'Ask NEXAR'
   };
 }
 
