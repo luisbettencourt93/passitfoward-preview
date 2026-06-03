@@ -7448,6 +7448,100 @@ async function deleteOpportunity(id) {
   showToast("Deleted");
 }
 
+// ── My Opportunities management panel (Command Centre / Posted Opportunities) ──
+// Frontend-only owner control. Reads the global `opportunities` array (refreshed
+// on dashboard entry) and reuses reopenOpportunity / deleteOpportunity for actions.
+// Renders into #my-opps-panel (added in Patch 2); no-ops safely if absent.
+let _myOppsFilter = 'active';
+
+function renderMyOppsPanel() {
+  const panel = document.getElementById('my-opps-panel');
+  if (!panel) return;
+  if (!currentUser) {
+    panel.innerHTML = '<div style="font-size:13px;color:#5a7a9a;padding:10px;">Login to manage your opportunities.</div>';
+    return;
+  }
+
+  const _isExp = o => {
+    const m = o.expires_at ? new Date(o.expires_at).getTime() : NaN;
+    return !Number.isNaN(m) && m < Date.now();
+  };
+
+  const expLabel = o => {
+    if (!o.expires_at) return 'No expiry';
+    const ms = new Date(o.expires_at).getTime();
+    if (Number.isNaN(ms)) return 'No expiry';
+    const diff = ms - Date.now();
+    if (diff < 0) return 'Expired';
+    const days = Math.ceil(diff / 86400000);
+    return days <= 1 ? 'Expires tomorrow' : 'Expires in ' + days + ' days';
+  };
+
+  const mine = opportunities.filter(o =>
+    o.poster === currentUser.handle || String(o.poster_id) === String(currentUser.id)
+  );
+
+  const list = _myOppsFilter === 'active'
+    ? mine.filter(o => !_isExp(o))
+    : _myOppsFilter === 'expired'
+      ? mine.filter(o => _isExp(o))
+      : mine;
+
+  const chip = (key, label) => `<button onclick="setMyOppsFilter('${key}')" style="background:${_myOppsFilter===key?'rgba(45,212,160,0.12)':'rgba(255,255,255,0.02)'};color:${_myOppsFilter===key?'#2dd4a0':'#94a3b8'};border:1px solid ${_myOppsFilter===key?'rgba(45,212,160,0.4)':'#2d4f6f'};padding:4px 12px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">${label}</button>`;
+
+  let html = `<div style="display:flex;gap:6px;margin:10px 0;">${chip('active','Active')}${chip('expired','Expired')}${chip('all','All')}</div>`;
+
+  if (!list.length) {
+    html += `<div style="font-size:13px;color:#5a7a9a;padding:10px;">No ${_myOppsFilter === 'all' ? '' : _myOppsFilter + ' '}opportunities.</div>`;
+    panel.innerHTML = html;
+    return;
+  }
+
+  html += list.map(o => {
+    const expired = _isExp(o);
+    const typeLabel = (o.type === 'offer') ? 'I offer' : 'I need';
+    const meta = [typeLabel, o.category, o.engagement_type, o.budget, o.location]
+      .filter(Boolean)
+      .map(x => sanitize(String(x)))
+      .join(' · ');
+
+    const reopenBtn = expired
+      ? `<button onclick="reopenOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(16,185,129,0.12);color:#34d399;border:1px solid rgba(16,185,129,0.30);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">♻️ Reopen</button>`
+      : '';
+
+    const delBtn = `<button onclick="deleteOpportunity('${o.id}').then(()=>renderMyOppsPanel())" style="background:rgba(239,68,68,0.10);color:#f87171;border:1px solid rgba(239,68,68,0.25);padding:4px 10px;border-radius:999px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🗑 Delete</button>`;
+
+    return `<div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:10px 12px;margin-bottom:8px;${expired?'opacity:0.7;':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;">${sanitize(o.title || 'Untitled')}</div>
+        <span style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;${expired?'background:rgba(239,68,68,0.10);color:#f87171;border:1px solid rgba(239,68,68,0.25);':'background:rgba(45,212,160,0.10);color:#2dd4a0;border:1px solid rgba(45,212,160,0.25);'}">${expired?'Expired':'Active'}</span>
+      </div>
+      <div style="font-size:11px;color:#5a7a9a;margin-top:5px;">${meta}</div>
+      <div style="font-size:11px;color:#5a7a9a;margin-top:3px;">⏳ ${expLabel(o)} · 🔥 ${o.interest || 0}</div>
+      <div style="display:flex;gap:6px;margin-top:8px;">${reopenBtn}${delBtn}</div>
+    </div>`;
+  }).join('');
+
+  panel.innerHTML = html;
+}
+
+function setMyOppsFilter(f) {
+  _myOppsFilter = f;
+  renderMyOppsPanel();
+}
+
+function toggleMyOppsPanel() {
+  const panel = document.getElementById('my-opps-panel');
+  if (!panel) return;
+
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'block';
+    renderMyOppsPanel();
+  }
+}
+
 async function reopenOpportunity(id) {
   reopenOpportunity._inFlight = reopenOpportunity._inFlight || new Set();
 
