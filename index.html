@@ -9782,10 +9782,10 @@ async function ccGetFounderData(force) {
       for (var i = 0; i < rows.length; i++) {
         var p = rows[i];
 
-        if (typeof pifProfileCompleteness === 'function') {
-          var c = pifProfileCompleteness(p);
-          if (typeof c === 'number') totalComp += c;
-        }
+         if (typeof pifProfileCompleteness === 'function') {
+         var c = pifProfileCompleteness(p);
+         if (c && typeof c.score === 'number') totalComp += c.score;
+         }
 
         var ls = p.last_seen ? new Date(p.last_seen).getTime() : 0;
         if (!ls || ls < inactiveCutoff) inactive++;
