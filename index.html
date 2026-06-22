@@ -16439,6 +16439,70 @@ window.nexarUpdateFabs = nexarUpdateFabs;
 document.addEventListener('DOMContentLoaded',()=>{const o=new IntersectionObserver((e)=>{e.forEach(en=>{if(en.isIntersecting){en.target.classList.add('visible');o.unobserve(en.target)}})},{threshold:0.15});document.querySelectorAll('.lp-fade').forEach(el=>o.observe(el))});
 // ═══════════ NEXAR PIPELINE — LAYER 1 ═══════════
 let _pipelineCache = [];
+
+// NEXAR Layer 3a: status-aware staleness thresholds (days). Rejected = no reminder.
+const NEXAR_REMINDER_THRESHOLDS = {
+  Applied: 7,
+  Responded: 3,
+  Interview: 3,
+  Offered: 2
+  // Rejected intentionally omitted -> never reminded
+};
+
+// NEXAR Layer 3a: compute stale pipeline entries from _pipelineCache.
+// Read-only. Ensures the cache is fresh first. Returns:
+// { count, items: [{ title, company, status, days_stale }] }
+async function nexarComputePipelineReminders() {
+  try {
+    if (typeof nexarPipelineLoad === 'function') {
+      if (!Array.isArray(_pipelineCache) || _pipelineCache.length === 0) {
+        await nexarPipelineLoad();
+      }
+    }
+
+    if (!Array.isArray(_pipelineCache) || _pipelineCache.length === 0) {
+      return { count: 0, items: [] };
+    }
+
+    var now = Date.now();
+    var stale = [];
+
+    for (var i = 0; i < _pipelineCache.length; i++) {
+      var row = _pipelineCache[i];
+      if (!row || !row.status) continue;
+
+      var threshold = NEXAR_REMINDER_THRESHOLDS[row.status];
+      if (typeof threshold !== 'number') continue;
+
+      var stamp = row.updated_at || row.created_at;
+      if (!stamp) continue;
+
+      var ts = new Date(stamp).getTime();
+      if (isNaN(ts)) continue;
+
+      var daysStale = Math.floor((now - ts) / 86400000);
+
+      if (daysStale >= threshold) {
+        stale.push({
+          title: row.title ? String(row.title).slice(0, 120) : '(untitled)',
+          company: row.company ? String(row.company).slice(0, 120) : '',
+          status: row.status,
+          days_stale: daysStale
+        });
+      }
+    }
+
+    stale.sort(function(a, b) {
+      return b.days_stale - a.days_stale;
+    });
+
+    if (stale.length > 5) stale = stale.slice(0, 5);
+
+    return { count: stale.length, items: stale };
+  } catch (e) {
+    return { count: 0, items: [] };
+  }
+}
 let _pipelineFilter = 'all';
 
 async function nexarSwitchView(view) {
