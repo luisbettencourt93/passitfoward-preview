@@ -10240,6 +10240,25 @@ async function ccBuildNexarContext() {
       }
     } catch (e) {}
 
+    
+
+    // --- NEXAR Layer 3a: stale pipeline reminders (user's own pipeline only) ---
+    // Lets NEXAR proactively suggest follow-ups. Titles/company/status/days only —
+    // no notes, no IDs, consistent with the privacy discipline above.
+    try {
+      if (typeof nexarComputePipelineReminders === 'function') {
+        var rem = await nexarComputePipelineReminders();
+        if (rem && rem.count > 0) {
+          ctx.pipeline_reminders = {
+            count: rem.count,
+            items: rem.items
+          };
+        }
+      }
+    } catch (e) {}
+
+    return ctx;
+    
     return ctx;
   } catch (e) {
     return {};
