@@ -10347,8 +10347,27 @@ async function ccRenderNeedsAttention() {
       if (typeof switchTab === 'function') switchTab('livefeed');
     });
 
-    container.appendChild(oppItem);
+        container.appendChild(oppItem);
   }
+
+  // --- Signal 4: NEXAR Layer 3a — stale pipeline follow-ups ---
+  try {
+    if (typeof nexarComputePipelineReminders === 'function') {
+      var remRes = await nexarComputePipelineReminders();
+      if (remRes && remRes.count >= 1) {
+        var remMsg = (remRes.count === 1)
+          ? '1 pipeline follow-up waiting'
+          : remRes.count + ' pipeline follow-ups waiting';
+
+        var remItem = ccBuildAttentionItem('pipeline-reminders', remMsg, function() {
+          if (typeof switchTab === 'function') switchTab('nexar');
+          if (typeof nexarSwitchView === 'function') nexarSwitchView('pipeline');
+        });
+
+        container.appendChild(remItem);
+      }
+    }
+  } catch (e) {}
 }
  
 // Builds one Needs Attention list item. createElement only — no innerHTML.
