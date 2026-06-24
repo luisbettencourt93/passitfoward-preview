@@ -11697,7 +11697,24 @@ ${(partner.phone || (partner.link && /^https?:\/\//i.test(partner.link))) ? `
   </div>
   ${partner.phone ? `<div style="font-size:12px;color:#5a7a9a;margin-top:12px;text-align:center;">${sanitize(partner.phone)}${partner.contact_name ? ' ('+sanitize(partner.contact_name)+')' : ''}</div>` : ''}
 </div>` : ''}
-
+     <!-- SHARE CARD -->
+<div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:16px;padding:18px;margin-bottom:16px;">
+  <div style="font-size:13px;font-weight:700;color:#e8f0f8;margin-bottom:10px;">Share this opportunity</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button onclick="fpShareOnX()" style="flex:1;min-width:130px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#60a5fa;border-radius:10px;padding:12px;font-weight:700;cursor:pointer;">
+      Share on X
+    </button>
+    <button onclick="fpCopyPartnerLink()" style="flex:1;min-width:130px;background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;border-radius:10px;padding:12px;font-weight:700;cursor:pointer;">
+      Copy Link
+    </button>
+    <button onclick="fpNativeShare()" style="flex:1;min-width:130px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;border-radius:10px;padding:12px;font-weight:700;cursor:pointer;">
+      Share
+    </button>
+  </div>
+  <div style="font-size:11px;color:#5a7a9a;margin-top:10px;text-align:center;">
+    Help this listing reach buyers, operators, investors, and opportunity seekers.
+  </div>
+</div>
     <!-- OWNER EDIT PANEL -->
     ${isOwner ? `<div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:20px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:12px;">✏️ Edit Your Featured Page</div>
@@ -11784,7 +11801,56 @@ async function savePartnerEdits(id) {
   showToast("Changes saved ✅");
   loadFeaturedPartner();
 }
+function fpShareUrl() {
+  const base = window.location.origin + window.location.pathname;
+  return base + '#featuredpartner';
+}
 
+function fpShareTitle() {
+  const titleEl = document.querySelector('#featuredpartner h1');
+  return titleEl?.textContent?.trim() || 'Featured Partner on Pass It Forward';
+}
+
+function fpShareText() {
+  const title = fpShareTitle();
+  return `Real opportunity listed on Pass It Forward: ${title}. View it here:`;
+}
+
+function fpShareOnX() {
+  const url = fpShareUrl();
+  const text = fpShareText();
+  const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+  window.open(xUrl, '_blank', 'noopener,noreferrer');
+}
+
+async function fpCopyPartnerLink() {
+  const url = fpShareUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Advert link copied ✅');
+  } catch (e) {
+    console.error('[featured-partner] copy link failed', e);
+    showToast('Copy failed');
+  }
+}
+
+async function fpNativeShare() {
+  const url = fpShareUrl();
+  const title = fpShareTitle();
+  const text = fpShareText();
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      return;
+    } catch (e) {
+      if (e?.name === 'AbortError') return;
+      console.error('[featured-partner] native share failed', e);
+    }
+  }
+
+  await fpCopyPartnerLink();
+}
 // -- XP SYSTEM -----------------------------
 function getXp(){return  parseInt(localStorage.getItem('pf_xp_'+(currentUser?.handle||'x'))||'0');}
 
