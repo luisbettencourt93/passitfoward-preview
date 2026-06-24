@@ -4947,7 +4947,9 @@ body.light .nr-state-unread { color:#059669; }
       <input id="ad-handle" aria-label="Your handle" type="text" placeholder="@handle or email" class="form-input" style="margin-bottom:0.6rem;">
       <input id="ad-what" aria-label="Ad title" type="text" placeholder="What are you advertising?" class="form-input" style="margin-bottom:0.6rem;">
       <textarea id="ad-desc" aria-label="Ad description" placeholder="Tell us about it — what makes it worth promoting?" class="form-input" style="height:80px;resize:vertical;margin-bottom:0.6rem;"></textarea>
-      <input id="ad-link" aria-label="Ad link URL" type="url" placeholder="Link (website, product)" class="form-input" style="margin-bottom:0.6rem;">
+      <input id="ad-link" aria-label="Ad link URL" type="url" placeholder="Website URL (optional, https://...)" class="form-input" style="margin-bottom:0.6rem;">
+      <input id="ad-phone" aria-label="Contact phone" type="tel" placeholder="Contact phone (e.g. +66 967 871 631)" class="form-input" style="margin-bottom:0.6rem;">
+      <input id="ad-contact" aria-label="Contact name" type="text" placeholder="Contact name (optional)" class="form-input" style="margin-bottom:0.6rem;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-bottom:0.8rem;">
         <select id="ad-package" aria-label="Ad package" class="form-input form-select" style="margin:0;">
           <option value="">Select package</option>
@@ -11675,17 +11677,34 @@ async function loadFeaturedPartner() {
     <!-- VIDEO (if set) -->
     ${partner.youtube_url ? `<div style="border-radius:16px;overflow:hidden;margin-bottom:16px;border:1px solid #2d4f6f;"><div style="position:relative;padding-bottom:56.25%;background:#0a0f1e;"><iframe src="${sanitize(partner.youtube_url.replace('watch?v=','embed/').replace('youtu.be/','youtube.com/embed/'))}" style="position:absolute;inset:0;width:100%;height:100%;border:none;" allowfullscreen></iframe></div></div>` : ''}
 
-    <!-- WEBSITE LINK -->
-    ${partner.link ? `<a href="${sanitize(partner.link)}" target="_blank" style="display:block;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:16px;text-align:center;text-decoration:none;margin-bottom:16px;">
-      <div style="font-size:14px;font-weight:700;color:#ef4444;margin-bottom:4px;">Visit Website →</div>
-      <div style="font-size:12px;color:#5a7a9a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sanitize(partner.link)}</div>
+   <!-- CONTACT / ACTION CARD -->
+${(partner.phone || (partner.link && /^https?:\/\//i.test(partner.link))) ? `
+<div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:16px;padding:20px;margin-bottom:16px;">
+  ${partner.contact_name ? `<div style="font-size:12px;color:#5a7a9a;margin-bottom:12px;">Contact: <span style="color:#e8f0f8;font-weight:600;">${sanitize(partner.contact_name)}</span></div>` : ''}
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    ${partner.phone ? `<a href="tel:${sanitize(partner.phone)}" style="flex:1;min-width:130px;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.3);border-radius:10px;padding:13px;text-decoration:none;">
+      <i class="fas fa-phone" style="color:#2dd4a0;font-size:13px;"></i>
+      <span style="font-size:13px;font-weight:700;color:#2dd4a0;">Call</span>
     </a>` : ''}
+    ${partner.phone ? `<a href="https://wa.me/${sanitize(partner.phone.replace(/[^0-9]/g,''))}" target="_blank" rel="noopener" style="flex:1;min-width:130px;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);border-radius:10px;padding:13px;text-decoration:none;">
+      <i class="fab fa-whatsapp" style="color:#25d366;font-size:15px;"></i>
+      <span style="font-size:13px;font-weight:700;color:#25d366;">WhatsApp</span>
+    </a>` : ''}
+    ${(partner.link && /^https?:\/\//i.test(partner.link)) ? `<a href="${sanitize(partner.link)}" target="_blank" rel="noopener" style="flex:1;min-width:130px;display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:13px;text-decoration:none;">
+      <i class="fas fa-globe" style="color:#ef4444;font-size:13px;"></i>
+      <span style="font-size:13px;font-weight:700;color:#ef4444;">Visit Website</span>
+    </a>` : ''}
+  </div>
+  ${partner.phone ? `<div style="font-size:12px;color:#5a7a9a;margin-top:12px;text-align:center;">${sanitize(partner.phone)}${partner.contact_name ? ' ('+sanitize(partner.contact_name)+')' : ''}</div>` : ''}
+</div>` : ''}
 
     <!-- OWNER EDIT PANEL -->
     ${isOwner ? `<div style="background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:20px;margin-bottom:16px;">
       <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:12px;">✏️ Edit Your Featured Page</div>
       <textarea id="fp-edit-desc" aria-label="Description" class="form-input" style="height:100px;resize:vertical;margin-bottom:8px;" placeholder="Your description — tell the community about your brand">${sanitize(partner.description)}</textarea>
-      <input id="fp-edit-link" aria-label="Website link" class="form-input" style="margin-bottom:8px;" placeholder="Website link" value="${sanitize(partner.link||'')}">
+      <input id="fp-edit-phone" aria-label="Phone number" class="form-input" style="margin-bottom:8px;" placeholder="Phone (e.g. +66 967 871 631)" value="${sanitize(partner.phone||'')}">
+      <input id="fp-edit-contact" aria-label="Contact name" class="form-input" style="margin-bottom:8px;" placeholder="Contact name (e.g. Maya)" value="${sanitize(partner.contact_name||'')}">
+      <input id="fp-edit-link" aria-label="Website link" class="form-input" style="margin-bottom:8px;" placeholder="Website URL (https://...)" value="${sanitize(partner.link||'')}">
       <input id="fp-edit-youtube" aria-label="YouTube URL" class="form-input" style="margin-bottom:10px;" placeholder="YouTube video URL (optional)" value="${sanitize(partner.youtube_url||'')}">
       <button onclick="savePartnerEdits(${partner.id})" style="width:100%;background:#f59e0b;color:#0d1520;border:none;padding:12px;border-radius:10px;font:700 14px/1 'Inter',sans-serif;cursor:pointer;">Save Changes</button>
     </div>` : ''}
@@ -11746,10 +11765,22 @@ async function savePartnerEdits(id) {
   const desc = document.getElementById('fp-edit-desc')?.value.trim();
   const link = document.getElementById('fp-edit-link')?.value.trim();
   const youtube = document.getElementById('fp-edit-youtube')?.value.trim();
+  const phone = document.getElementById('fp-edit-phone')?.value.trim();
+  const contact = document.getElementById('fp-edit-contact')?.value.trim();
+
   if(!desc) return showToast("Description can't be empty");
-  const updates = { description: desc, link: link || '', youtube_url: youtube || '' };
+
+  const updates = {
+    description: desc,
+    link: link || null,
+    youtube_url: youtube || null,
+    phone: phone || null,
+    contact_name: contact || null
+  };
+
   const { error } = await sb.from('ad_submissions').update(updates).eq('id',id).eq('user_id',currentUser.id);
   if(error) return showToast("Error: "+error.message);
+
   showToast("Changes saved ✅");
   loadFeaturedPartner();
 }
@@ -13846,6 +13877,8 @@ async function submitAdEnquiry() {
   const what = document.getElementById('ad-what').value.trim();
   const desc = document.getElementById('ad-desc').value.trim();
   const link = document.getElementById('ad-link').value.trim();
+  const phone = document.getElementById('ad-phone')?.value.trim() || '';
+  const contact = document.getElementById('ad-contact')?.value.trim() || '';
   const tier = _selectedAdTier || document.getElementById('ad-package').value;
   const budget = document.getElementById('ad-budget').value;
   if(!name) return showToast("Enter your name or brand");
@@ -13855,9 +13888,10 @@ async function submitAdEnquiry() {
   if(sb && !currentUser.id.startsWith('demo-')) {
     const freshUid = await getFreshUid(); if(!freshUid) return;
     const { error } = await sb.from('ad_submissions').insert({
-      name, handle, title: what, description: desc, link, tier, budget,
-      user_id: freshUid, status: 'pending'
-    });
+  name, handle, title: what, description: desc, link: link || null,
+  phone: phone || null, contact_name: contact || null,
+  tier, budget, user_id: freshUid, status: 'pending'
+});
     if(error) return showToast("Error: " + error.message);
   }
   const t = AD_TIERS[tier];
