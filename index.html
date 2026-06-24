@@ -11668,7 +11668,13 @@ async function loadFeaturedPartner() {
       <h2 style="font-family:'Space Grotesk',sans-serif;font-size:1.8rem;font-weight:700;color:white;margin-bottom:6px;">${sanitize(partner.name || partner.title)}</h2>
       <p style="color:#5a7a9a;font-size:13px;">by <span style="color:#2dd4a0;font-weight:600;">${sanitize(partner.handle)}</span></p>
     </div>
-
+     <!-- ADVERT IMAGES (cover + supporting, each shown only if present) -->
+    ${partner.cover_image_url ? `<div style="border-radius:16px;overflow:hidden;margin-bottom:16px;border:1px solid #2d4f6f;background:#0a0f1e;">
+      <img src="${sanitize(partner.cover_image_url)}" alt="${sanitize(partner.name || partner.title)}" style="display:block;width:100%;height:auto;max-height:420px;object-fit:cover;" loading="lazy">
+    </div>` : ''}
+    ${partner.image_2_url ? `<div style="border-radius:16px;overflow:hidden;margin-bottom:16px;border:1px solid #2d4f6f;background:#0a0f1e;">
+      <img src="${sanitize(partner.image_2_url)}" alt="${sanitize(partner.name || partner.title)} — supporting image" style="display:block;width:100%;height:auto;max-height:420px;object-fit:cover;" loading="lazy">
+    </div>` : ''}
     <!-- DESCRIPTION -->
     <div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:16px;padding:28px;margin-bottom:16px;">
       <div style="font-size:15px;color:#e8f0f8;line-height:1.7;white-space:pre-wrap;">${sanitize(partner.description)}</div>
