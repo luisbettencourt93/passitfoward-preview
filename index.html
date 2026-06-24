@@ -11807,8 +11807,20 @@ function fpShareUrl() {
 }
 
 function fpShareTitle() {
-  const titleEl = document.querySelector('#featuredpartner h1');
-  return titleEl?.textContent?.trim() || 'Featured Partner on Pass It Forward';
+  const selectors = [
+    '#fp-content h1',
+    '#fp-content h2',
+    '#featuredpartner h1',
+    '#featuredpartner h2'
+  ];
+
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    const txt = el?.textContent?.trim();
+    if (txt) return txt;
+  }
+
+  return 'Featured Partner on Pass It Forward';
 }
 
 function fpShareText() {
@@ -11820,7 +11832,16 @@ function fpShareOnX() {
   const url = fpShareUrl();
   const text = fpShareText();
   const xUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
-  window.open(xUrl, '_blank', 'noopener,noreferrer');
+
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    window.location.href = xUrl;
+    return;
+  }
+
+  const win = window.open(xUrl, '_blank', 'noopener,noreferrer');
+  if (!win) window.location.href = xUrl;
 }
 
 async function fpCopyPartnerLink() {
