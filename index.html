@@ -11729,7 +11729,31 @@ ${(partner.phone || (partner.link && /^https?:\/\//i.test(partner.link))) ? `
       <input id="fp-edit-contact" aria-label="Contact name" class="form-input" style="margin-bottom:8px;" placeholder="Contact name (e.g. Maya)" value="${sanitize(partner.contact_name||'')}">
       <input id="fp-edit-link" aria-label="Website link" class="form-input" style="margin-bottom:8px;" placeholder="Website URL (https://...)" value="${sanitize(partner.link||'')}">
       <input id="fp-edit-youtube" aria-label="YouTube URL" class="form-input" style="margin-bottom:10px;" placeholder="YouTube video URL (optional)" value="${sanitize(partner.youtube_url||'')}">
-      <button onclick="savePartnerEdits(${partner.id})" style="width:100%;background:#f59e0b;color:#0d1520;border:none;padding:12px;border-radius:10px;font:700 14px/1 'Inter',sans-serif;cursor:pointer;">Save Changes</button>
+
+<div style="margin-bottom:12px;">
+  <div style="font-size:12px;color:#5a7a9a;margin-bottom:8px;">Advert images (JPG/PNG/WebP, max 2MB each)</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">Cover image</div>
+      <div id="fp-img-preview-cover">${partner.cover_image_url ? `<img src="${sanitize(partner.cover_image_url)}" style="display:block;width:100%;height:120px;object-fit:cover;border-radius:8px;" alt="cover">` : `<div style="height:120px;display:flex;align-items:center;justify-content:center;color:#5a7a9a;font-size:12px;border:1px dashed #2d4f6f;border-radius:8px;">No image</div>`}</div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button type="button" onclick="advertImagePick('cover')" style="flex:1;background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:7px;border-radius:7px;font:600 11px/1 'Inter',sans-serif;cursor:pointer;">Upload / Replace</button>
+        ${partner.cover_image_url ? `<button type="button" onclick="advertImageRemove('cover')" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:7px 10px;border-radius:7px;font:600 11px/1 'Inter',sans-serif;cursor:pointer;">Remove</button>` : ''}
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px;">Second image</div>
+      <div id="fp-img-preview-image2">${partner.image_2_url ? `<img src="${sanitize(partner.image_2_url)}" style="display:block;width:100%;height:120px;object-fit:cover;border-radius:8px;" alt="second">` : `<div style="height:120px;display:flex;align-items:center;justify-content:center;color:#5a7a9a;font-size:12px;border:1px dashed #2d4f6f;border-radius:8px;">No image</div>`}</div>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button type="button" onclick="advertImagePick('image2')" style="flex:1;background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:7px;border-radius:7px;font:600 11px/1 'Inter',sans-serif;cursor:pointer;">Upload / Replace</button>
+        ${partner.image_2_url ? `<button type="button" onclick="advertImageRemove('image2')" style="background:none;border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:7px 10px;border-radius:7px;font:600 11px/1 'Inter',sans-serif;cursor:pointer;">Remove</button>` : ''}
+      </div>
+    </div>
+  </div>
+</div>
+
+<button onclick="savePartnerEdits(${partner.id})" style="width:100%;background:#f59e0b;color:#0d1520;border:none;padding:12px;border-radius:10px;font:700 14px/1 'Inter',sans-serif;cursor:pointer;">Save Changes</button>
     </div>` : ''}
 
     <!-- TRUST BADGES -->
@@ -11783,6 +11807,54 @@ async function removeCurrentPartner() {
   loadFeaturedPartner();
 }
 
+// ── Stage 4.3: advert image upload (owner-edit, upload-on-Save) ──────
+// Holds picked-but-not-yet-uploaded files between pick and Save.
+// 'cover'/'image2' -> File (to upload) | 'REMOVE' (to delete) | null (no change)
+let _advertPendingImages = { cover: null, image2: null };
+
+// Open device picker, validate, show LOCAL preview (no upload yet).
+function advertImagePick(slot) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp';
+  input.onchange = function() {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const okTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (okTypes.indexOf(file.type) === -1) { showToast('Only JPG, PNG, or WebP allowed'); return; }
+    if (file.size > 2097152) { showToast('Image must be under 2MB'); return; }
+    _advertPendingImages[slot] = file;
+    const previewEl = document.getElementById('fp-img-preview-' + slot);
+    if (previewEl) {
+      const url = URL.createObjectURL(file);
+      previewEl.innerHTML = '<img src="' + url + '" style="display:block;width:100%;height:120px;object-fit:cover;border-radius:8px;" alt="preview">';
+    }
+  };
+  input.click();
+}
+
+// Mark an image for removal on Save (clears preview now).
+function advertImageRemove(slot) {
+  _advertPendingImages[slot] = 'REMOVE';
+  const previewEl = document.getElementById('fp-img-preview-' + slot);
+  if (previewEl) {
+    previewEl.innerHTML = '<div style="height:120px;display:flex;align-items:center;justify-content:center;color:#5a7a9a;font-size:12px;border:1px dashed #2d4f6f;border-radius:8px;">No image</div>';
+  }
+}
+
+// Upload one image to Storage (authenticated client; RLS enforces owner-only).
+// Path: {currentUser.id}/{adId}/{slot}.{ext}. Returns public URL with cache-bust.
+async function advertUploadImage(file, adId, slot) {
+  const ext = file.type === 'image/png' ? 'png' : (file.type === 'image/webp' ? 'webp' : 'jpg');
+  const path = currentUser.id + '/' + adId + '/' + slot + '.' + ext;
+  const { error: upErr } = await sb.storage
+    .from('advert-images')
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (upErr) throw upErr;
+  const { data: urlData } = sb.storage.from('advert-images').getPublicUrl(path);
+  return urlData.publicUrl + '?v=' + Date.now();
+}
+
 async function savePartnerEdits(id) {
   if(!currentUser || !sb) return;
   const desc = document.getElementById('fp-edit-desc')?.value.trim();
@@ -11793,7 +11865,7 @@ async function savePartnerEdits(id) {
 
   if(!desc) return showToast("Description can't be empty");
 
-  const updates = {
+   const updates = {
     description: desc,
     link: link || null,
     youtube_url: youtube || null,
@@ -11801,9 +11873,31 @@ async function savePartnerEdits(id) {
     contact_name: contact || null
   };
 
+  // Stage 4.3: process pending image uploads/removals before the DB update.
+  try {
+    for (const slot of ['cover', 'image2']) {
+      const pending = _advertPendingImages[slot];
+      const col = slot === 'cover' ? 'cover_image_url' : 'image_2_url';
+      if (pending === 'REMOVE') {
+        // Delete any existing file, try all extensions best-effort, then null the column.
+        for (const e of ['jpg', 'png', 'webp']) {
+          await sb.storage.from('advert-images')
+            .remove([currentUser.id + '/' + id + '/' + slot + '.' + e]).catch(function(){});
+        }
+        updates[col] = null;
+      } else if (pending instanceof File) {
+        updates[col] = await advertUploadImage(pending, id, slot);
+      }
+      // else null: no change to this image slot.
+    }
+  } catch (e) {
+    return showToast('Image upload failed: ' + (e?.message || 'unknown'));
+  }
+
   const { error } = await sb.from('ad_submissions').update(updates).eq('id',id).eq('user_id',currentUser.id);
   if(error) return showToast("Error: "+error.message);
 
+  _advertPendingImages = { cover: null, image2: null };
   showToast("Changes saved ✅");
   loadFeaturedPartner();
 }
