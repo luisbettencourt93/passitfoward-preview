@@ -1784,7 +1784,88 @@ body.light .nr-state-unread { color:#059669; }
   padding: 8px 4px;
 }
 .nexar-input::placeholder { color: #5a7a9a; }
-.nexar-send {
+.nexar-input::placeholder { color: #5a7a9a; }
+
+/* ── Pipeline Follow-up Focus Mode ─────────────────────────────── */
+.np-focus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(45,212,160,0.12), rgba(45,127,212,0.10));
+  border: 1px solid rgba(45,212,160,0.35);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.np-focus-banner-text { display: flex; flex-direction: column; gap: 2px; }
+.np-focus-banner-title {
+  font-size: 13px; font-weight: 700; color: #2dd4a0; letter-spacing: 0.2px;
+}
+.np-focus-banner-sub { font-size: 12px; color: #94a3b8; }
+.np-focus-exit {
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid #2d4f6f;
+  color: #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.np-focus-exit:hover { background: rgba(255,255,255,0.08); border-color: #3d6f9f; }
+
+.np-card-focus {
+  border: 1px solid rgba(45,212,160,0.55) !important;
+  box-shadow: 0 0 0 1px rgba(45,212,160,0.25), 0 4px 18px rgba(45,212,160,0.12);
+  background: rgba(45,212,160,0.04);
+}
+.np-focus-chip {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #2dd4a0;
+  background: rgba(45,212,160,0.12);
+  border: 1px solid rgba(45,212,160,0.35);
+  border-radius: 5px;
+  padding: 3px 8px;
+  width: fit-content;
+}
+.np-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.np-focus-btn {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #2d4f6f;
+  color: #cbd5e1;
+  padding: 8px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.np-focus-btn:hover { background: rgba(255,255,255,0.07); border-color: #3d6f9f; }
+.np-focus-btn.primary {
+  background: rgba(45,212,160,0.12);
+  border-color: rgba(45,212,160,0.45);
+  color: #2dd4a0;
+}
+.np-focus-btn.primary:hover { background: rgba(45,212,160,0.20); }
+.np-focus-btn.danger { color: #f87171; border-color: rgba(248,113,113,0.35); }
+.np-focus-btn.danger:hover { background: rgba(248,113,113,0.12); border-color: rgba(248,113,113,0.55); }
+  .nexar-send {
   width: 38px; height: 38px;
   background: #2dd4a0;
   color: #0a0f1e;
@@ -10249,10 +10330,17 @@ async function ccBuildNexarContext() {
       if (typeof nexarComputePipelineReminders === 'function') {
         var rem = await nexarComputePipelineReminders();
         if (rem && rem.count > 0) {
-          ctx.pipeline_reminders = {
-            count: rem.count,
-            items: rem.items
-          };
+         ctx.pipeline_reminders = {
+         count: rem.count,
+         items: (rem.items || []).map(function(it) {
+         return {
+      title: it.title,
+      company: it.company,
+      status: it.status,
+      days_stale: it.days_stale
+    };
+  })
+};
         }
       }
     } catch (e) {}
@@ -10359,10 +10447,13 @@ async function ccRenderNeedsAttention() {
           ? '1 pipeline follow-up waiting'
           : remRes.count + ' pipeline follow-ups waiting';
 
-        var remItem = ccBuildAttentionItem('pipeline-reminders', remMsg, function() {
-          if (typeof switchTab === 'function') switchTab('nexar');
-          if (typeof nexarSwitchView === 'function') nexarSwitchView('pipeline');
-        });
+       var remItem = ccBuildAttentionItem('pipeline-reminders', remMsg, function() {
+  // Enter Follow-up Focus Mode: capture the stale ids, then open Pipeline.
+  _pipelineFocusIds = (remRes.items || []).map(function(i) { return i.id; }).filter(Boolean);
+  _pipelineFocusMode = _pipelineFocusIds.length > 0;
+  if (typeof switchTab === 'function') switchTab('nexar');
+  if (typeof nexarSwitchView === 'function') nexarSwitchView('pipeline');
+});
 
         container.appendChild(remItem);
       }
@@ -16522,6 +16613,7 @@ async function nexarComputePipelineReminders() {
 
       if (daysStale >= threshold) {
         stale.push({
+         id: row.id,
           title: row.title ? String(row.title).slice(0, 120) : '(untitled)',
           company: row.company ? String(row.company).slice(0, 120) : '',
           status: row.status,
@@ -16542,6 +16634,8 @@ async function nexarComputePipelineReminders() {
   }
 }
 let _pipelineFilter = 'all';
+let _pipelineFocusMode = false;   // Follow-up Focus Mode active?
+let _pipelineFocusIds = [];       // pipeline_ids of stale entries to highlight
 
 async function nexarSwitchView(view) {
   const tabChat  = document.getElementById('nexar-subtab-chat');
@@ -16599,6 +16693,9 @@ async function nexarPipelineLoad() {
 
 function nexarPipelineFilter(status) {
   _pipelineFilter = status;
+  // Choosing a filter exits Follow-up Focus Mode.
+  _pipelineFocusMode = false;
+  _pipelineFocusIds = [];
   document.querySelectorAll('#np-chips .np-chip').forEach(c => {
     c.classList.toggle('active', c.dataset.status === status);
   });
@@ -16622,45 +16719,159 @@ function nexarPipelineRender() {
   const empty = document.getElementById('np-empty');
   if (!list || !empty) return;
 
-  const filtered = _pipelineFilter === 'all'
-    ? _pipelineCache
+  const focusSet = (_pipelineFocusMode && _pipelineFocusIds.length)
+    ? new Set(_pipelineFocusIds)
+    : null;
+
+  let filtered = _pipelineFilter === 'all'
+    ? _pipelineCache.slice()
     : _pipelineCache.filter(j => j.status === _pipelineFilter);
 
+  if (focusSet) {
+    filtered.sort((a, b) => {
+      const af = focusSet.has(a.id) ? 0 : 1;
+      const bf = focusSet.has(b.id) ? 0 : 1;
+      return af - bf;
+    });
+  }
+
   list.innerHTML = '';
+
+  if (focusSet) {
+    const focusedCount = _pipelineCache.filter(j => focusSet.has(j.id)).length;
+    const banner = document.createElement('div');
+    banner.className = 'np-focus-banner';
+
+    const bText = document.createElement('div');
+    bText.className = 'np-focus-banner-text';
+
+    if (focusedCount <= 1) {
+      bText.innerHTML = '<span class="np-focus-banner-title">Follow-up needed</span>'
+        + '<span class="np-focus-banner-sub">This item has had no update — time for a nudge.</span>';
+    } else {
+      bText.innerHTML = '<span class="np-focus-banner-title">' + focusedCount + ' follow-ups need action</span>'
+        + '<span class="np-focus-banner-sub">These items have gone quiet — pick one to move forward.</span>';
+    }
+
+    const bExit = document.createElement('button');
+    bExit.className = 'np-focus-exit';
+    bExit.textContent = 'Show all';
+    bExit.onclick = () => nexarPipelineExitFocus();
+
+    banner.appendChild(bText);
+    banner.appendChild(bExit);
+    list.appendChild(banner);
+  }
+
   if (!filtered.length) { empty.style.display = 'flex'; return; }
   empty.style.display = 'none';
 
   for (const job of filtered) {
-    const card = document.createElement('div'); card.className = 'np-card';
+    const isFocused = focusSet && focusSet.has(job.id);
 
-    const head = document.createElement('div'); head.className = 'np-card-head';
-    const wrap = document.createElement('div'); wrap.className = 'np-card-title-wrap';
-    const t = document.createElement('div'); t.className = 'np-card-title'; t.textContent = job.title || '(no title)';
-    const c = document.createElement('div'); c.className = 'np-card-company'; c.textContent = job.company || '';
-    wrap.appendChild(t); wrap.appendChild(c);
-    const status = document.createElement('span'); status.className = 'np-status';
-    status.dataset.status = job.status; status.textContent = (job.status || '').toUpperCase();
-    head.appendChild(wrap); head.appendChild(status);
+    const card = document.createElement('div');
+    card.className = isFocused ? 'np-card np-card-focus' : 'np-card';
+
+    const head = document.createElement('div');
+    head.className = 'np-card-head';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'np-card-title-wrap';
+
+    const t = document.createElement('div');
+    t.className = 'np-card-title';
+    t.textContent = job.title || '(no title)';
+
+    const c = document.createElement('div');
+    c.className = 'np-card-company';
+    c.textContent = job.company || '';
+
+    wrap.appendChild(t);
+    wrap.appendChild(c);
+
+    const status = document.createElement('span');
+    status.className = 'np-status';
+    status.dataset.status = job.status;
+    status.textContent = (job.status || '').toUpperCase();
+
+    head.appendChild(wrap);
+    head.appendChild(status);
     card.appendChild(head);
 
+    if (isFocused) {
+      const chip = document.createElement('div');
+      chip.className = 'np-focus-chip';
+      chip.textContent = 'FOLLOW-UP NEEDED';
+      card.appendChild(chip);
+    }
+
     if (job.notes && job.notes.trim()) {
-      const n = document.createElement('div'); n.className = 'np-card-notes'; n.textContent = job.notes;
+      const n = document.createElement('div');
+      n.className = 'np-card-notes';
+      n.textContent = job.notes;
       card.appendChild(n);
     }
 
-    const actions = document.createElement('div'); actions.className = 'np-card-actions';
-    const meta = document.createElement('div'); meta.className = 'np-card-meta';
+    const actions = document.createElement('div');
+    actions.className = 'np-card-actions';
+
+    const meta = document.createElement('div');
+    meta.className = 'np-card-meta';
     meta.textContent = nexarPipelineRelTime(job.updated_at || job.created_at);
-    const btns = document.createElement('div'); btns.className = 'np-card-buttons';
-    const eb = document.createElement('button'); eb.className = 'np-icon-btn'; eb.title = 'Edit';
+
+    const btns = document.createElement('div');
+    btns.className = 'np-card-buttons';
+
+    const eb = document.createElement('button');
+    eb.className = 'np-icon-btn';
+    eb.title = 'Edit';
     eb.innerHTML = '<i class="fas fa-pen"></i>';
     eb.onclick = () => nexarPipelineEditOpen(job.id);
-    const db = document.createElement('button'); db.className = 'np-icon-btn danger'; db.title = 'Delete';
+
+    const db = document.createElement('button');
+    db.className = 'np-icon-btn danger';
+    db.title = 'Delete';
     db.innerHTML = '<i class="fas fa-trash"></i>';
     db.onclick = () => nexarPipelineDelete(job.id);
-    btns.appendChild(eb); btns.appendChild(db);
-    actions.appendChild(meta); actions.appendChild(btns);
+
+    btns.appendChild(eb);
+    btns.appendChild(db);
+
+    actions.appendChild(meta);
+    actions.appendChild(btns);
     card.appendChild(actions);
+
+    if (isFocused) {
+      const fa = document.createElement('div');
+      fa.className = 'np-focus-actions';
+
+      const draftBtn = document.createElement('button');
+      draftBtn.className = 'np-focus-btn primary';
+      draftBtn.textContent = 'Ask NEXAR to draft follow-up';
+      draftBtn.onclick = () => nexarPipelineAskDraft(job.id);
+
+      const respBtn = document.createElement('button');
+      respBtn.className = 'np-focus-btn';
+      respBtn.textContent = 'Mark Responded';
+      respBtn.onclick = () => nexarPipelineSetStatus(job.id, 'Responded');
+
+      const intBtn = document.createElement('button');
+      intBtn.className = 'np-focus-btn';
+      intBtn.textContent = 'Mark Interview';
+      intBtn.onclick = () => nexarPipelineSetStatus(job.id, 'Interview');
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'np-focus-btn danger';
+      delBtn.textContent = 'Delete';
+      delBtn.onclick = () => nexarPipelineDelete(job.id);
+
+      fa.appendChild(draftBtn);
+      fa.appendChild(respBtn);
+      fa.appendChild(intBtn);
+      fa.appendChild(delBtn);
+
+      card.appendChild(fa);
+    }
 
     list.appendChild(card);
   }
@@ -16736,6 +16947,51 @@ async function nexarPipelineDelete(id) {
     console.error('[pipeline] delete', e);
     showToast('Delete failed');
   }
+}
+// Focus Mode: one-click status update. Mirrors nexarPipelineSave's update path
+// (status only). Refreshing updated_at clears the stale follow-up naturally, and
+// the server reminder dismisses via reconciliation on the next NEXAR run.
+async function nexarPipelineSetStatus(id, status) {
+  if (!sb || !currentUser) return;
+  const valid = ['Applied', 'Responded', 'Interview', 'Offered', 'Rejected'];
+  if (valid.indexOf(status) === -1) return;
+  try {
+    const { error } = await sb.from('nexar_pipeline')
+      .update({ status: status })
+      .eq('id', id)
+      .eq('user_id', currentUser.id);
+    if (error) throw error;
+    showToast('Marked ' + status);
+    _pipelineFocusIds = _pipelineFocusIds.filter(function(fid) { return fid !== id; });
+    if (_pipelineFocusIds.length === 0) _pipelineFocusMode = false;
+    await nexarPipelineLoad();
+    nexarPipelineRender();
+  } catch (e) {
+    console.error('[pipeline] setStatus', e);
+    showToast('Update failed: ' + (e?.message || 'unknown'));
+  }
+}
+
+// Focus Mode: hand off to NEXAR chat to draft a follow-up for this entry.
+function nexarPipelineAskDraft(id) {
+  const job = _pipelineCache.find(j => j.id === id);
+  if (!job) return;
+  if (typeof nexarSwitchView === 'function') nexarSwitchView('chat');
+  const ta = document.getElementById('nexar-input');
+  if (!ta) return;
+  const titlePart = job.title || 'this role';
+  const coPart = job.company ? (' at ' + job.company) : '';
+  ta.value = 'Draft a short, professional follow-up message for my application: '
+    + titlePart + coPart + '.';
+  if (typeof nexarAutoGrow === 'function') nexarAutoGrow(ta);
+  if (typeof nexarSend === 'function') nexarSend();
+}
+
+// Focus Mode: exit (Show all) — clear focus state and re-render normally.
+function nexarPipelineExitFocus() {
+  _pipelineFocusMode = false;
+  _pipelineFocusIds = [];
+  nexarPipelineRender();
 }
 </script>
  <script src="pif-patch.js"></script>
