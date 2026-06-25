@@ -14315,10 +14315,80 @@ async function viewMemberProfile(handle) {
       ${checkMark}
     </div>`;
   }).join('').replace(/border-bottom:1px solid rgba\(45,79,111,0\.5\);">\s*$/, '">')}</div>` : '<div style="font-size:12px;color:#5a7a9a;text-align:center;padding:12px;">No completed deals yet.</div>';
+ // --- Increment A: Track Record trust-surface precompute ---
+  const hasVerified = total > 0;
+  const hasProof = workExamples.length > 0;
+  const rateColor = rate >= 80 ? '#2dd4a0' : (rate >= 50 ? '#f59e0b' : '#ef4444');
+
+  // Trust summary: 3 metrics (delivery rate, completed deals, proof count)
+  const trackSummary = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:10px;padding:12px 8px;text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:${hasVerified ? rateColor : '#3d5a7a'};line-height:1;">${hasVerified ? rate + '%' : '—'}</div>
+        <div style="font-size:9px;color:#5a7a9a;margin-top:5px;letter-spacing:0.3px;">DELIVERY RATE</div>
+      </div>
+      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:10px;padding:12px 8px;text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:${completed > 0 ? '#2dd4a0' : '#3d5a7a'};line-height:1;">${completed}</div>
+        <div style="font-size:9px;color:#5a7a9a;margin-top:5px;letter-spacing:0.3px;">COMPLETED DEALS</div>
+      </div>
+      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:10px;padding:12px 8px;text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:${hasProof ? '#60a5fa' : '#3d5a7a'};line-height:1;">${workExamples.length}</div>
+        <div style="font-size:9px;color:#5a7a9a;margin-top:5px;letter-spacing:0.3px;">PROOF OF WORK</div>
+      </div>
+    </div>`;
+
+  // Verified on PIF sub-section (platform-confirmed deal outcomes)
+  const verifiedBlock = hasVerified ? `
+    <div style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <i class="fas fa-shield-check" style="font-size:11px;color:#2dd4a0;"></i>
+        <span style="font-size:11px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;">VERIFIED ON PIF</span>
+        <span style="font-size:10px;color:#5a7a9a;">· confirmed by completed deals</span>
+      </div>
+      ${dealsHtml}
+      ${failed > 0 ? `<div style="margin-top:6px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">⚠️ ${failed} failed deal${failed>1?'s':''} on record</div>` : ''}
+    </div>` : '';
+
+  // Proof of Work sub-section (self-submitted work_examples)
+  const proofBlock = hasProof ? `
+    <div id="member-work-section" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <i class="fas fa-folder-open" style="font-size:11px;color:#60a5fa;"></i>
+        <span style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;">PROOF OF WORK</span>
+        <span style="font-size:10px;color:#5a7a9a;">· self-submitted</span>
+      </div>
+      ${!hasVerified ? `<div style="font-size:10px;color:#f59e0b;margin-bottom:8px;padding:7px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:7px;">No completed PIF deals yet — the proof below is self-reported, not platform-verified.</div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${workExamples.map(we => `
+          <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:10px 12px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
+              <span style="font-size:13px;font-weight:700;color:#e8f0f8;">${sanitize(we.title)}</span>
+              <span style="font-size:9px;background:rgba(96,165,250,0.15);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;">${sanitize(we.category)}</span>
+            </div>
+            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(we.image_url)}','_blank','noopener,noreferrer');" title="Click to view full image" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;" alt="">` : ''}${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;line-height:1.45;">${sanitize(we.description)}</div>` : ''}
+            ${we.outcome ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;font-weight:600;margin-bottom:6px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
+            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:500;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:14px;margin-top:2px;">
+              <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
+              ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : '';
+
+  // Empty state: neither verified deals nor self-submitted proof
+  const trackEmpty = (!hasVerified && !hasProof) ? `
+    <div style="background:rgba(255,255,255,0.02);border:1px dashed #2d4f6f;border-radius:10px;padding:18px 14px;text-align:center;margin-bottom:14px;">
+      <i class="fas fa-clipboard-list" style="font-size:18px;color:#3d5a7a;margin-bottom:8px;"></i>
+      <div style="font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:4px;">No track record yet</div>
+      <div style="font-size:11px;color:#5a7a9a;line-height:1.5;">This member hasn't completed any PIF deals or added proof of work. Consider starting with a smaller, lower-stake deal to build mutual trust.</div>
+    </div>` : '';
 
   content.innerHTML = `
     <!-- HEADER: avatar left, info right -->
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
+ 
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px;">
       <div style="width:52px;height:52px;border-radius:50%;background:${tier.abg};border:3px solid ${tier.aborder};display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:${tier.color};flex-shrink:0;position:relative;overflow:visible;">${avInner}${onlineDot}</div>
       <div style="flex:1;min-width:0;">
         <div style="font-size:15px;font-weight:700;color:#e8f0f8;">${pifRenderPublicNameBlock(profile || handle)}</div>
@@ -14348,12 +14418,16 @@ async function viewMemberProfile(handle) {
     Support not set up yet
   </button>
 `}
-    <!-- 4 STAT CARDS -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;">
-      <div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;"><div style="font-size:16px;font-weight:700;color:${tier.color};">${xp.toLocaleString()}</div><div style="font-size:9px;color:#5a7a9a;">XP</div></div>
-      <div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;"><div style="font-size:16px;font-weight:700;color:#e8f0f8;">${total}</div><div style="font-size:9px;color:#5a7a9a;">Deals</div></div>
-      <div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;"><div style="font-size:16px;font-weight:700;color:#2dd4a0;">${completed}</div><div style="font-size:9px;color:#5a7a9a;">Done</div></div>
-      <div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:8px;padding:8px;text-align:center;"><div style="font-size:16px;font-weight:700;color:${rate>=80?'#2dd4a0':rate>=50?'#f59e0b':'#ef4444'};">${total>0?rate+'%':'—'}</div><div style="font-size:9px;color:#5a7a9a;">Rate</div></div>
+   <!-- ⭐ TRACK RECORD (Increment A — unified trust surface) -->
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
+        <i class="fas fa-award" style="font-size:14px;color:#f59e0b;"></i>
+        <span style="font-size:14px;font-weight:800;color:#e8f0f8;letter-spacing:0.2px;">Track Record</span>
+      </div>
+      ${trackSummary}
+      ${verifiedBlock}
+      ${proofBlock}
+      ${trackEmpty}
     </div>
 
     <!-- SKILLS -->
@@ -14363,28 +14437,7 @@ async function viewMemberProfile(handle) {
       <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Looking for</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;">${intents.map(it=>`<span style="font-size:11px;padding:3px 10px;border-radius:12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);color:#60a5fa;font-weight:600;">${sanitize(it)}</span>`).join('')}</div>
     </div>` : ''}
-        <!-- WORK EXAMPLES (Phase 2 V1) -->
-    ${workExamples.length ? `<div id="member-work-section" style="margin-bottom:14px;">
-      <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Work</div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        ${workExamples.map(we => `
-                   <div style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.25);border-radius:8px;padding:10px 12px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
-              <span style="font-size:13px;font-weight:700;color:#e8f0f8;">${sanitize(we.title)}</span>
-              <span style="font-size:9px;background:rgba(45,212,160,0.15);color:#2dd4a0;padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;">${sanitize(we.category)}</span>
-            </div>
-            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(we.image_url)}','_blank','noopener,noreferrer');" title="Click to view full image" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;" alt="">` : ''}            ${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;line-height:1.45;">${sanitize(we.description)}</div>` : ''}
-            ${we.outcome ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;font-weight:600;margin-bottom:6px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
-            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:500;">${sanitize(s)}</span>`).join('')}</div>` : ''}
-            <div style="display:flex;align-items:center;gap:14px;margin-top:2px;">
-              <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
-              ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>` : ''}
-    <!-- PAYMENT METHODS -->
+    <!-- PAYMENT METHODS (moved below Track Record — transactional, not trust) -->
     ${(profile?.stripe_link || profile?.usdt_address) ? `<div style="margin-bottom:14px;">
       <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Payment methods</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -14392,13 +14445,6 @@ async function viewMemberProfile(handle) {
         ${profile?.usdt_address ? `<button onclick="navigator.clipboard.writeText('${sanitize(profile.usdt_address)}');showToast('USDT address copied!')" style="flex:1;display:flex;align-items:center;gap:6px;padding:8px 12px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.15);border-radius:8px;font-size:11px;color:#2dd4a0;font-weight:600;cursor:pointer;">💰 Copy USDT</button>` : ''}
       </div>
     </div>` : ''}
-
-    <!-- RECENT DEALS -->
-    <div style="margin-bottom:14px;">
-      <div style="font-size:11px;color:#5a7a9a;margin-bottom:6px;font-weight:600;">Recent deals</div>
-      ${dealsHtml}
-      ${failed > 0 ? `<div style="margin-top:6px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">⚠️ ${failed} strike${failed>1?'s':''} on record</div>` : ''}
-    </div>
   `;
 }
   
