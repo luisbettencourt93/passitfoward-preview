@@ -14320,69 +14320,83 @@ async function viewMemberProfile(handle) {
   const hasProof = workExamples.length > 0;
   const rateColor = rate >= 80 ? '#2dd4a0' : (rate >= 50 ? '#f59e0b' : '#ef4444');
 
-  // Trust summary: 3 metrics (delivery rate, completed deals, proof count)
+  
+  // A2: premium trust-summary cards — delivery rate as hero, all elevated.
   const trackSummary = `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
-      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:10px;padding:12px 8px;text-align:center;">
-        <div style="font-size:20px;font-weight:800;color:${hasVerified ? rateColor : '#3d5a7a'};line-height:1;">${hasVerified ? rate + '%' : '—'}</div>
-        <div style="font-size:9px;color:#5a7a9a;margin-top:5px;letter-spacing:0.3px;">DELIVERY RATE</div>
+    <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="background:linear-gradient(160deg,#13243a,#0c1626);border:1px solid ${hasVerified ? (rate>=80?'rgba(45,212,160,0.4)':rate>=50?'rgba(245,158,11,0.4)':'rgba(239,68,68,0.4)') : '#2d4f6f'};border-radius:13px;padding:15px 10px;text-align:center;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
+        <div style="font-size:30px;font-weight:800;color:${hasVerified ? rateColor : '#3d5a7a'};line-height:0.95;letter-spacing:-0.5px;">${hasVerified ? rate + '<span style="font-size:17px;font-weight:700;">%</span>' : '—'}</div>
+        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:1.2px;font-weight:700;">DELIVERY RATE</div>
       </div>
-      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:10px;padding:12px 8px;text-align:center;">
-        <div style="font-size:20px;font-weight:800;color:${completed > 0 ? '#2dd4a0' : '#3d5a7a'};line-height:1;">${completed}</div>
-        <div style="font-size:9px;color:#5a7a9a;margin-top:5px;letter-spacing:0.3px;">COMPLETED DEALS</div>
+      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:13px;padding:15px 8px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
+        <div style="font-size:26px;font-weight:800;color:${completed > 0 ? '#2dd4a0' : '#3d5a7a'};line-height:0.95;">${completed}</div>
+        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:0.8px;font-weight:700;">COMPLETED<br>DEALS</div>
       </div>
-      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:10px;padding:12px 8px;text-align:center;">
-        <div style="font-size:20px;font-weight:800;color:${hasProof ? '#60a5fa' : '#3d5a7a'};line-height:1;">${workExamples.length}</div>
-        <div style="font-size:9px;color:#5a7a9a;margin-top:5px;letter-spacing:0.3px;">PROOF OF WORK</div>
+      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:13px;padding:15px 8px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
+        <div style="font-size:26px;font-weight:800;color:${hasProof ? '#60a5fa' : '#3d5a7a'};line-height:0.95;">${workExamples.length}</div>
+        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:0.8px;font-weight:700;">PROOF OF<br>WORK</div>
       </div>
     </div>`;
 
-  // Verified on PIF sub-section (platform-confirmed deal outcomes)
+  // A2: Verified on PIF — authoritative platform-confirmed zone (green-tinted).
   const verifiedBlock = hasVerified ? `
-    <div style="margin-bottom:14px;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-        <i class="fas fa-shield-check" style="font-size:11px;color:#2dd4a0;"></i>
-        <span style="font-size:11px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;">VERIFIED ON PIF</span>
-        <span style="font-size:10px;color:#5a7a9a;">· confirmed by completed deals</span>
+    <div style="background:rgba(45,212,160,0.03);border:1px solid rgba(45,212,160,0.18);border-radius:13px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <div style="width:26px;height:26px;border-radius:8px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-shield-check" style="font-size:12px;color:#2dd4a0;"></i>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:#2dd4a0;font-weight:800;letter-spacing:0.3px;">Verified on PIF</div>
+          <div style="font-size:9.5px;color:#5a7a9a;">Outcomes confirmed through completed deals</div>
+        </div>
       </div>
       ${dealsHtml}
-      ${failed > 0 ? `<div style="margin-top:6px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">⚠️ ${failed} failed deal${failed>1?'s':''} on record</div>` : ''}
+      ${failed > 0 ? `<div style="margin-top:8px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">${failed} failed deal${failed>1?'s':''} on record</div>` : ''}
     </div>` : '';
 
-  // Proof of Work sub-section (self-submitted work_examples)
+  // A2: Proof of Work — self-submitted evidence zone (blue-tinted, case-study cards).
   const proofBlock = hasProof ? `
-    <div id="member-work-section" style="margin-bottom:14px;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-        <i class="fas fa-folder-open" style="font-size:11px;color:#60a5fa;"></i>
-        <span style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;">PROOF OF WORK</span>
-        <span style="font-size:10px;color:#5a7a9a;">· self-submitted</span>
+    <div id="member-work-section" style="background:rgba(96,165,250,0.03);border:1px solid rgba(96,165,250,0.18);border-radius:13px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:26px;height:26px;border-radius:8px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-folder-open" style="font-size:12px;color:#60a5fa;"></i>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:#94a3b8;font-weight:800;letter-spacing:0.3px;">Proof of Work</div>
+          <div style="font-size:9.5px;color:#5a7a9a;">Work evidence submitted by this member</div>
+        </div>
       </div>
-      ${!hasVerified ? `<div style="font-size:10px;color:#f59e0b;margin-bottom:8px;padding:7px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.15);border-radius:7px;">No completed PIF deals yet — the proof below is self-reported, not platform-verified.</div>` : ''}
-      <div style="display:flex;flex-direction:column;gap:8px;">
+      ${!hasVerified ? `<div style="display:flex;gap:9px;align-items:flex-start;font-size:10.5px;margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,0.025);border:1px solid #2d4f6f;border-radius:9px;">
+        <i class="fas fa-circle-info" style="font-size:12px;color:#7d9bbb;margin-top:1px;flex-shrink:0;"></i>
+        <div><div style="color:#cbd5e1;font-weight:700;margin-bottom:2px;">Proof added — not yet PIF verified</div><div style="color:#7d9bbb;line-height:1.5;">This member has added self-submitted work evidence. They have not completed a verified PIF deal yet.</div></div>
+      </div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:10px;">
         ${workExamples.map(we => `
-          <div style="background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.2);border-radius:8px;padding:10px 12px;">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;">
-              <span style="font-size:13px;font-weight:700;color:#e8f0f8;">${sanitize(we.title)}</span>
-              <span style="font-size:9px;background:rgba(96,165,250,0.15);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:600;letter-spacing:0.3px;text-transform:uppercase;">${sanitize(we.category)}</span>
+          <div style="background:#0c1626;border:1px solid #213a54;border-radius:11px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:9px;flex-wrap:wrap;">
+              <span style="font-size:14px;font-weight:800;color:#e8f0f8;line-height:1.25;">${sanitize(we.title)}</span>
+              <span style="font-size:8.5px;background:rgba(96,165,250,0.15);color:#60a5fa;padding:3px 9px;border-radius:6px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;flex-shrink:0;">${sanitize(we.category)}</span>
             </div>
-            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(we.image_url)}','_blank','noopener,noreferrer');" title="Click to view full image" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:6px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;" alt="">` : ''}${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;line-height:1.45;">${sanitize(we.description)}</div>` : ''}
-            ${we.outcome ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;font-weight:600;margin-bottom:6px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
-            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:500;">${sanitize(s)}</span>`).join('')}</div>` : ''}
-            <div style="display:flex;align-items:center;gap:14px;margin-top:2px;">
-              <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
-              ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
+            ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(we.image_url)}','_blank','noopener,noreferrer');" title="Click to view full image" style="display:block;width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.06);margin-bottom:10px;cursor:pointer;" alt="">` : ''}${we.description ? `<div style="font-size:11.5px;color:#94a3b8;margin-bottom:9px;line-height:1.55;">${sanitize(we.description)}</div>` : ''}
+            ${we.outcome ? `<div style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#2dd4a0;font-weight:700;margin-bottom:9px;padding:5px 10px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);border-radius:7px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
+            ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.1);color:#60a5fa;padding:3px 9px;border-radius:6px;font-weight:600;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:11px;border-top:1px solid rgba(255,255,255,0.05);">
+              <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#0c1626;background:#2dd4a0;padding:7px 13px;border-radius:7px;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
+              ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#60a5fa;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);padding:7px 13px;border-radius:7px;text-decoration:none;font-weight:700;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
             </div>
           </div>
         `).join('')}
       </div>
     </div>` : '';
 
-  // Empty state: neither verified deals nor self-submitted proof
+  // A2: premium designed empty state.
   const trackEmpty = (!hasVerified && !hasProof) ? `
-    <div style="background:rgba(255,255,255,0.02);border:1px dashed #2d4f6f;border-radius:10px;padding:18px 14px;text-align:center;margin-bottom:14px;">
-      <i class="fas fa-clipboard-list" style="font-size:18px;color:#3d5a7a;margin-bottom:8px;"></i>
-      <div style="font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:4px;">No track record yet</div>
-      <div style="font-size:11px;color:#5a7a9a;line-height:1.5;">This member hasn't completed any PIF deals or added proof of work. Consider starting with a smaller, lower-stake deal to build mutual trust.</div>
+    <div style="background:linear-gradient(160deg,rgba(96,165,250,0.04),rgba(45,212,160,0.02));border:1px solid #213a54;border-radius:13px;padding:26px 18px;text-align:center;margin-bottom:12px;">
+      <div style="width:46px;height:46px;border-radius:13px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+        <i class="fas fa-clipboard-list" style="font-size:20px;color:#60a5fa;"></i>
+      </div>
+      <div style="font-size:14px;color:#e8f0f8;font-weight:800;margin-bottom:6px;">No track record yet</div>
+      <div style="font-size:11.5px;color:#7d9bbb;line-height:1.6;max-width:260px;margin:0 auto;">This member hasn't completed any PIF deals or added proof of work. Consider starting with a smaller, lower-stake deal to build mutual trust.</div>
     </div>` : '';
 
   content.innerHTML = `
@@ -14418,18 +14432,22 @@ async function viewMemberProfile(handle) {
     Support not set up yet
   </button>
 `}
-   <!-- ⭐ TRACK RECORD (Increment A — unified trust surface) -->
-    <div style="margin-bottom:16px;">
-      <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
-        <i class="fas fa-award" style="font-size:14px;color:#f59e0b;"></i>
-        <span style="font-size:14px;font-weight:800;color:#e8f0f8;letter-spacing:0.2px;">Track Record</span>
+   <!-- ⭐ TRACK RECORD (Increment A2 — premium trust surface) -->
+    <div style="background:linear-gradient(170deg,#101f33,#0a1322);border:1px solid #243d57;border-radius:16px;padding:16px 15px;margin-bottom:18px;box-shadow:0 4px 20px rgba(0,0,0,0.25);">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:15px;padding-bottom:13px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(160deg,rgba(245,158,11,0.18),rgba(245,158,11,0.06));border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-award" style="font-size:16px;color:#f59e0b;"></i>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:800;color:#ffffff;letter-spacing:0.2px;line-height:1.1;">Track Record</div>
+          <div style="font-size:10.5px;color:#7d9bbb;margin-top:2px;">Verified outcomes and submitted work evidence</div>
+        </div>
       </div>
       ${trackSummary}
       ${verifiedBlock}
       ${proofBlock}
       ${trackEmpty}
     </div>
-
     <!-- SKILLS -->
     ${skills.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:14px;">${skills.map((s,i)=>`<span style="font-size:10px;padding:3px 10px;border-radius:4px;background:${tagColors[i%tagColors.length]},0.06);border:1px solid ${tagColors[i%tagColors.length]},0.12);color:${tagTextColors[i%tagTextColors.length]};">${sanitize(s)}</span>`).join('')}</div>` : ''}
         <!-- INTENTS / Looking for -->
