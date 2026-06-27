@@ -9769,7 +9769,119 @@ async function saveProofOfWork() {
   powHubRender();
   closeModal('pow-hub-modal');
 }
+// ── B2: Deal Proof Storage Helpers (storage-only, no UI) ──
+// These helpers write/read deal-linked completion proof from deal_proofs.
+// They DO NOT touch forged_deals, settlement, XP, stakes, disputes, or outcomes.
 
+function pifDealProofNormalizeHandle(handle) {
+  if (typeof pifNormalizeHandleKey === 'function') return pifNormalizeHandleKey(handle);
+  return String(handle || '').trim().replace(/^@+/, '').toLowerCase();
+}
+
+function pifDealProofCleanUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return null;
+    return raw.slice(0, 500);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Insert one deal-linked proof row.
+// RLS enforces:
+// - submitter_id = auth.uid()
+// - submitter_handle matches logged-in profile handle
+// - user is a participant in the deal
+// - deal is settled + delivered
+// - status can only be deal_linked
+async function saveDealProof(dealId, proof = {}) {
+  if (!currentUser || !sb) return { ok: false, error: 'Not ready' };
+
+  const safeDealId = Number(dealId);
+  if (!Number.isFinite(safeDealId)) {
+    return { ok: false, error: 'Invalid deal id' };
+  }
+
+  const title = String(proof.title || '').trim().slice(0, 120);
+  if (!title) return { ok: false, error: 'Title required' };
+
+  const rawLink = String(proof.link || '').trim();
+  const rawImage = String(proof.image_url || '').trim();
+
+  const link = pifDealProofCleanUrl(rawLink);
+  const imageUrl = pifDealProofCleanUrl(rawImage);
+
+  if (rawLink && !link) return { ok: false, error: 'Proof link must be a valid https URL' };
+  if (rawImage && !imageUrl) return { ok: false, error: 'Image URL must be a valid https URL' };
+
+  const row = {
+    deal_id: safeDealId,
+    submitter_id: currentUser.id,
+    submitter_handle: pifDealProofNormalizeHandle(currentUser.handle),
+    title,
+    description: String(proof.description || '').trim().slice(0, 500) || null,
+    link: link || null,
+    image_url: imageUrl || null,
+    status: 'deal_linked'
+  };
+
+  const { data, error } = await sb
+    .from('deal_proofs')
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data };
+}
+
+// Load all proofs for one deal.
+// Public read is allowed by RLS.
+async function loadDealProofs(dealId) {
+  if (!sb) return [];
+
+  const safeDealId = Number(dealId);
+  if (!Number.isFinite(safeDealId)) return [];
+
+  const { data, error } = await sb
+    .from('deal_proofs')
+    .select('*')
+    .eq('deal_id', safeDealId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.warn('loadDealProofs failed:', error.message);
+    return [];
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+// Future Track Record helper.
+// Loads proof submitted by a handle.
+async function loadDealProofsByHandle(handle) {
+  if (!sb) return [];
+
+  const normalizedHandle = pifDealProofNormalizeHandle(handle);
+  if (!normalizedHandle) return [];
+
+  const { data, error } = await sb
+    .from('deal_proofs')
+    .select('*')
+    .eq('submitter_handle', normalizedHandle)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.warn('loadDealProofsByHandle failed:', error.message);
+    return [];
+  }
+
+  return Array.isArray(data) ? data : [];
+}
 function ccOpenProfileToWork() {
   // Increment B: route the dashboard Proof of Work card to the Hub (not Edit Profile).
   showProofOfWorkHub();
