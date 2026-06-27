@@ -9638,13 +9638,141 @@ function ccActionBannerClick() {
 }
 
 
-// Open Profile modal scrolled to Work section
+
+// ── Increment B: Proof of Work Hub (self-contained, own state + DOM) ──
+// Hub-specific staging array — independent of Edit Profile's pendingWorkExamples.
+let _powHubExamples = [];
+
+function showProofOfWorkHub() {
+  if (!currentUser) return;
+  // Load current work_examples (Supabase truth via currentUser, sanitized).
+  _powHubExamples = pifSanitizeWorkExamples(currentUser.work_examples || []);
+  powHubRender();
+  powHubCancelForm(); // ensure form hidden on open
+  const modal = document.getElementById('pow-hub-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function powHubRender() {
+  const list = document.getElementById('pow-hub-list');
+  const countEl = document.getElementById('pow-hub-count');
+  const addBtn = document.getElementById('pow-hub-add-btn');
+  if (!list) return;
+
+  if (countEl) countEl.textContent = _powHubExamples.length + ' / 5';
+  if (addBtn) addBtn.style.display = _powHubExamples.length >= 5 ? 'none' : '';
+
+  if (!_powHubExamples.length) {
+    list.innerHTML = `<div style="background:rgba(255,255,255,0.02);border:1px dashed #2d4f6f;border-radius:10px;padding:20px 14px;text-align:center;">
+      <i class="fas fa-clipboard-list" style="font-size:18px;color:#3d5a7a;margin-bottom:8px;"></i>
+      <div style="font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:3px;">No proof of work yet</div>
+      <div style="font-size:11px;color:#5a7a9a;line-height:1.5;">Add your first work example to start building trust.</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = _powHubExamples.map((we, i) => `
+    <div style="background:#0c1626;border:1px solid #213a54;border-radius:11px;padding:13px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <span style="font-size:13.5px;font-weight:800;color:#e8f0f8;line-height:1.25;">${sanitize(we.title)}</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <span style="font-size:8.5px;background:rgba(96,165,250,0.15);color:#60a5fa;padding:3px 8px;border-radius:6px;font-weight:700;letter-spacing:0.4px;text-transform:uppercase;">${sanitize(we.category)}</span>
+          <button type="button" onclick="powHubRemove(${i})" title="Remove" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:2px 4px;"><i class="fas fa-trash"></i></button>
+        </div>
+      </div>
+      ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;width:100%;max-height:130px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;" alt="">` : ''}${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:7px;line-height:1.5;">${sanitize(we.description)}</div>` : ''}
+      ${we.outcome ? `<div style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;font-weight:700;margin-bottom:7px;padding:4px 9px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);border-radius:6px;"><i class="fas fa-arrow-trend-up" style="font-size:9px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
+      ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.1);color:#60a5fa;padding:2px 8px;border-radius:6px;font-weight:600;">${sanitize(s)}</span>`).join('')}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:12px;margin-top:2px;">
+        <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>
+        ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#60a5fa;text-decoration:none;font-weight:700;"><i class="fas fa-play-circle" style="font-size:10px;"></i> Video</a>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function powHubShowForm() {
+  if (_powHubExamples.length >= 5) { showToast('Maximum 5 work examples'); return; }
+  const form = document.getElementById('pow-hub-form');
+  const addBtn = document.getElementById('pow-hub-add-btn');
+  if (form) form.style.display = 'block';
+  if (addBtn) addBtn.style.display = 'none';
+}
+
+function powHubCancelForm() {
+  const form = document.getElementById('pow-hub-form');
+  const addBtn = document.getElementById('pow-hub-add-btn');
+  if (form) form.style.display = 'none';
+  if (addBtn) addBtn.style.display = _powHubExamples.length >= 5 ? 'none' : '';
+  // clear inputs
+  ['title','link','description','outcome','skills','image','video'].forEach(k => {
+    const el = document.getElementById('pow-hub-' + k);
+    if (el) el.value = '';
+  });
+  const cat = document.getElementById('pow-hub-category');
+  if (cat) cat.value = 'Other';
+}
+
+function powHubAddExample() {
+  if (_powHubExamples.length >= 5) { showToast('Maximum 5 work examples'); return; }
+  // Build candidate from Hub inputs, reuse the PURE validation function.
+  const candidate = {
+    title: (document.getElementById('pow-hub-title')?.value || '').trim(),
+    link: (document.getElementById('pow-hub-link')?.value || '').trim(),
+    category: document.getElementById('pow-hub-category')?.value || 'Other',
+    description: (document.getElementById('pow-hub-description')?.value || '').trim(),
+    outcome: (document.getElementById('pow-hub-outcome')?.value || '').trim(),
+    skills_used: (document.getElementById('pow-hub-skills')?.value || '').split(',').map(s => s.trim()).filter(Boolean),
+    image_url: (document.getElementById('pow-hub-image')?.value || '').trim(),
+    video_url: (document.getElementById('pow-hub-video')?.value || '').trim()
+  };
+  const valid = pifValidateWorkExample(candidate);
+  if (!valid) { showToast('Add a title and a valid https link'); return; }
+  _powHubExamples.push(valid);
+  powHubCancelForm();
+  powHubRender();
+}
+
+function powHubRemove(index) {
+  if (typeof index !== 'number' || index < 0 || index >= _powHubExamples.length) return;
+  _powHubExamples.splice(index, 1);
+  powHubRender();
+}
+
+// ── THE ISOLATION POINT (Increment B = Option 1 internals; B2 swaps these guts) ──
+// B: write ONLY work_examples to Supabase + localStorage sync. Does NOT touch other
+// profile fields (avoids clobbering — saveProfile reads Edit-Profile DOM, which the
+// Hub doesn't populate). No DB change. B2 will replace this function's internals with
+// the fuller independent proof-save; the Hub UI never changes.
+async function saveProofOfWork() {
+  if (!currentUser) return;
+  const toSave = pifSanitizeWorkExamples(_powHubExamples);
+
+  // Update in-memory + localStorage immediately (optimistic, mirrors existing pattern).
+  currentUser.work_examples = toSave;
+  try {
+    const lsKey = 'pf_profile_' + currentUser.handle;
+    const existing = JSON.parse(localStorage.getItem(lsKey) || '{}');
+    existing.work_examples = toSave;
+    localStorage.setItem(lsKey, JSON.stringify(existing));
+  } catch (e) {}
+
+  // Persist to Supabase — ONLY the work_examples column (focused write).
+  if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
+    const { error } = await sb.from('profiles').update({ work_examples: toSave }).eq('id', currentUser.id);
+    if (error) { showToast('Save failed: ' + error.message); return; }
+  }
+
+  showToast('Proof of Work saved ✅');
+  // Refresh the dashboard count + the Hub list.
+  if (typeof ccUpdateStatusStats === 'function') ccUpdateStatusStats();
+  powHubRender();
+  closeModal('pow-hub-modal');
+}
+
 function ccOpenProfileToWork() {
-  showProfileModal();
-  setTimeout(() => {
-    const section = document.querySelector('#work-examples-preview');
-    if (section && section.scrollIntoView) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 200);
+  // Increment B: route the dashboard Proof of Work card to the Hub (not Edit Profile).
+  showProofOfWorkHub();
 }
 
 // Needs Attention — Signal 1: pending forged deals awaiting current user's response
@@ -16786,6 +16914,86 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       <button onclick="closeModal('forged-deals-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:18px;">✕</button>
     </div>
     <div id="forged-deals-list"></div>
+  </div>
+</div>
+<div id="pow-hub-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#0d1520;border:1px solid #2d4f6f;border-radius:16px;padding:0;width:92%;max-width:520px;max-height:88vh;overflow-y:auto;font-family:'Inter',sans-serif;">
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 22px 16px;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;background:#0d1520;z-index:2;">
+      <div style="display:flex;align-items:center;gap:11px;">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(160deg,rgba(245,158,11,0.18),rgba(245,158,11,0.06));border:1px solid rgba(245,158,11,0.3);display:flex;align-items:center;justify-content:center;">
+          <i class="fas fa-award" style="font-size:16px;color:#f59e0b;"></i>
+        </div>
+        <div>
+          <div style="font-size:17px;font-weight:800;color:#fff;font-family:'Space Grotesk',sans-serif;line-height:1.1;">Proof of Work</div>
+          <div style="font-size:10.5px;color:#7d9bbb;margin-top:1px;">Build trust before deals</div>
+        </div>
+      </div>
+      <button onclick="closeModal('pow-hub-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;">✕</button>
+    </div>
+
+    <div style="padding:18px 22px 22px;">
+      <!-- WHY IT MATTERS -->
+      <div style="background:linear-gradient(170deg,#101f33,#0a1322);border:1px solid #243d57;border-radius:13px;padding:15px;margin-bottom:16px;">
+        <div style="font-size:12px;color:#e8f0f8;font-weight:700;margin-bottom:8px;">Why Proof of Work matters</div>
+        <div style="font-size:11.5px;color:#94a3b8;line-height:1.6;margin-bottom:12px;">Before members start a deal, hire you, fund you, or collaborate, they check your track record. Proof of Work is how you show what you've actually done — and it's the foundation of your reputation on PIF.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;gap:9px;align-items:flex-start;">
+            <div style="width:20px;height:20px;border-radius:6px;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;"><i class="fas fa-folder-open" style="font-size:9px;color:#60a5fa;"></i></div>
+            <div style="font-size:11px;color:#94a3b8;line-height:1.5;"><span style="color:#cbd5e1;font-weight:700;">Self-submitted</span> — work you add yourself. Shown honestly as self-reported.</div>
+          </div>
+          <div style="display:flex;gap:9px;align-items:flex-start;">
+            <div style="width:20px;height:20px;border-radius:6px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;"><i class="fas fa-shield-check" style="font-size:9px;color:#2dd4a0;"></i></div>
+            <div style="font-size:11px;color:#94a3b8;line-height:1.5;"><span style="color:#2dd4a0;font-weight:700;">Verified on PIF</span> — confirmed through completed deals. Carries more weight (coming as you trade).</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- YOUR PROOF -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:12px;color:#e8f0f8;font-weight:700;letter-spacing:0.3px;">YOUR PROOF OF WORK</span>
+        <span id="pow-hub-count" style="font-size:11px;color:#7d9bbb;font-weight:600;">0 / 5</span>
+      </div>
+      <div id="pow-hub-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;"></div>
+
+      <!-- ADD FORM (self-contained, Hub-specific IDs) -->
+      <div id="pow-hub-form" style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;padding:13px;display:none;margin-bottom:12px;">
+        <input type="text" id="pow-hub-title" maxlength="60" placeholder="Title (e.g. Landing page for X)" class="form-input" style="margin-bottom:7px;font-size:13px;">
+        <input type="url" id="pow-hub-link" maxlength="500" placeholder="Proof link (https://...)" class="form-input" style="margin-bottom:7px;font-size:13px;">
+        <select id="pow-hub-category" class="form-input form-select" style="margin-bottom:7px;font-size:13px;">
+          <option value="Design">Design</option>
+          <option value="Development">Development</option>
+          <option value="Marketing">Marketing</option>
+          <option value="Writing">Writing</option>
+          <option value="Consulting">Consulting</option>
+          <option value="Other" selected>Other</option>
+        </select>
+        <textarea id="pow-hub-description" maxlength="280" placeholder="Short description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:7px;font-size:13px;"></textarea>
+        <input type="text" id="pow-hub-outcome" maxlength="120" placeholder="Outcome (optional — e.g. +40% signups)" class="form-input" style="margin-bottom:7px;font-size:13px;">
+        <input type="text" id="pow-hub-skills" maxlength="200" placeholder="Skills used (optional — comma-separated)" class="form-input" style="margin-bottom:7px;font-size:13px;">
+        <input type="url" id="pow-hub-image" maxlength="500" placeholder="Image URL (optional — link to a screenshot)" class="form-input" style="margin-bottom:7px;font-size:13px;">
+        <input type="url" id="pow-hub-video" maxlength="500" placeholder="Video URL (optional — YouTube, Loom, Vimeo)" class="form-input" style="margin-bottom:9px;font-size:13px;">
+        <div style="display:flex;gap:7px;">
+          <button type="button" onclick="powHubAddExample()" style="flex:1;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.4);color:#2dd4a0;padding:8px 12px;border-radius:7px;font:700 12px/1 'Inter',sans-serif;cursor:pointer;">Add proof</button>
+          <button type="button" onclick="powHubCancelForm()" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:8px 12px;border-radius:7px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
+        </div>
+      </div>
+      <button type="button" id="pow-hub-add-btn" onclick="powHubShowForm()" style="background:rgba(45,212,160,0.06);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:10px 14px;border-radius:8px;font:700 12px/1 'Inter',sans-serif;cursor:pointer;width:100%;margin-bottom:16px;">+ Add proof of work</button>
+
+      <!-- TRUST ROADMAP (coming soon — honest) -->
+      <div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:11px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:11px;color:#7d9bbb;font-weight:700;letter-spacing:0.4px;margin-bottom:9px;">HOW PROOF BECOMES VERIFIED</div>
+        <div style="display:flex;flex-direction:column;gap:7px;font-size:11px;color:#94a3b8;line-height:1.5;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="color:#60a5fa;font-weight:700;">1.</span> <span><span style="color:#cbd5e1;">Self-submitted</span> — you add it (available now)</span></div>
+          <div style="display:flex;align-items:center;gap:8px;opacity:0.6;"><span style="color:#7d9bbb;font-weight:700;">2.</span> <span>Deal-linked — attached to a PIF deal <span style="font-size:9px;color:#5a7a9a;">(coming)</span></span></div>
+          <div style="display:flex;align-items:center;gap:8px;opacity:0.6;"><span style="color:#7d9bbb;font-weight:700;">3.</span> <span>Verified on PIF — confirmed by a completed deal <span style="font-size:9px;color:#5a7a9a;">(coming)</span></span></div>
+        </div>
+        <div style="font-size:10.5px;color:#5a7a9a;line-height:1.5;margin-top:10px;padding-top:9px;border-top:1px solid rgba(255,255,255,0.05);">As you complete deals on PIF, your proof can become verified — carrying more trust than self-submitted work. PIF never fake-verifies uploads.</div>
+      </div>
+
+      <!-- SAVE -->
+      <button type="button" onclick="saveProofOfWork()" style="width:100%;background:#2dd4a0;color:#0c1626;border:none;padding:13px;border-radius:10px;font:800 14px/1 'Inter',sans-serif;cursor:pointer;">Save Proof of Work</button>
+    </div>
   </div>
 </div>
 <div id="member-profile-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;">
