@@ -14616,7 +14616,7 @@ const { data: deals } = await sb.from('forged_deals')
       </div>
       <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:13px;padding:15px 8px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
         <div style="font-size:26px;font-weight:800;color:${hasProof ? '#60a5fa' : '#3d5a7a'};line-height:0.95;">${workExamples.length}</div>
-        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:0.8px;font-weight:700;">PROOF OF<br>WORK</div>
+        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:0.8px;font-weight:700;">WORK<br>EXAMPLES</div>
       </div>
     </div>`;
 
@@ -14632,18 +14632,20 @@ const dealTitleById = {};
 
 const dealLinkedProofsHtml = (Array.isArray(memberDealProofs) && memberDealProofs.length) ? `
   <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(45,212,160,0.15);">
-    <div style="font-size:10px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;margin-bottom:9px;">DEAL-LINKED PROOF · ${memberDealProofs.length}</div>
-    <div style="display:flex;flex-direction:column;gap:8px;">
+<div style="font-size:10px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;margin-bottom:9px;">DEAL-BACKED COMPLETION PROOF · ${memberDealProofs.length}</div>    <div style="display:flex;flex-direction:column;gap:8px;">
       ${memberDealProofs.map(p => {
         const ctx = dealTitleById[p.deal_id];
         return `<div style="background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.22);border-radius:9px;padding:11px;">
           <div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:${(p.description||p.image_url)?'7px':'5px'};">
             <i class="fas fa-shield-check" style="font-size:11px;color:#2dd4a0;margin-top:2px;flex-shrink:0;"></i>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:12.5px;font-weight:700;color:#e8f0f8;line-height:1.3;">${sanitize(p.title)}</div>
-              ${ctx ? `<div style="font-size:9.5px;color:#5a7a9a;margin-top:2px;">From completed deal: ${sanitize(ctx.title)}${ctx.other ? ' · with ' + sanitize(ctx.other) : ''}</div>` : `<div style="font-size:9.5px;color:#5a7a9a;margin-top:2px;">From a completed PIF deal</div>`}
-            </div>
-          </div>
+             <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:1px;">
+               <span style="font-size:12.5px;font-weight:700;color:#e8f0f8;line-height:1.3;">${sanitize(p.title)}</span>
+               <span style="font-size:8px;background:rgba(45,212,160,0.18);color:#2dd4a0;padding:2px 7px;border-radius:5px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;flex-shrink:0;">✓ Deal-linked</span>
+               </div>
+                ${ctx ? `<div style="font-size:9.5px;color:#5a7a9a;margin-top:2px;">From completed deal: ${sanitize(ctx.title)}${ctx.other ? ' · with ' + sanitize(ctx.other) : ''}</div>` : `<div style="font-size:9.5px;color:#5a7a9a;margin-top:2px;">From a completed PIF deal</div>`}
+               </div>
+               </div>
           ${p.image_url ? `<img src="${sanitize(p.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(p.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:120px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;cursor:pointer;" alt="">` : ''}${p.description ? `<div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:7px;">${sanitize(p.description)}</div>` : ''}
           ${p.link ? `<a href="${sanitize(p.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
         </div>`;
@@ -14676,8 +14678,11 @@ ${failed > 0 ? `<div style="margin-top:8px;font-size:10px;color:#ef4444;font-wei
           <i class="fas fa-folder-open" style="font-size:12px;color:#60a5fa;"></i>
         </div>
         <div style="flex:1;min-width:0;">
-          <div style="font-size:12px;color:#94a3b8;font-weight:800;letter-spacing:0.3px;">Proof of Work</div>
-          <div style="font-size:9.5px;color:#5a7a9a;">Work evidence submitted by this member</div>
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+  <span style="font-size:12px;color:#94a3b8;font-weight:800;letter-spacing:0.3px;">Self-submitted Work Examples</span>
+  <span style="font-size:8px;background:rgba(96,165,250,0.15);color:#60a5fa;padding:2px 7px;border-radius:5px;font-weight:800;letter-spacing:0.4px;text-transform:uppercase;flex-shrink:0;">Self-submitted</span>
+</div>
+<div style="font-size:9.5px;color:#5a7a9a;margin-top:1px;">Portfolio examples added by this member — not linked to a completed PIF deal</div>
         </div>
       </div>
       ${!hasVerified ? `<div style="display:flex;gap:9px;align-items:flex-start;font-size:10.5px;margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,0.025);border:1px solid #2d4f6f;border-radius:9px;">
