@@ -9798,7 +9798,44 @@ function pifDealProofCleanUrl(value) {
 // - user is a participant in the deal
 // - deal is settled + delivered
 // - status can only be deal_linked
-async function saveDealProof(dealId, proof = {}) {
+// ── C-core: Deal Completion Proof modal (writes via saveDealProof → deal_proofs only) ──
+let _activeDealProofId = null;
+
+function openDealProofModal(dealId, dealTitle, counterparty) {
+  _activeDealProofId = dealId;
+  const titleEl = document.getElementById('deal-proof-context-title');
+  const metaEl  = document.getElementById('deal-proof-context-meta');
+  if (titleEl) titleEl.textContent = dealTitle || 'Deal';
+  if (metaEl)  metaEl.textContent = 'with ' + (counterparty || '') + ' · Delivered ✓';
+  // clear inputs
+  ['title','description','link','image'].forEach(k => {
+    const el = document.getElementById('deal-proof-' + k);
+    if (el) el.value = '';
+  });
+  const modal = document.getElementById('deal-proof-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+async function submitDealProof() {
+  if (!_activeDealProofId) { showToast('No deal selected'); return; }
+  const proof = {
+    title: (document.getElementById('deal-proof-title')?.value || '').trim(),
+    description: (document.getElementById('deal-proof-description')?.value || '').trim(),
+    link: (document.getElementById('deal-proof-link')?.value || '').trim(),
+    image_url: (document.getElementById('deal-proof-image')?.value || '').trim()
+  };
+  if (!proof.title) { showToast('Add a title for the proof'); return; }
+  // saveDealProof (B2) writes ONLY to deal_proofs; RLS enforces participant + settled+delivered.
+  const result = await saveDealProof(_activeDealProofId, proof);
+  if (!result.ok) { showToast('Could not add proof: ' + result.error); return; }
+  showToast('Completion proof added ✅');
+  closeModal('deal-proof-modal');
+  _activeDealProofId = null;
+  showMyForgedDeals(); // re-render deals — picks up the new proof via batch-load
+}
+
+// Insert a deal-linked completion proof. RLS enforces participant + settled+delivered + status.
+  async function saveDealProof(dealId, proof = {}) {
   if (!currentUser || !sb) return { ok: false, error: 'Not ready' };
 
   const safeDealId = Number(dealId);
@@ -15261,12 +15298,28 @@ async function showMyForgedDeals() {
   const disputed = data.filter(d => d.status === 'disputed');
   const rejected = data.filter(d => d.status === 'rejected');
   const cancelled = data.filter(d => d.status === 'cancelled');
-  const history  = data.filter(d => d.status === 'settled');
+ const history  = data.filter(d => d.status === 'settled');
   const delivered = history.filter(d => d.outcome === 'delivered').length;
   const failed    = history.filter(d => d.outcome === 'failed').length;
   const rate      = history.length > 0 ? Math.round((delivered / history.length) * 100) : 0;
   const totalEarned = history.filter(d => d.outcome === 'delivered').reduce((s,d) => s + (parseFloat(String(d.amount).replace(/[^0-9.]/g,'')) || 0), 0);
 
+  // C-core: batch-load completion proofs for settled+delivered deals (C-async-A).
+  // Read-only — queries deal_proofs (B2). Never touches forged_deals.
+  const dealProofsMap = {};
+  const deliveredIds = history.filter(d => d.outcome === 'delivered').map(d => d.id);
+  if (deliveredIds.length && sb) {
+    try {
+      const { data: proofRows } = await sb.from('deal_proofs')
+        .select('*')
+        .in('deal_id', deliveredIds)
+        .order('created_at', { ascending: true });
+      (proofRows || []).forEach(p => {
+        if (!dealProofsMap[p.deal_id]) dealProofsMap[p.deal_id] = [];
+        dealProofsMap[p.deal_id].push(p);
+      });
+    } catch (e) { /* proofs are non-critical; deal cards still render without them */ }
+  }
   function dealCard(d, canDelete) {
     const isInitiator  = d.initiator_handle === currentUser.handle;
     const other        = isInitiator ? d.receiver_handle : d.initiator_handle;
@@ -15346,6 +15399,29 @@ async function showMyForgedDeals() {
       } else {
         actions = `<div style="font-size:10px;color:#f59e0b;margin-top:6px;">⚖️ Under review by founder. You'll be notified of the outcome.</div>`;
       }
+    } else if (d.outcome === 'delivered' && d.status === 'settled') {
+      // C-core: completion proof — ONLY on settled+delivered deals. Additive.
+      // Reads dealProofsMap (closure) + writes only via saveDealProof → deal_proofs.
+      const proofs = dealProofsMap[d.id] || [];
+      const proofCards = proofs.map(p => `
+        <div style="background:#0c1626;border:1px solid #213a54;border-radius:9px;padding:11px;margin-bottom:8px;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:${p.description||p.image_url?'7px':'4px'};">
+            <span style="font-size:12.5px;font-weight:700;color:#e8f0f8;line-height:1.3;">${sanitize(p.title)}</span>
+            <span style="font-size:8.5px;background:rgba(45,212,160,0.12);color:#2dd4a0;padding:2px 7px;border-radius:6px;font-weight:700;letter-spacing:0.3px;flex-shrink:0;white-space:nowrap;">@${sanitize(p.submitter_handle)}</span>
+          </div>
+          ${p.image_url ? `<img src="${sanitize(p.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(p.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:120px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;cursor:pointer;" alt="">` : ''}${p.description ? `<div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:7px;">${sanitize(p.description)}</div>` : ''}
+          ${p.link ? `<a href="${sanitize(p.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+        </div>
+      `).join('');
+      actions = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
+          <i class="fas fa-folder-open" style="font-size:11px;color:#2dd4a0;"></i>
+          <span style="font-size:11px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;">COMPLETION PROOF</span>
+          ${proofs.length ? `<span style="font-size:10px;color:#5a7a9a;">· ${proofs.length}</span>` : ''}
+        </div>
+        ${proofCards}
+        <button type="button" onclick="openDealProofModal(${d.id}, ${JSON.stringify(d.title).replace(/"/g,'&quot;')}, '${sanitize(other)}')" style="width:100%;background:rgba(45,212,160,0.08);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:9px;border-radius:8px;font:700 11.5px/1 'Inter',sans-serif;cursor:pointer;">+ Add completion proof</button>
+      </div>`;
     }
 
     const deleteBtn = canDelete ? `<button onclick="deleteForge(${d.id})" title="Remove" style="background:none;border:none;color:#3d5a7a;cursor:pointer;font-size:14px;padding:2px;flex-shrink:0;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#3d5a7a'">🗑</button>` : '';
@@ -17026,6 +17102,38 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       <button onclick="closeModal('forged-deals-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:18px;">✕</button>
     </div>
     <div id="forged-deals-list"></div>
+  </div>
+</div>
+<div id="deal-proof-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1001;align-items:center;justify-content:center;">
+  <div style="background:#0d1520;border:1px solid #2d4f6f;border-radius:16px;width:92%;max-width:460px;max-height:88vh;overflow-y:auto;font-family:'Inter',sans-serif;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;background:#0d1520;z-index:2;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:30px;height:30px;border-radius:9px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);display:flex;align-items:center;justify-content:center;">
+          <i class="fas fa-shield-check" style="font-size:13px;color:#2dd4a0;"></i>
+        </div>
+        <div style="font-size:15px;font-weight:800;color:#fff;font-family:'Space Grotesk',sans-serif;">Add Completion Proof</div>
+      </div>
+      <button onclick="closeModal('deal-proof-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;">✕</button>
+    </div>
+    <div style="padding:16px 20px 20px;">
+      <!-- Deal context (read-only, filled by openDealProofModal) -->
+      <div style="background:rgba(45,212,160,0.04);border:1px solid rgba(45,212,160,0.18);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="font-size:9px;color:#5a7a9a;letter-spacing:0.5px;font-weight:700;margin-bottom:4px;">LINKING TO COMPLETED DEAL</div>
+        <div id="deal-proof-context-title" style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;"></div>
+        <div id="deal-proof-context-meta" style="font-size:11px;color:#94a3b8;margin-top:3px;"></div>
+      </div>
+      <div style="font-size:10.5px;color:#7d9bbb;line-height:1.5;margin-bottom:14px;">This proof links to a completed PIF deal. Deal-linked proof carries more weight than self-submitted work.</div>
+
+      <input type="text" id="deal-proof-title" maxlength="120" placeholder="Title (e.g. Final delivered website)" class="form-input" style="margin-bottom:8px;font-size:13px;">
+      <textarea id="deal-proof-description" maxlength="500" placeholder="Description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
+      <input type="url" id="deal-proof-link" maxlength="500" placeholder="Proof link (https://...)" class="form-input" style="margin-bottom:8px;font-size:13px;">
+      <input type="url" id="deal-proof-image" maxlength="500" placeholder="Image URL (optional — screenshot/result)" class="form-input" style="margin-bottom:14px;font-size:13px;">
+
+      <div style="display:flex;gap:8px;">
+        <button type="button" onclick="submitDealProof()" style="flex:1;background:#2dd4a0;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Add proof</button>
+        <button type="button" onclick="closeModal('deal-proof-modal')" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:11px 16px;border-radius:9px;font:600 13px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 <div id="pow-hub-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1000;align-items:center;justify-content:center;">
