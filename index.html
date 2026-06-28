@@ -15281,11 +15281,17 @@ window.addEventListener('load', () => setTimeout(startForgedAutoRefresh, 2000));
 
 async function showMyForgedDeals() {
   if(!currentUser || !sb) return;
+
+  // Handle-format tolerance: forged_deals may store handles with or without a leading '@'.
+  // Query both forms so deals load regardless of stored format.
+  // Read/query fix only — no settlement/XP/stake/dispute/C-proof logic touched.
+  const bareHandle = pifNormalizeHandleKey(currentUser.handle);
+  const atHandle = '@' + bareHandle;
+
   const { data } = await sb.from('forged_deals')
     .select('*')
-    .or(`initiator_handle.eq.${currentUser.handle},receiver_handle.eq.${currentUser.handle}`)
+    .or(`initiator_handle.eq.${bareHandle},receiver_handle.eq.${bareHandle},initiator_handle.eq.${atHandle},receiver_handle.eq.${atHandle}`)
     .order('created_at', { ascending: false });
-
   const modal = document.getElementById('forged-deals-modal');
   modal.style.display = 'flex';
 
