@@ -14532,12 +14532,17 @@ async function viewMemberProfile(handle) {
   modal.style.display = 'flex';
 
   const { data: profile } = await sb.from('profiles').select('*').eq('handle', handle).single();
-  const { data: deals } = await sb.from('forged_deals')
+const { data: deals } = await sb.from('forged_deals')
     .select('*')
     .or(`initiator_handle.eq.${handle},receiver_handle.eq.${handle}`)
     .eq('status', 'settled')
     .order('created_at', { ascending: false })
     .limit(5);
+
+  // C-phase-2: load this member's deal-linked completion proofs (read-only, deal_proofs public-read).
+  // Used to surface verified, deal-backed proof in the Verified on PIF zone. No writes.
+  let memberDealProofs = [];
+  try { memberDealProofs = await loadDealProofsByHandle(handle); } catch (e) { memberDealProofs = []; }
 
   const xp = profile?.xp || 0;
   const bio = profile?.bio || 'No bio yet.';
@@ -14615,8 +14620,39 @@ async function viewMemberProfile(handle) {
       </div>
     </div>`;
 
-  // A2: Verified on PIF — authoritative platform-confirmed zone (green-tinted).
-  const verifiedBlock = hasVerified ? `
+  // C-phase-2: deal-linked completion proof cards (verified-tier — backed by completed deals).
+// Matches each proof to its deal (from the loaded `deals`) for context. Green/verified palette.
+const dealTitleById = {};
+(deals || []).forEach(d => {
+  dealTitleById[d.id] = {
+    title: d.title,
+    other: (d.initiator_handle === handle ? d.receiver_handle : d.initiator_handle)
+  };
+});
+
+const dealLinkedProofsHtml = (Array.isArray(memberDealProofs) && memberDealProofs.length) ? `
+  <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(45,212,160,0.15);">
+    <div style="font-size:10px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;margin-bottom:9px;">DEAL-LINKED PROOF · ${memberDealProofs.length}</div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${memberDealProofs.map(p => {
+        const ctx = dealTitleById[p.deal_id];
+        return `<div style="background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.22);border-radius:9px;padding:11px;">
+          <div style="display:flex;align-items:flex-start;gap:7px;margin-bottom:${(p.description||p.image_url)?'7px':'5px'};">
+            <i class="fas fa-shield-check" style="font-size:11px;color:#2dd4a0;margin-top:2px;flex-shrink:0;"></i>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12.5px;font-weight:700;color:#e8f0f8;line-height:1.3;">${sanitize(p.title)}</div>
+              ${ctx ? `<div style="font-size:9.5px;color:#5a7a9a;margin-top:2px;">From completed deal: ${sanitize(ctx.title)}${ctx.other ? ' · with ' + sanitize(ctx.other) : ''}</div>` : `<div style="font-size:9.5px;color:#5a7a9a;margin-top:2px;">From a completed PIF deal</div>`}
+            </div>
+          </div>
+          ${p.image_url ? `<img src="${sanitize(p.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(p.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:120px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;cursor:pointer;" alt="">` : ''}${p.description ? `<div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:7px;">${sanitize(p.description)}</div>` : ''}
+          ${p.link ? `<a href="${sanitize(p.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>` : '';
+
+// A2: Verified on PIF — authoritative platform-confirmed zone (green-tinted).
+const verifiedBlock = hasVerified ? `
     <div style="background:rgba(45,212,160,0.03);border:1px solid rgba(45,212,160,0.18);border-radius:13px;padding:14px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
         <div style="width:26px;height:26px;border-radius:8px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -14628,10 +14664,11 @@ async function viewMemberProfile(handle) {
         </div>
       </div>
       ${dealsHtml}
-      ${failed > 0 ? `<div style="margin-top:8px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">${failed} failed deal${failed>1?'s':''} on record</div>` : ''}
-    </div>` : '';
+${dealLinkedProofsHtml}
+${failed > 0 ? `<div style="margin-top:8px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">${failed} failed deal${failed>1?'s':''} on record</div>` : ''}
+</div>` : '';
 
-  // A2: Proof of Work — self-submitted evidence zone (blue-tinted, case-study cards).
+// A2: Proof of Work — self-submitted evidence zone (blue-tinted, case-study cards).
   const proofBlock = hasProof ? `
     <div id="member-work-section" style="background:rgba(96,165,250,0.03);border:1px solid rgba(96,165,250,0.18);border-radius:13px;padding:14px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
