@@ -10005,9 +10005,12 @@ async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealSta
 
   modal.style.display = 'flex';
 
-    const updates = await loadDealProgressUpdates(dealId);
+   const updates = await loadDealProgressUpdates(dealId);
   const reviews = await loadDealReviews(dealId);
-  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, buildLatestReviewMap(reviews), pifDealProofNormalizeHandle(currentUser.handle), dealStatus || 'active');
+  const reviewMap = buildLatestReviewMap(reviews);
+  const fdEl = document.getElementById('deal-room-final-delivery');
+  if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, reviewMap, pifDealProofNormalizeHandle(currentUser.handle), dealStatus || 'active');
 }
 // D2: composer submit — validate + save via saveProgressUpdate, then refresh the timeline.
 async function submitProgressUpdate() {
@@ -10052,13 +10055,16 @@ async function submitProgressUpdate() {
     if (el) el.value = '';
   });
 
-  const typeEl = document.getElementById('deal-room-type');
+const typeEl = document.getElementById('deal-room-type');
   if (typeEl) typeEl.value = 'progress';
 
     const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
+  const reviewMap = buildLatestReviewMap(reviews);
+  const fdEl = document.getElementById('deal-room-final-delivery');
+  if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
   const listEl = document.getElementById('deal-room-timeline');
-  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, buildLatestReviewMap(reviews), pifDealProofNormalizeHandle(currentUser.handle), 'active');
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, reviewMap, pifDealProofNormalizeHandle(currentUser.handle), 'active');
 }
 
 // ── D3-A: save a review of a progress update. Writes ONLY to deal_progress_reviews via the
@@ -10123,13 +10129,15 @@ async function submitDealReview(updateId, reviewState) {
 
   const result = await saveDealReview(updateId, _dealRoomActiveId, { review_state: reviewState, note });
   if (!result.ok) { showToast('Could not submit review: ' + result.error); return; }
-  showToast(reviewState === 'approved' ? 'Approved ✅' : 'Changes requested');
+   showToast(reviewState === 'approved' ? 'Approved ✅' : 'Changes requested');
 
-  // Refresh the timeline (re-load updates + reviews, re-render).
   const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
+  const reviewMap = buildLatestReviewMap(reviews);
+  const fdEl = document.getElementById('deal-room-final-delivery');
+  if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
   const listEl = document.getElementById('deal-room-timeline');
-  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, buildLatestReviewMap(reviews), pifDealProofNormalizeHandle(currentUser.handle), 'active');
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, reviewMap, pifDealProofNormalizeHandle(currentUser.handle), 'active');
 }
 
 // D1: render the read-only progress timeline (oldest-first). Type badge + content + author.
@@ -10211,7 +10219,55 @@ function dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus) {
     </div>`;
   }
 
-  return badgeHtml + readyHtml + actionsHtml;
+ return badgeHtml + readyHtml + actionsHtml;
+}
+
+// ── D4a: Final Delivery Package — read-only headline above the timeline.
+// Surfaces final_delivery updates (newest-first) + their D3 approval state + a prominent
+// deliverable link. Reuses the already-loaded updates + review map (no new query).
+// Read-only presentation. NEVER settlement (approval stays a signal). ──
+function dealRoomFinalDeliveryHtml(updates, reviewMap) {
+  if (!Array.isArray(updates)) return '';
+  const finals = updates.filter(u => u.update_type === 'final_delivery').slice().reverse(); // newest-first
+  if (!finals.length) return '';  // section hidden when no final delivery exists
+
+  const stateMeta = {
+    approved:          { label: '✓ APPROVED',         color: '#2dd4a0', bg: 'rgba(45,212,160,0.14)' },
+    changes_requested: { label: 'CHANGES REQUESTED',  color: '#f59e0b', bg: 'rgba(245,158,11,0.14)' },
+    needs_review:      { label: 'NEEDS REVIEW',        color: '#7d9bbb', bg: 'rgba(125,155,187,0.14)' }
+  };
+
+  const cards = finals.map(u => {
+    const review = (reviewMap && reviewMap[u.id]) || null;
+    const when = u.created_at ? new Date(u.created_at).toLocaleDateString() : '';
+    const sm = review && stateMeta[review.review_state] ? stateMeta[review.review_state] : null;
+    const isApproved = review && review.review_state === 'approved';
+    return `<div style="background:#0c1626;border:1px solid rgba(45,212,160,0.28);border-radius:11px;padding:14px;margin-bottom:9px;">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px;">
+        <span style="font-size:8.5px;background:rgba(45,212,160,0.14);color:#2dd4a0;padding:3px 9px;border-radius:5px;font-weight:800;letter-spacing:0.4px;">📦 FINAL DELIVERY</span>
+        <span style="font-size:9.5px;color:#5a7a9a;">by @${sanitize(u.author_handle || '')}${when ? ' · ' + when : ''}</span>
+      </div>
+      ${u.title ? `<div style="font-size:14px;font-weight:800;color:#e8f0f8;line-height:1.3;margin-bottom:${(u.body||u.image_url||u.link)?'7px':'0'};font-family:'Space Grotesk',sans-serif;">${sanitize(u.title)}</div>` : ''}
+      ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;" alt="">` : ''}${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'9px':'0'};">${sanitize(u.body)}</div>` : ''}
+      ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:9px;border-radius:8px;font-size:12px;font-weight:800;text-decoration:none;margin-bottom:${sm?'9px':'0'};"><i class="fas fa-box-open" style="font-size:12px;"></i>Open deliverable</a>` : ''}
+      ${sm ? `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;${u.link?'':'margin-top:4px;'}">
+        <span style="font-size:8px;background:${sm.bg};color:${sm.color};padding:3px 8px;border-radius:5px;font-weight:800;letter-spacing:0.4px;">${sm.label}</span>
+        <span style="font-size:9px;color:#5a7a9a;">by @${sanitize(review.reviewer_handle || '')}</span>
+      </div>${review.note ? `<div style="margin-top:5px;font-size:10.5px;color:#94a3b8;line-height:1.5;background:rgba(255,255,255,0.02);border-left:2px solid ${sm.color};padding:6px 9px;border-radius:0 6px 6px 0;">${sanitize(review.note)}</div>` : ''}` : ''}
+      ${isApproved ? `<div style="margin-top:9px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.22);border-radius:8px;padding:9px 11px;">
+        <div style="font-size:10.5px;color:#2dd4a0;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-circle-check" style="font-size:11px;"></i>Final delivery approved — ready to complete</div>
+        <div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.45;">When you're both ready, mark the deal's outcome from the deal card to settle it.</div>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `<div style="margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px;">
+      <i class="fas fa-box-open" style="font-size:12px;color:#2dd4a0;"></i>
+      <span style="font-size:11px;color:#2dd4a0;font-weight:800;letter-spacing:0.4px;">FINAL DELIVERY${finals.length > 1 ? ' · ' + finals.length : ''}</span>
+    </div>
+    ${cards}
+  </div>`;
 }
 // Needs Attention — Signal 1: pending forged deals awaiting current user's response
 // Self-contained: runs its own count query. Returns a number (0 on any failure).
@@ -17458,7 +17514,9 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       </div>
       <button onclick="closeModal('deal-room-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;flex-shrink:0;">✕</button>
     </div>
-    <div style="padding:16px 22px 22px;">
+   <div style="padding:16px 22px 22px;">
+      <!-- D4a: Final Delivery Package (above the timeline; populated by openDealRoom, hidden when empty) -->
+      <div id="deal-room-final-delivery"></div>
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px;">
         <i class="fas fa-stream" style="font-size:11px;color:#60a5fa;"></i>
         <span style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;">PROGRESS &amp; DELIVERY</span>
