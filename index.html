@@ -9923,6 +9923,52 @@ function ccOpenProfileToWork() {
   // Increment B: route the dashboard Proof of Work card to the Hub (not Edit Profile).
   showProofOfWorkHub();
 }
+// ── D2: Deal Room — save a progress/delivery update. Writes ONLY to deal_progress_updates
+// via D1's proven participant+active-gated INSERT policy. No forged_deals write. ──
+const POW_UPDATE_TYPES = ['progress', 'draft', 'revision', 'final_delivery', 'note'];
+
+async function saveProgressUpdate(dealId, update = {}) {
+  if (!currentUser || !sb) return { ok: false, error: 'Not ready' };
+
+  const safeDealId = Number(dealId);
+  if (!Number.isFinite(safeDealId)) return { ok: false, error: 'Invalid deal id' };
+
+  const updateType = POW_UPDATE_TYPES.includes(update.update_type) ? update.update_type : 'progress';
+
+  const title = String(update.title || '').trim().slice(0, 120);
+  const body  = String(update.body || '').trim().slice(0, 1000);
+
+  if (!title && !body) return { ok: false, error: 'Add a title or a description' };
+
+  const rawLink = String(update.link || '').trim();
+  const rawImage = String(update.image_url || '').trim();
+  const link = pifDealProofCleanUrl(rawLink);
+  const imageUrl = pifDealProofCleanUrl(rawImage);
+
+  if (rawLink && !link) return { ok: false, error: 'Link must be a valid https URL' };
+  if (rawImage && !imageUrl) return { ok: false, error: 'Image URL must be a valid https URL' };
+
+  const row = {
+    deal_id: safeDealId,
+    author_id: currentUser.id,
+    author_handle: pifDealProofNormalizeHandle(currentUser.handle),
+    update_type: updateType,
+    title: title || null,
+    body: body || null,
+    link: link || null,
+    image_url: imageUrl || null,
+    review_state: null
+  };
+
+  const { data, error } = await sb
+    .from('deal_progress_updates')
+    .insert(row)
+    .select()
+    .single();
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data };
+}
 // ── D1: Deal Room — load a deal's progress updates (participant-only RLS enforces access).
 // Read-only. Oldest-first (work-timeline order). Returns []. ──
 async function loadDealProgressUpdates(dealId) {
@@ -9937,15 +9983,22 @@ async function loadDealProgressUpdates(dealId) {
 
 // ── D1: Deal Room shell (read-only). Opens a per-deal private delivery view. ──
 // Participants only (RLS enforces). D1 = overview + read-only timeline. Posting = D2.
+let _dealRoomActiveId = null;  // D2: the deal currently open in the Deal Room (for the composer)
+
 async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
   const modal = document.getElementById('deal-room-modal');
   if (!modal) return;
+
+  _dealRoomActiveId = Number(dealId);
 
   const titleEl = document.getElementById('deal-room-title');
   const metaEl  = document.getElementById('deal-room-meta');
 
   if (titleEl) titleEl.textContent = dealTitle || 'Deal';
   if (metaEl)  metaEl.textContent = 'with ' + (counterparty || '') + ' · ' + (dealStatus || 'active').toUpperCase() + (dealAmount ? ' · ' + dealAmount : '');
+
+  const composer = document.getElementById('deal-room-composer');
+  if (composer) composer.style.display = (dealStatus === 'active') ? 'block' : 'none';
 
   const listEl = document.getElementById('deal-room-timeline');
   if (listEl) listEl.innerHTML = `<div style="text-align:center;color:#5a7a9a;font-size:11px;padding:14px;">Loading…</div>`;
@@ -9955,7 +10008,56 @@ async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealSta
   const updates = await loadDealProgressUpdates(dealId);
   if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates);
 }
+// D2: composer submit — validate + save via saveProgressUpdate, then refresh the timeline.
+async function submitProgressUpdate() {
+  if (!_dealRoomActiveId) { showToast('No deal open'); return; }
 
+  const btn = document.getElementById('deal-room-post-btn');
+
+  const update = {
+    update_type: document.getElementById('deal-room-type')?.value || 'progress',
+    title: (document.getElementById('deal-room-title-input')?.value || '').trim(),
+    body: (document.getElementById('deal-room-body-input')?.value || '').trim(),
+    link: (document.getElementById('deal-room-link-input')?.value || '').trim(),
+    image_url: (document.getElementById('deal-room-image-input')?.value || '').trim()
+  };
+
+  if (!update.title && !update.body) {
+    showToast('Add a title or a description');
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Posting…';
+  }
+
+  const result = await saveProgressUpdate(_dealRoomActiveId, update);
+
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = 'Post update';
+  }
+
+  if (!result.ok) {
+    showToast('Could not post: ' + result.error);
+    return;
+  }
+
+  showToast('Update posted ✅');
+
+  ['title','body','link','image'].forEach(k => {
+    const el = document.getElementById('deal-room-' + k + '-input');
+    if (el) el.value = '';
+  });
+
+  const typeEl = document.getElementById('deal-room-type');
+  if (typeEl) typeEl.value = 'progress';
+
+  const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+  const listEl = document.getElementById('deal-room-timeline');
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates);
+}
 // D1: render the read-only progress timeline (oldest-first). Type badge + content + author.
 function dealRoomTimelineHtml(updates) {
   if (!Array.isArray(updates) || !updates.length) {
@@ -17240,9 +17342,31 @@ window.nexarUpdateFabs = nexarUpdateFabs;
         <span style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;">PROGRESS &amp; DELIVERY</span>
       </div>
       <div id="deal-room-timeline"></div>
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);font-size:10px;color:#5a7a9a;text-align:center;line-height:1.5;">
-        Private to deal participants. Posting updates arrives soon.
-      </div>
+
+<!-- D2: posting composer (participants only, active deals; RLS-enforced) -->
+<div id="deal-room-composer" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);">
+  <div style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;margin-bottom:10px;">ADD UPDATE</div>
+
+  <select id="deal-room-type" class="form-input form-select" style="margin-bottom:8px;font-size:13px;">
+    <option value="progress">Progress update</option>
+    <option value="draft">Draft</option>
+    <option value="revision">Revision</option>
+    <option value="final_delivery">Final delivery</option>
+    <option value="note">Note</option>
+  </select>
+
+  <input type="text" id="deal-room-title-input" maxlength="120" placeholder="Title (e.g. First draft ready)" class="form-input" style="margin-bottom:8px;font-size:13px;">
+
+  <textarea id="deal-room-body-input" maxlength="1000" placeholder="Describe the update / delivery (optional)" class="form-input" style="height:64px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
+
+  <input type="url" id="deal-room-link-input" maxlength="500" placeholder="Link (optional — deliverable, repo, doc)" class="form-input" style="margin-bottom:8px;font-size:13px;">
+
+  <input type="url" id="deal-room-image-input" maxlength="500" placeholder="Image URL (optional — screenshot/preview)" class="form-input" style="margin-bottom:10px;font-size:13px;">
+
+  <button type="button" id="deal-room-post-btn" onclick="submitProgressUpdate()" style="width:100%;background:#60a5fa;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Post update</button>
+
+  <div style="font-size:10px;color:#5a7a9a;text-align:center;line-height:1.5;margin-top:10px;">Private to deal participants.</div>
+</div>
     </div>
   </div>
 </div>
