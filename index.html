@@ -10005,8 +10005,9 @@ async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealSta
 
   modal.style.display = 'flex';
 
-  const updates = await loadDealProgressUpdates(dealId);
-  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates);
+    const updates = await loadDealProgressUpdates(dealId);
+  const reviews = await loadDealReviews(dealId);
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, buildLatestReviewMap(reviews), pifDealProofNormalizeHandle(currentUser.handle), dealStatus || 'active');
 }
 // D2: composer submit — validate + save via saveProgressUpdate, then refresh the timeline.
 async function submitProgressUpdate() {
@@ -10054,12 +10055,86 @@ async function submitProgressUpdate() {
   const typeEl = document.getElementById('deal-room-type');
   if (typeEl) typeEl.value = 'progress';
 
-  const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+    const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+  const reviews = await loadDealReviews(_dealRoomActiveId);
   const listEl = document.getElementById('deal-room-timeline');
-  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates);
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, buildLatestReviewMap(reviews), pifDealProofNormalizeHandle(currentUser.handle), 'active');
 }
+
+// ── D3-A: save a review of a progress update. Writes ONLY to deal_progress_reviews via the
+// proven reviewer-owns-own + participant + active-gated INSERT policy. NEVER touches
+// forged_deals, settlement, XP, or the original update row. ──
+const DEAL_REVIEW_STATES = ['approved', 'changes_requested', 'needs_review'];
+
+async function saveDealReview(updateId, dealId, review = {}) {
+  if (!currentUser || !sb) return { ok: false, error: 'Not ready' };
+  if (!updateId) return { ok: false, error: 'Invalid update id' };
+  const safeDealId = Number(dealId);
+  if (!Number.isFinite(safeDealId)) return { ok: false, error: 'Invalid deal id' };
+
+  const reviewState = DEAL_REVIEW_STATES.includes(review.review_state) ? review.review_state : null;
+  if (!reviewState) return { ok: false, error: 'Invalid review state' };
+
+  const note = String(review.note || '').trim().slice(0, 500);
+
+  const row = {
+    update_id: updateId,
+    deal_id: safeDealId,
+    reviewer_id: currentUser.id,
+    reviewer_handle: pifDealProofNormalizeHandle(currentUser.handle),
+    review_state: reviewState,
+    note: note || null
+  };
+
+  const { data, error } = await sb.from('deal_progress_reviews').insert(row).select().single();
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, data };
+}
+
+// D3-A: load all reviews for a deal (participant-only RLS). Read-only. Oldest-first.
+async function loadDealReviews(dealId) {
+  if (!sb || !dealId) return [];
+  const { data, error } = await sb.from('deal_progress_reviews')
+    .select('*')
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true });
+  if (error) { console.warn('loadDealReviews failed:', error.message); return []; }
+  return Array.isArray(data) ? data : [];
+}
+
+// D3-A: reduce reviews to the latest per update_id (loaded oldest-first → last wins = current).
+function buildLatestReviewMap(reviews) {
+  const map = {};
+  (reviews || []).forEach(r => { map[r.update_id] = r; });
+  return map;
+}
+
+// D3-A: review action handler — Approve (one-click) or Request changes (note prompt).
+// Writes via saveDealReview, then refreshes the timeline. NEVER settles the deal.
+async function submitDealReview(updateId, reviewState) {
+  if (!_dealRoomActiveId) { showToast('No deal open'); return; }
+  if (!DEAL_REVIEW_STATES.includes(reviewState)) { showToast('Invalid review'); return; }
+
+  let note = '';
+  if (reviewState === 'changes_requested') {
+    note = (prompt('What changes are needed? (this note is shared with the other participant)') || '').trim();
+    if (!note) { showToast('Add a brief note so they know what to change'); return; }
+  }
+
+  const result = await saveDealReview(updateId, _dealRoomActiveId, { review_state: reviewState, note });
+  if (!result.ok) { showToast('Could not submit review: ' + result.error); return; }
+  showToast(reviewState === 'approved' ? 'Approved ✅' : 'Changes requested');
+
+  // Refresh the timeline (re-load updates + reviews, re-render).
+  const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+  const reviews = await loadDealReviews(_dealRoomActiveId);
+  const listEl = document.getElementById('deal-room-timeline');
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, buildLatestReviewMap(reviews), pifDealProofNormalizeHandle(currentUser.handle), 'active');
+}
+
 // D1: render the read-only progress timeline (oldest-first). Type badge + content + author.
-function dealRoomTimelineHtml(updates) {
+// D3-A: now also renders review state badges + review actions (on the OTHER participant's updates).
+function dealRoomTimelineHtml(updates, reviewMap, viewerHandle, dealStatus) {
   if (!Array.isArray(updates) || !updates.length) {
     return `<div style="background:rgba(255,255,255,0.02);border:1px dashed #2d4f6f;border-radius:10px;padding:22px 16px;text-align:center;">
       <i class="fas fa-stream" style="font-size:18px;color:#3d5a7a;margin-bottom:8px;"></i>
@@ -10086,10 +10161,57 @@ function dealRoomTimelineHtml(updates) {
       </div>
       ${u.title ? `<div style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;margin-bottom:${(u.body||u.image_url||u.link)?'6px':'0'};">${sanitize(u.title)}</div>` : ''}
       ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:6px;cursor:pointer;" alt="">` : ''}
-      ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
+           ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
       ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+      ${dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus)}
     </div>`;
   }).join('')}</div>`;
+}
+
+// D3-A: per-update review section — state badge (if reviewed) + actions (on the OTHER's updates, active only).
+// Renders inside the existing Deal Room timeline card. NEVER triggers settlement.
+function dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus) {
+  const review = (reviewMap && reviewMap[u.id]) || null;
+  const isOwnUpdate = pifDealProofNormalizeHandle(u.author_handle || '') === (viewerHandle || '');
+  const isActive = dealStatus === 'active';
+
+  // Review state badge (current state, if any review exists)
+  const stateMeta = {
+    approved:          { label: '✓ APPROVED',         color: '#2dd4a0', bg: 'rgba(45,212,160,0.14)' },
+    changes_requested: { label: 'CHANGES REQUESTED',  color: '#f59e0b', bg: 'rgba(245,158,11,0.14)' },
+    needs_review:      { label: 'NEEDS REVIEW',        color: '#7d9bbb', bg: 'rgba(125,155,187,0.14)' }
+  };
+  let badgeHtml = '';
+  if (review && stateMeta[review.review_state]) {
+    const sm = stateMeta[review.review_state];
+    badgeHtml = `<div style="margin-top:9px;display:flex;align-items:flex-start;gap:7px;flex-wrap:wrap;">
+      <span style="font-size:8px;background:${sm.bg};color:${sm.color};padding:3px 8px;border-radius:5px;font-weight:800;letter-spacing:0.4px;">${sm.label}</span>
+      <span style="font-size:9px;color:#5a7a9a;">by @${sanitize(review.reviewer_handle || '')}</span>
+    </div>`;
+    if (review.note) {
+      badgeHtml += `<div style="margin-top:5px;font-size:10.5px;color:#94a3b8;line-height:1.5;background:rgba(255,255,255,0.02);border-left:2px solid ${sm.color};padding:6px 9px;border-radius:0 6px 6px 0;">${sanitize(review.note)}</div>`;
+    }
+  }
+
+  // "Ready to complete" signal — ONLY when an approved final_delivery exists. Signal only, NO settlement.
+  let readyHtml = '';
+  if (review && review.review_state === 'approved' && u.update_type === 'final_delivery') {
+    readyHtml = `<div style="margin-top:8px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.22);border-radius:8px;padding:9px 11px;">
+      <div style="font-size:10.5px;color:#2dd4a0;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-circle-check" style="font-size:11px;"></i>Final delivery approved — ready to complete</div>
+      <div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.45;">When you're both ready, mark the deal's outcome from the deal card to settle it.</div>
+    </div>`;
+  }
+
+  // Review actions — ONLY on the OTHER participant's updates, only while the deal is active.
+  let actionsHtml = '';
+  if (!isOwnUpdate && isActive) {
+    actionsHtml = `<div style="margin-top:9px;display:flex;gap:6px;">
+      <button type="button" onclick="submitDealReview('${u.id}','approved')" style="flex:1;background:rgba(45,212,160,0.1);color:#2dd4a0;border:1px solid rgba(45,212,160,0.28);padding:6px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;">Approve</button>
+      <button type="button" onclick="submitDealReview('${u.id}','changes_requested')" style="flex:1;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.28);padding:6px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;">Request changes</button>
+    </div>`;
+  }
+
+  return badgeHtml + readyHtml + actionsHtml;
 }
 // Needs Attention — Signal 1: pending forged deals awaiting current user's response
 // Self-contained: runs its own count query. Returns a number (0 on any failure).
