@@ -9984,13 +9984,13 @@ async function loadDealProgressUpdates(dealId) {
 // ── D1: Deal Room shell (read-only). Opens a per-deal private delivery view. ──
 // Participants only (RLS enforces). D1 = overview + read-only timeline. Posting = D2.
 let _dealRoomActiveId = null;  // D2: the deal currently open in the Deal Room (for the composer)
-
+let _dealRoomCounterparty = null;  // D4b: the other participant (recipient for final_delivery notifications)
 async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
   const modal = document.getElementById('deal-room-modal');
   if (!modal) return;
 
   _dealRoomActiveId = Number(dealId);
-
+  _dealRoomCounterparty = counterparty || null;  // D4b: remember the other participant for notifications
   const titleEl = document.getElementById('deal-room-title');
   const metaEl  = document.getElementById('deal-room-meta');
 
@@ -10048,7 +10048,17 @@ async function submitProgressUpdate() {
     return;
   }
 
-  showToast('Update posted ✅');
+    showToast('Update posted ✅');
+
+  // D4b: notify the counterparty when a FINAL DELIVERY is posted (meaningful-only — not routine updates).
+  // Uses the existing addNotif pipeline; push automatic. Never touches settlement.
+  if (update.update_type === 'final_delivery' && _dealRoomCounterparty) {
+    addNotif(
+      '@' + pifNormalizeHandleKey(currentUser.handle) + ' sent the final delivery for your deal',
+      _dealRoomCounterparty,
+      { type: 'deal_final_delivery', target_type: 'deal', target_id: _dealRoomActiveId, actor_handle: currentUser.handle }
+    );
+  }
 
   ['title','body','link','image'].forEach(k => {
     const el = document.getElementById('deal-room-' + k + '-input');
@@ -10117,7 +10127,7 @@ function buildLatestReviewMap(reviews) {
 
 // D3-A: review action handler — Approve (one-click) or Request changes (note prompt).
 // Writes via saveDealReview, then refreshes the timeline. NEVER settles the deal.
-async function submitDealReview(updateId, reviewState) {
+async function submitDealReview(updateId, reviewState, authorHandle, updateType) {
   if (!_dealRoomActiveId) { showToast('No deal open'); return; }
   if (!DEAL_REVIEW_STATES.includes(reviewState)) { showToast('Invalid review'); return; }
 
@@ -10131,6 +10141,24 @@ async function submitDealReview(updateId, reviewState) {
   if (!result.ok) { showToast('Could not submit review: ' + result.error); return; }
    showToast(reviewState === 'approved' ? 'Approved ✅' : 'Changes requested');
 
+  // D4b: notify the reviewed update's author (meaningful-only). Uses existing addNotif pipeline; push automatic.
+  if (authorHandle) {
+    const me = pifNormalizeHandleKey(currentUser.handle);
+    let notifText = '', notifType = '';
+    if (reviewState === 'approved' && updateType === 'final_delivery') {
+      notifText = '@' + me + ' approved your final delivery — ready to complete';
+      notifType = 'deal_ready';
+    } else if (reviewState === 'approved') {
+      notifText = '@' + me + ' approved your update';
+      notifType = 'deal_review';
+    } else if (reviewState === 'changes_requested') {
+      notifText = '@' + me + ' requested changes on your update';
+      notifType = 'deal_review';
+    }
+    if (notifText) {
+      addNotif(notifText, authorHandle, { type: notifType, target_type: 'deal', target_id: _dealRoomActiveId, actor_handle: currentUser.handle });
+    }
+  }
   const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
   const reviewMap = buildLatestReviewMap(reviews);
@@ -10214,8 +10242,7 @@ function dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus) {
   let actionsHtml = '';
   if (!isOwnUpdate && isActive) {
     actionsHtml = `<div style="margin-top:9px;display:flex;gap:6px;">
-      <button type="button" onclick="submitDealReview('${u.id}','approved')" style="flex:1;background:rgba(45,212,160,0.1);color:#2dd4a0;border:1px solid rgba(45,212,160,0.28);padding:6px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;">Approve</button>
-      <button type="button" onclick="submitDealReview('${u.id}','changes_requested')" style="flex:1;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.28);padding:6px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;">Request changes</button>
+<button type="button" onclick="submitDealReview('${u.id}','approved','${sanitize(u.author_handle||'')}','${sanitize(u.update_type||'')}')" style="flex:1;background:rgba(45,212,160,0.1);color:#2dd4a0;border:1px solid rgba(45,212,160,0.28);padding:6px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;">Approve</button>      <button type="button" onclick="submitDealReview('${u.id}','changes_requested','${sanitize(u.author_handle||'')}','${sanitize(u.update_type||'')}')" style="flex:1;background:rgba(245,158,11,0.1);color:#f59e0b;border:1px solid rgba(245,158,11,0.28);padding:6px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;">Request changes</button>
     </div>`;
   }
 
@@ -13139,7 +13166,8 @@ function pifRouteFromNotification(data) {
 
   if (type === 'new_message' && actor) {
     if (typeof openDmWith === 'function') openDmWith(actor);
-  } else if (type === 'deal_received' || type === 'deal_accepted' || type === 'deal_rejected') {
+   } else if (type === 'deal_received' || type === 'deal_accepted' || type === 'deal_rejected'
+             || type === 'deal_final_delivery' || type === 'deal_review' || type === 'deal_ready') {
     if (typeof showMyForgedDeals === 'function') showMyForgedDeals();
   } else if (type === 'founder_application') {
     if (typeof showApplicationsModal === 'function') showApplicationsModal();
