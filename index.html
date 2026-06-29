@@ -9923,7 +9923,72 @@ function ccOpenProfileToWork() {
   // Increment B: route the dashboard Proof of Work card to the Hub (not Edit Profile).
   showProofOfWorkHub();
 }
+// ── D1: Deal Room — load a deal's progress updates (participant-only RLS enforces access).
+// Read-only. Oldest-first (work-timeline order). Returns []. ──
+async function loadDealProgressUpdates(dealId) {
+  if (!sb || !dealId) return [];
+  const { data, error } = await sb.from('deal_progress_updates')
+    .select('*')
+    .eq('deal_id', dealId)
+    .order('created_at', { ascending: true });
+  if (error) { console.warn('loadDealProgressUpdates failed:', error.message); return []; }
+  return Array.isArray(data) ? data : [];
+}
 
+// ── D1: Deal Room shell (read-only). Opens a per-deal private delivery view. ──
+// Participants only (RLS enforces). D1 = overview + read-only timeline. Posting = D2.
+async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
+  const modal = document.getElementById('deal-room-modal');
+  if (!modal) return;
+
+  const titleEl = document.getElementById('deal-room-title');
+  const metaEl  = document.getElementById('deal-room-meta');
+
+  if (titleEl) titleEl.textContent = dealTitle || 'Deal';
+  if (metaEl)  metaEl.textContent = 'with ' + (counterparty || '') + ' · ' + (dealStatus || 'active').toUpperCase() + (dealAmount ? ' · ' + dealAmount : '');
+
+  const listEl = document.getElementById('deal-room-timeline');
+  if (listEl) listEl.innerHTML = `<div style="text-align:center;color:#5a7a9a;font-size:11px;padding:14px;">Loading…</div>`;
+
+  modal.style.display = 'flex';
+
+  const updates = await loadDealProgressUpdates(dealId);
+  if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates);
+}
+
+// D1: render the read-only progress timeline (oldest-first). Type badge + content + author.
+function dealRoomTimelineHtml(updates) {
+  if (!Array.isArray(updates) || !updates.length) {
+    return `<div style="background:rgba(255,255,255,0.02);border:1px dashed #2d4f6f;border-radius:10px;padding:22px 16px;text-align:center;">
+      <i class="fas fa-stream" style="font-size:18px;color:#3d5a7a;margin-bottom:8px;"></i>
+      <div style="font-size:12px;color:#94a3b8;font-weight:600;margin-bottom:3px;">No progress updates yet</div>
+      <div style="font-size:11px;color:#5a7a9a;line-height:1.5;">Progress, drafts, and delivery updates for this deal will appear here.</div>
+    </div>`;
+  }
+
+  const typeMeta = {
+    progress:       { label: 'PROGRESS',       color: '#60a5fa', bg: 'rgba(96,165,250,0.12)' },
+    draft:          { label: 'DRAFT',          color: '#a78bfa', bg: 'rgba(167,139,250,0.12)' },
+    revision:       { label: 'REVISION',       color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
+    final_delivery: { label: 'FINAL DELIVERY', color: '#2dd4a0', bg: 'rgba(45,212,160,0.12)' },
+    note:           { label: 'NOTE',           color: '#7d9bbb', bg: 'rgba(125,155,187,0.12)' }
+  };
+
+  return `<div style="display:flex;flex-direction:column;gap:10px;">${updates.map(u => {
+    const m = typeMeta[u.update_type] || typeMeta.note;
+    const when = u.created_at ? new Date(u.created_at).toLocaleDateString() : '';
+    return `<div style="background:#0c1626;border:1px solid #213a54;border-radius:11px;padding:13px;">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:${(u.title||u.body||u.image_url||u.link)?'8px':'0'};">
+        <span style="font-size:8.5px;background:${m.bg};color:${m.color};padding:2px 8px;border-radius:5px;font-weight:800;letter-spacing:0.4px;">${m.label}</span>
+        <span style="font-size:9.5px;color:#5a7a9a;">@${sanitize(u.author_handle || '')}${when ? ' · ' + when : ''}</span>
+      </div>
+      ${u.title ? `<div style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;margin-bottom:${(u.body||u.image_url||u.link)?'6px':'0'};">${sanitize(u.title)}</div>` : ''}
+      ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:6px;cursor:pointer;" alt="">` : ''}
+      ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
+      ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+    </div>`;
+  }).join('')}</div>`;
+}
 // Needs Attention — Signal 1: pending forged deals awaiting current user's response
 // Self-contained: runs its own count query. Returns a number (0 on any failure).
 // Not called from anywhere yet — display wiring is a separate later step.
@@ -15421,19 +15486,21 @@ async function showMyForgedDeals() {
         <span style="font-size:10px;color:#f59e0b;">Waiting for ${sanitize(other)} to accept…</span>
         <button onclick="cancelForge(${d.id})" style="background:none;border:1px solid #2d4f6f;color:#5a7a9a;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;">Cancel</button>
       </div>`;
-    } else if(d.status === 'active' && !myOutcome) {
+      } else if(d.status === 'active' && !myOutcome) {
       actions = `<div style="display:flex;gap:6px;margin-top:8px;">
         <button onclick="showPaymentInfo('${sanitize(other)}')" style="flex:1;background:rgba(45,212,160,0.1);color:#2dd4a0;border:1px solid rgba(45,212,160,0.25);padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">💳 Pay</button>
         <button onclick="openForgeOutcome(${d.id})" style="flex:1;background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25);padding:6px 14px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">Mark Outcome</button>
         <button onclick="cancelForge(${d.id})" style="background:none;border:1px solid #2d4f6f;color:#5a7a9a;padding:6px 10px;border-radius:8px;font-size:10px;font-weight:600;cursor:pointer;">Cancel</button>
-      </div>`;
-    } else if(d.status === 'active' && myOutcome) {
+      </div>
+      <button onclick="openDealRoom(${d.id}, ${JSON.stringify(d.title).replace(/"/g,'&quot;')}, '${sanitize(other)}', ${JSON.stringify(String(d.amount||'')).replace(/"/g,'&quot;')}, 'active')" style="width:100%;margin-top:6px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;"><i class="fas fa-briefcase" style="font-size:10px;margin-right:5px;"></i>Deal Room</button>`;
+      } else if(d.status === 'active' && myOutcome) {
       actions = `<div style="margin-top:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-size:10px;color:#a78bfa;">You marked: ${myOutcome}. Waiting for ${sanitize(other)}…</span>
           <button onclick="cancelForge(${d.id})" style="background:none;border:1px solid #2d4f6f;color:#5a7a9a;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;">Cancel</button>
         </div>
         <button onclick="showPaymentInfo('${sanitize(other)}')" style="margin-top:6px;width:100%;background:rgba(45,212,160,0.06);color:#2dd4a0;border:1px solid rgba(45,212,160,0.15);padding:5px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;">💳 View payment info for ${sanitize(other)}</button>
+        <button onclick="openDealRoom(${d.id}, ${JSON.stringify(d.title).replace(/"/g,'&quot;')}, '${sanitize(other)}', ${JSON.stringify(String(d.amount||'')).replace(/"/g,'&quot;')}, 'active')" style="margin-top:6px;width:100%;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;"><i class="fas fa-briefcase" style="font-size:10px;margin-right:5px;"></i>Deal Room</button>
       </div>`;
     } else if(d.status === 'disputed') {
       if(founder) {
@@ -17152,7 +17219,34 @@ window.nexarUpdateFabs = nexarUpdateFabs;
     <div id="forged-deals-list"></div>
   </div>
 </div>
-<div id="deal-proof-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1001;align-items:center;justify-content:center;">
+<div id="deal-room-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1001;align-items:center;justify-content:center;">
+  <div style="background:#0d1520;border:1px solid #2d4f6f;border-radius:16px;width:92%;max-width:540px;max-height:88vh;overflow-y:auto;font-family:'Inter',sans-serif;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:18px 22px 14px;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;background:#0d1520;z-index:2;">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0;">
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(160deg,rgba(96,165,250,0.18),rgba(96,165,250,0.06));border:1px solid rgba(96,165,250,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <i class="fas fa-briefcase" style="font-size:15px;color:#60a5fa;"></i>
+        </div>
+        <div style="min-width:0;">
+          <div style="font-size:11px;color:#7d9bbb;font-weight:700;letter-spacing:0.5px;">DEAL ROOM</div>
+          <div id="deal-room-title" style="font-size:15px;font-weight:800;color:#fff;font-family:'Space Grotesk',sans-serif;line-height:1.2;"></div>
+          <div id="deal-room-meta" style="font-size:11px;color:#94a3b8;margin-top:2px;"></div>
+        </div>
+      </div>
+      <button onclick="closeModal('deal-room-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;flex-shrink:0;">✕</button>
+    </div>
+    <div style="padding:16px 22px 22px;">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px;">
+        <i class="fas fa-stream" style="font-size:11px;color:#60a5fa;"></i>
+        <span style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;">PROGRESS &amp; DELIVERY</span>
+      </div>
+      <div id="deal-room-timeline"></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);font-size:10px;color:#5a7a9a;text-align:center;line-height:1.5;">
+        Private to deal participants. Posting updates arrives soon.
+      </div>
+    </div>
+  </div>
+</div>
+  <div id="deal-proof-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:1001;align-items:center;justify-content:center;">
   <div style="background:#0d1520;border:1px solid #2d4f6f;border-radius:16px;width:92%;max-width:460px;max-height:88vh;overflow-y:auto;font-family:'Inter',sans-serif;">
     <div style="display:flex;justify-content:space-between;align-items:center;padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);position:sticky;top:0;background:#0d1520;z-index:2;">
       <div style="display:flex;align-items:center;gap:10px;">
