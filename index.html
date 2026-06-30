@@ -9923,6 +9923,52 @@ function ccOpenProfileToWork() {
   // Increment B: route the dashboard Proof of Work card to the Hub (not Edit Profile).
   showProofOfWorkHub();
 }
+// ── D5a: Deal Room file storage helpers (PRIVATE deal-files bucket). ──
+// uploadDealFile: participant+active-gated by Storage RLS. Path {dealId}/{updateId}/{safeName}.
+//   Returns { ok, path, name } — NO public URL (private bucket, signed-URL access only).
+// getDealFileSignedUrl: time-limited signed URL; RLS gates it (non-participants denied).
+const DEAL_FILE_ALLOWED_EXT = ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'zip'];
+const DEAL_FILE_MAX_BYTES = 26214400; // 25 MB
+
+async function uploadDealFile(file, dealId, updateId) {
+  if (!currentUser || !sb) return { ok: false, error: 'Not ready' };
+  if (!file) return { ok: false, error: 'No file selected' };
+  if (!dealId || !updateId) return { ok: false, error: 'Missing deal or update reference' };
+
+  // Size check (client-side; the bucket also enforces 25MB server-side).
+  if (file.size > DEAL_FILE_MAX_BYTES) return { ok: false, error: 'File exceeds 25MB' };
+
+  // Extension allowlist (client-side; the bucket MIME allowlist is the server backstop).
+  const origName = String(file.name || 'file');
+  const ext = (origName.split('.').pop() || '').toLowerCase();
+  if (!DEAL_FILE_ALLOWED_EXT.includes(ext)) {
+    return { ok: false, error: 'File type not allowed' };
+  }
+
+  // Sanitize the filename segment (no path traversal / unsafe chars); keep it short.
+  const safeName = origName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100) || 'file';
+  const path = String(dealId) + '/' + String(updateId) + '/' + safeName;
+
+  // Upload via authenticated client. Storage RLS enforces participant + active deal.
+  // PRIVATE bucket — deliberately NO getPublicUrl.
+  const { error: upErr } = await sb.storage
+    .from('deal-files')
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (upErr) return { ok: false, error: upErr.message };
+
+  return { ok: true, path: path, name: safeName };
+}
+
+async function getDealFileSignedUrl(filePath, expiresInSeconds) {
+  if (!sb || !filePath) return { ok: false, error: 'No file' };
+  const expiry = expiresInSeconds || 300; // 5 minutes — short-lived
+  const { data, error } = await sb.storage
+    .from('deal-files')
+    .createSignedUrl(filePath, expiry);
+  if (error) return { ok: false, error: error.message }; // non-participant → denied here by RLS
+  return { ok: true, url: data.signedUrl };
+}
+
 // ── D2: Deal Room — save a progress/delivery update. Writes ONLY to deal_progress_updates
 // via D1's proven participant+active-gated INSERT policy. No forged_deals write. ──
 const POW_UPDATE_TYPES = ['progress', 'draft', 'revision', 'final_delivery', 'note'];
