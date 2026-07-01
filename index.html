@@ -10088,7 +10088,75 @@ async function loadDealProgressUpdates(dealId) {
 // Participants only (RLS enforces). D1 = overview + read-only timeline. Posting = D2.
 let _dealRoomActiveId = null;  // D2: the deal currently open in the Deal Room (for the composer)
 let _dealRoomCounterparty = null;  // D4b: the other participant (recipient for final_delivery notifications)
-async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
+  // ── D6a: Deal Room state read (READ-ONLY keystone). Fetches the authoritative forged_deals
+// row so the room knows viewer role, status, outcome, and who has/hasn't voted. Consumed by
+// D6b guidance later — NOTHING renders from this yet. NEVER writes. Non-fatal: on any
+// failure the room behaves exactly as before (state stays null).
+// Role derivation uses the SAME raw handle equality as settleForge/dealCard, so what this
+// reports always agrees with what settlement will actually do. ──
+let _dealRoomState = null;  // D6a: authoritative deal-row state for the open room (null until loaded / on failure)
+
+async function loadDealRoomState(dealId) {
+  _dealRoomState = null;
+  try {
+    if (!sb || !currentUser) return null;
+    const safeId = Number(dealId);
+    if (!Number.isFinite(safeId)) return null;
+
+    // READ-ONLY select — explicit column list documents exactly what D6 consumes.
+    const { data: deal, error } = await sb.from('forged_deals')
+      .select('id, title, amount, status, outcome, initiator_handle, receiver_handle, initiator_xp_stake, receiver_xp_stake, initiator_outcome, receiver_outcome, xp_settled, xp_locked, created_at, completed_at')
+      .eq('id', safeId)
+      .single();
+    if (error || !deal) return null;
+
+    const me = currentUser.handle;
+    const isInitiator = deal.initiator_handle === me;
+    const isReceiver  = deal.receiver_handle === me;
+    const viewerRole  = isInitiator ? 'initiator' : (isReceiver ? 'receiver' : null);
+    const isParticipant = viewerRole !== null;
+
+    const myOutcome    = isInitiator ? deal.initiator_outcome : (isReceiver ? deal.receiver_outcome : null);
+    const otherOutcome = isInitiator ? deal.receiver_outcome  : (isReceiver ? deal.initiator_outcome : null);
+    const otherHandle  = isInitiator ? deal.receiver_handle   : (isReceiver ? deal.initiator_handle  : null);
+    const iActed = !!myOutcome;
+    const otherActed = !!otherOutcome;
+
+    // Who still needs to act (outcome votes). null when the viewer isn't a participant.
+    let waitingOn = null;
+    if (isParticipant) {
+      if (deal.status === 'pending')       waitingOn = 'acceptance';
+      else if (deal.status === 'disputed') waitingOn = 'founder';
+      else if (deal.status === 'active') {
+        if (iActed && !otherActed)       waitingOn = 'other';
+        else if (!iActed && otherActed)  waitingOn = 'me';
+        else if (!iActed && !otherActed) waitingOn = 'both';
+        else                             waitingOn = 'none';
+      }
+      else waitingOn = 'none';
+    }
+
+    _dealRoomState = {
+      deal: deal,
+      viewerRole: viewerRole,
+      isParticipant: isParticipant,
+      otherHandle: otherHandle,
+      myOutcome: myOutcome,
+      otherOutcome: otherOutcome,
+      iActed: iActed,
+      otherActed: otherActed,
+      waitingOn: waitingOn,
+      isActive:   deal.status === 'active',
+      isSettled:  deal.status === 'settled',
+      isDisputed: deal.status === 'disputed'
+    };
+    return _dealRoomState;
+  } catch (e) {
+    _dealRoomState = null;
+    return null;
+  }
+}
+  async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
   const modal = document.getElementById('deal-room-modal');
   if (!modal) return;
 
@@ -10108,7 +10176,9 @@ async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealSta
 
   modal.style.display = 'flex';
 
-   const updates = await loadDealProgressUpdates(dealId);
+   // D6a: fetch authoritative deal state (read-only, non-fatal). Nothing renders from it yet.
+  await loadDealRoomState(dealId);
+  const updates = await loadDealProgressUpdates(dealId);
   const reviews = await loadDealReviews(dealId);
   const reviewMap = buildLatestReviewMap(reviews);
   const fdEl = document.getElementById('deal-room-final-delivery');
