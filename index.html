@@ -9968,7 +9968,51 @@ async function getDealFileSignedUrl(filePath, expiresInSeconds) {
   if (error) return { ok: false, error: error.message }; // non-participant → denied here by RLS
   return { ok: true, url: data.signedUrl };
 }
+// ── D5c: Deal Room — open a PRIVATE deal file. Generates a FRESH signed URL ON CLICK
+// (never on render) via getDealFileSignedUrl, then opens it in a new tab. No public URLs.
+// `btn` is the clicked element (for the preparing state); `filePath` is the storage key.
+// Render-side gate requires BOTH file_name and file_path before this can be invoked.
+// Touches NOTHING in settlement / payment / XP / stakes / disputes / forged_deals. ──
+async function openDealFile(btn, filePath) {
+  if (!filePath) { showToast('This file link is unavailable'); return; }
 
+  // Defensive: rows are written already-sanitized, but never trust the DB blindly.
+  if (!/^[A-Za-z0-9._\/-]+$/.test(filePath) || filePath.indexOf('..') !== -1) {
+    showToast('That file reference looks invalid'); return;
+  }
+
+  var el = (btn && btn.nodeType === 1) ? btn : null;
+  if (el && el.dataset.busy === '1') return;
+
+  var restore = el ? el.innerHTML : '';
+
+  if (el) {
+    el.dataset.busy = '1';
+    el.disabled = true;
+    el.style.opacity = '0.6';
+    el.style.cursor = 'wait';
+    el.innerHTML = '⏳ Preparing…';
+  }
+
+  try {
+    var res = await getDealFileSignedUrl(filePath); // fresh, short-lived; RLS-gated
+    if (!res || !res.ok || !res.url) {
+      showToast((res && res.error) || 'Could not prepare that file');
+      return;
+    }
+    window.open(res.url, '_blank', 'noopener,noreferrer');
+  } catch (e) {
+    showToast('Could not open that file — please try again');
+  } finally {
+    if (el) {
+      el.dataset.busy = '';
+      el.disabled = false;
+      el.style.opacity = '';
+      el.style.cursor = '';
+      el.innerHTML = restore;
+    }
+  }
+}
 // ── D2: Deal Room — save a progress/delivery update. Writes ONLY to deal_progress_updates
 // via D1's proven participant+active-gated INSERT policy. No forged_deals write. ──
 const POW_UPDATE_TYPES = ['progress', 'draft', 'revision', 'final_delivery', 'note'];
@@ -10311,10 +10355,9 @@ function dealRoomTimelineHtml(updates, reviewMap, viewerHandle, dealStatus) {
       </div>
       ${u.title ? `<div style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;margin-bottom:${(u.body||u.image_url||u.link)?'6px':'0'};">${sanitize(u.title)}</div>` : ''}
       ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:6px;cursor:pointer;" alt="">` : ''}
-       ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
+      ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
       ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
-      ${u.file_name ? `<div style="margin-top:7px;font-size:10.5px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid #213a54;border-radius:7px;padding:5px 9px;display:inline-block;">📎 ${sanitize(u.file_name)}</div>` : ''}
-      ${dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus)}
+      ${(u.file_name && u.file_path) ? `<button type="button" onclick="openDealFile(this,'${u.file_path}')" title="Download ${sanitize(u.file_name)}" style="margin-top:7px;font-size:10.5px;color:#7cc4ff;background:rgba(96,165,250,0.08);border:1px solid #2d4f6f;border-radius:7px;padding:5px 10px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-family:inherit;font-weight:700;line-height:1;">📎 ${sanitize(u.file_name)}</button>` : ''}      ${dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus)}
       
     </div>`;
   }).join('')}</div>`;
@@ -10392,7 +10435,8 @@ function dealRoomFinalDeliveryHtml(updates, reviewMap) {
       </div>
       ${u.title ? `<div style="font-size:14px;font-weight:800;color:#e8f0f8;line-height:1.3;margin-bottom:${(u.body||u.image_url||u.link)?'7px':'0'};font-family:'Space Grotesk',sans-serif;">${sanitize(u.title)}</div>` : ''}
       ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;cursor:pointer;" alt="">` : ''}${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'9px':'0'};">${sanitize(u.body)}</div>` : ''}
-      ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:9px;border-radius:8px;font-size:12px;font-weight:800;text-decoration:none;margin-bottom:${sm?'9px':'0'};"><i class="fas fa-box-open" style="font-size:12px;"></i>Open deliverable</a>` : ''}
+      ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;padding:9px;border-radius:8px;font-size:12px;font-weight:800;text-decoration:none;margin-bottom:${(sm||(u.file_name&&u.file_path))?'9px':'0'};"><i class="fas fa-box-open" style="font-size:12px;"></i>Open deliverable</a>` : ''}
+      ${(u.file_name && u.file_path) ? `<button type="button" onclick="openDealFile(this,'${u.file_path}')" title="Download ${sanitize(u.file_name)}" style="display:flex;align-items:center;justify-content:center;gap:7px;width:100%;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.32);color:#7cc4ff;padding:9px;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;margin-bottom:${sm?'9px':'0'};line-height:1;">📎 Download final files · ${sanitize(u.file_name)}</button>` : ''}
       ${sm ? `<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;${u.link?'':'margin-top:4px;'}">
         <span style="font-size:8px;background:${sm.bg};color:${sm.color};padding:3px 8px;border-radius:5px;font-weight:800;letter-spacing:0.4px;">${sm.label}</span>
         <span style="font-size:9px;color:#5a7a9a;">by @${sanitize(review.reviewer_handle || '')}</span>
