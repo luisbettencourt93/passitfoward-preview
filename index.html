@@ -10310,7 +10310,11 @@ clearDealFileInput();  // D5b: reset the file picker + filename display after po
 const typeEl = document.getElementById('deal-room-type');
   if (typeEl) typeEl.value = 'progress';
 
-  const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+// D6c.0: re-read authoritative deal state (read-only) so the banner reflects any outcome
+// vote that landed while this room was open. Keeps last-known-good state if the fetch fails.
+const _prevDealRoomState = _dealRoomState;
+if (!(await loadDealRoomState(_dealRoomActiveId))) _dealRoomState = _prevDealRoomState;
+    const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
   const reviewMap = buildLatestReviewMap(reviews);
   renderDealRoomGuidance(updates, reviewMap);  // D6b: who-needs-to-act banner (pure render off _dealRoomState)
@@ -10402,7 +10406,11 @@ async function submitDealReview(updateId, reviewState, authorHandle, updateType)
       addNotif(notifText, authorHandle, { type: notifType, target_type: 'deal', target_id: _dealRoomActiveId, actor_handle: currentUser.handle });
     }
   }
-  const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+ // D6c.0: re-read authoritative deal state (read-only) so the banner reflects any outcome
+// vote that landed while this room was open. Keeps last-known-good state if the fetch fails.
+const _prevDealRoomState = _dealRoomState;
+if (!(await loadDealRoomState(_dealRoomActiveId))) _dealRoomState = _prevDealRoomState;
+const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
   const reviewMap = buildLatestReviewMap(reviews);
   renderDealRoomGuidance(updates, reviewMap);  // D6b: who-needs-to-act banner (pure render off _dealRoomState)
