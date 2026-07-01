@@ -9959,17 +9959,18 @@ async function uploadDealFile(file, dealId, updateId) {
   return { ok: true, path: path, name: safeName };
 }
 
-async function getDealFileSignedUrl(filePath, expiresInSeconds) {
+async function getDealFileSignedUrl(filePath, expiresInSeconds, downloadMode) {
   if (!sb || !filePath) return { ok: false, error: 'No file' };
   const expiry = expiresInSeconds || 300; // 5 minutes — short-lived
   const { data, error } = await sb.storage
     .from('deal-files')
-    .createSignedUrl(filePath, expiry);
+    .createSignedUrl(filePath, expiry, downloadMode ? { download: (typeof downloadMode === 'string' ? downloadMode : true) } : undefined);
   if (error) return { ok: false, error: error.message }; // non-participant → denied here by RLS
   return { ok: true, url: data.signedUrl };
 }
-// ── D5c: Deal Room — open a PRIVATE deal file. Generates a FRESH signed URL ON CLICK
-// (never on render) via getDealFileSignedUrl, then opens it in a new tab. No public URLs.
+// ── D5c: Deal Room — SAVE a PRIVATE deal file. Generates a FRESH download-mode signed URL
+// ON CLICK (never on render) via getDealFileSignedUrl(..., true), then triggers a real save
+// (Content-Disposition: attachment) so images/PDFs download instead of opening inline.
 // `btn` is the clicked element (for the preparing state); `filePath` is the storage key.
 // Render-side gate requires BOTH file_name and file_path before this can be invoked.
 // Touches NOTHING in settlement / payment / XP / stakes / disputes / forged_deals. ──
@@ -9995,12 +9996,24 @@ async function openDealFile(btn, filePath) {
   }
 
   try {
-    var res = await getDealFileSignedUrl(filePath); // fresh, short-lived; RLS-gated
+   // Request a DOWNLOAD signed URL (Content-Disposition: attachment) so images/PDFs
+  // save to the device instead of opening inline. Fresh, short-lived, RLS-gated.
+    var res = await getDealFileSignedUrl(filePath, 300, true);
     if (!res || !res.ok || !res.url) {
       showToast((res && res.error) || 'Could not prepare that file');
       return;
     }
-    window.open(res.url, '_blank', 'noopener,noreferrer');
+ // Trigger a real save via a transient anchor. The server's attachment disposition
+// drives the download cross-origin (the `download` attribute is ignored cross-origin
+// but harmless); target=_blank is a graceful fallback if disposition is ever absent.
+var a = document.createElement('a');
+a.href = res.url;
+a.rel = 'noopener noreferrer';
+a.target = '_blank';
+a.download = '';
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
   } catch (e) {
     showToast('Could not open that file — please try again');
   } finally {
