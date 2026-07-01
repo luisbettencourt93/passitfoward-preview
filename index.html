@@ -10311,10 +10311,9 @@ function dealRoomTimelineHtml(updates, reviewMap, viewerHandle, dealStatus) {
       </div>
       ${u.title ? `<div style="font-size:13px;font-weight:700;color:#e8f0f8;line-height:1.3;margin-bottom:${(u.body||u.image_url||u.link)?'6px':'0'};">${sanitize(u.title)}</div>` : ''}
       ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:6px;cursor:pointer;" alt="">` : ''}
-           ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
+       ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
       ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
-      ${u.file_name ? `<div style="margin-top:7px;display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid #213a54;border-radius:7px;padding:5px 9px;"><i class="fas fa-paperclip" style="font-size:9px;color:#60a5fa;"></i>${sanitize(u.file_name)}</div>` : ''}
-      ${dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus)}
+      ${u.file_name ? `<div style="margin-top:7px;font-size:10.5px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid #213a54;border-radius:7px;padding:5px 9px;display:inline-block;">📎 ${sanitize(u.file_name)}</div>` : ''}      ${dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus)}
     </div>`;
   }).join('')}</div>`;
 }
