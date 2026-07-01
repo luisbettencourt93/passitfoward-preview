@@ -10090,7 +10090,7 @@ let _dealRoomActiveId = null;  // D2: the deal currently open in the Deal Room (
 let _dealRoomCounterparty = null;  // D4b: the other participant (recipient for final_delivery notifications)
   // ── D6a: Deal Room state read (READ-ONLY keystone). Fetches the authoritative forged_deals
 // row so the room knows viewer role, status, outcome, and who has/hasn't voted. Consumed by
-// D6b guidance later — NOTHING renders from this yet. NEVER writes. Non-fatal: on any
+// the D6b guidance banner (dealRoomGuidanceHtml). NEVER writes. Non-fatal: on any
 // failure the room behaves exactly as before (state stays null).
 // Role derivation uses the SAME raw handle equality as settleForge/dealCard, so what this
 // reports always agrees with what settlement will actually do. ──
@@ -10176,11 +10176,12 @@ async function loadDealRoomState(dealId) {
 
   modal.style.display = 'flex';
 
-   // D6a: fetch authoritative deal state (read-only, non-fatal). Nothing renders from it yet.
+   // D6a: fetch authoritative deal state (read-only, non-fatal). D6b's guidance banner renders from it.
   await loadDealRoomState(dealId);
   const updates = await loadDealProgressUpdates(dealId);
   const reviews = await loadDealReviews(dealId);
   const reviewMap = buildLatestReviewMap(reviews);
+  renderDealRoomGuidance(updates, reviewMap);  // D6b: who-needs-to-act banner (pure render off _dealRoomState)
   const fdEl = document.getElementById('deal-room-final-delivery');
   if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
   if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, reviewMap, pifDealProofNormalizeHandle(currentUser.handle), dealStatus || 'active');
@@ -10309,9 +10310,10 @@ clearDealFileInput();  // D5b: reset the file picker + filename display after po
 const typeEl = document.getElementById('deal-room-type');
   if (typeEl) typeEl.value = 'progress';
 
-    const updates = await loadDealProgressUpdates(_dealRoomActiveId);
+  const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
   const reviewMap = buildLatestReviewMap(reviews);
+  renderDealRoomGuidance(updates, reviewMap);  // D6b: who-needs-to-act banner (pure render off _dealRoomState)
   const fdEl = document.getElementById('deal-room-final-delivery');
   if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
   const listEl = document.getElementById('deal-room-timeline');
@@ -10403,6 +10405,7 @@ async function submitDealReview(updateId, reviewState, authorHandle, updateType)
   const updates = await loadDealProgressUpdates(_dealRoomActiveId);
   const reviews = await loadDealReviews(_dealRoomActiveId);
   const reviewMap = buildLatestReviewMap(reviews);
+  renderDealRoomGuidance(updates, reviewMap);  // D6b: who-needs-to-act banner (pure render off _dealRoomState)
   const fdEl = document.getElementById('deal-room-final-delivery');
   if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
   const listEl = document.getElementById('deal-room-timeline');
@@ -10490,6 +10493,68 @@ function dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus) {
 
  return badgeHtml + readyHtml + actionsHtml;
 }
+// ── D6b: Deal Room guidance banner (PURE RENDER). Derives "what's happening / who needs to
+// act next" from D6a's _dealRoomState (deal row) + the already-loaded updates & reviews.
+// Copy points to EXISTING flows only (Mark Outcome stays on the deal card — D6c is held).
+// NEVER reveals the other party's outcome vote before settlement (matches card behaviour).
+// No writes, no new queries, no settlement/XP/stakes/dispute/status logic. ──
+function dealRoomGuidanceHtml(updates, reviewMap) {
+  const s = _dealRoomState;
+  if (!s || !s.isParticipant || !s.deal) return '';
+  const other = sanitize(s.otherHandle || '');
+
+  const box = (border, bg, color, primary, secondary) =>
+    `<div style="background:${bg};border:1px solid ${border};border-radius:9px;padding:10px 12px;margin-bottom:14px;">
+      <div style="font-size:11px;color:${color};font-weight:800;line-height:1.4;">${primary}</div>
+      ${secondary ? `<div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.5;">${secondary}</div>` : ''}
+    </div>`;
+  const amber = (p, sec) => box('rgba(245,158,11,0.22)', 'rgba(245,158,11,0.06)', '#f59e0b', p, sec);
+  const blue  = (p, sec) => box('rgba(96,165,250,0.22)', 'rgba(96,165,250,0.06)', '#60a5fa', p, sec);
+  const green = (p, sec) => box('rgba(45,212,160,0.22)', 'rgba(45,212,160,0.06)', '#2dd4a0', p, sec);
+  const muted = (p, sec) => box('#2d4f6f', 'rgba(255,255,255,0.02)', '#7d9bbb', p, sec);
+
+  // Closed / non-active states first (authoritative deal row).
+  if (s.isSettled && s.deal.outcome === 'delivered') return green('✅ Deal completed — both of you marked it delivered.', 'Stakes released. This deal is closed.');
+  if (s.isSettled && s.deal.outcome === 'failed')    return muted('Deal closed — both of you marked it failed.', 'Stakes returned, no strikes.');
+  if (s.deal.status === 'cancelled') return muted('This deal was cancelled.', '');
+  if (s.deal.status === 'rejected')  return muted('This deal was rejected.', '');
+  if (s.isDisputed) return amber('⚖️ Disputed — one of you marked delivered, the other failed.', 'Stakes stay locked until the founder resolves it. You\'ll be notified.');
+  if (s.deal.status === 'pending')   return amber('⏳ Waiting for acceptance.', s.viewerRole === 'initiator' ? '@' + other + ' hasn\'t accepted this deal yet.' : 'Respond to this deal from My Forged Deals.');
+  if (!s.isActive) return '';
+
+  // Active + outcome votes already moving → the vote flow is the next step.
+  // (Deliberately does NOT reveal WHICH outcome the other party chose.)
+  if (s.waitingOn === 'me')    return amber(`⚡ Waiting on you — @${other} has marked their outcome.`, 'Mark yours from this deal\'s card in My Forged Deals to settle the deal.');
+  if (s.waitingOn === 'other') return blue(`⌛ You marked ${sanitize(s.myOutcome || '')} — waiting for @${other}.`, 'The deal settles once both outcomes are in.');
+
+  // Active, no votes yet → guidance follows the delivery stage.
+  const finals = (Array.isArray(updates) ? updates : []).filter(u => u.update_type === 'final_delivery');
+  if (!finals.length) return blue('⚡ Deal in progress.', 'Post progress updates as you go, and a Final Delivery update when the work is done.');
+
+  const latest = finals[finals.length - 1];
+  const rev = (reviewMap && reviewMap[latest.id]) || null;
+  const iDelivered = pifDealProofNormalizeHandle(latest.author_handle || '') === pifDealProofNormalizeHandle(currentUser.handle || '');
+
+  if (rev && rev.review_state === 'approved') {
+    return amber('✅ Final delivery approved — ready to complete.', 'Both of you: use Mark Outcome on this deal\'s card in My Forged Deals to settle it.');
+  }
+  if (rev && rev.review_state === 'changes_requested') {
+    return iDelivered
+      ? amber('🔁 Changes requested on your final delivery.', 'Post a revision or an updated Final Delivery below when it\'s ready.')
+      : blue(`🔁 You requested changes — waiting for @${other} to revise.`, '');
+  }
+  // Final delivery posted, not yet reviewed (or explicit needs_review).
+  return iDelivered
+    ? blue(`📦 Final delivery posted — waiting for @${other} to review it.`, 'They can Approve or Request changes on the update below.')
+    : amber(`📦 @${other} posted a final delivery — review it.`, 'Use Approve or Request changes on their update below.');
+}
+
+// D6b: paint the banner into its container. Pure DOM set — safe to call after every timeline render.
+function renderDealRoomGuidance(updates, reviewMap) {
+  const el = document.getElementById('deal-room-guidance');
+  if (el) el.innerHTML = dealRoomGuidanceHtml(updates, reviewMap);
+}
+
 
 // ── D4a: Final Delivery Package — read-only headline above the timeline.
 // Surfaces final_delivery updates (newest-first) + their D3 approval state + a prominent
@@ -17786,8 +17851,9 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       <button onclick="closeModal('deal-room-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;flex-shrink:0;">✕</button>
     </div>
    <div style="padding:16px 22px 22px;">
-      <!-- D4a: Final Delivery Package (above the timeline; populated by openDealRoom, hidden when empty) -->
-      <div id="deal-room-final-delivery"></div>
+       <!-- D6b: who-needs-to-act guidance banner (populated by renderDealRoomGuidance; hidden when empty) -->
+       <div id="deal-room-guidance"></div>
+      <!-- D4a: Final Delivery Package (above the timeline; populated by openDealRoom, hidden when empty) -->      <div id="deal-room-final-delivery"></div>
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px;">
         <i class="fas fa-stream" style="font-size:11px;color:#60a5fa;"></i>
         <span style="font-size:11px;color:#94a3b8;font-weight:700;letter-spacing:0.4px;">PROGRESS &amp; DELIVERY</span>
