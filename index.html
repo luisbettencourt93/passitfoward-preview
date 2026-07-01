@@ -10059,7 +10059,46 @@ async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealSta
   if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, reviewMap, pifDealProofNormalizeHandle(currentUser.handle), dealStatus || 'active');
 }
 // D2: composer submit — validate + save via saveProgressUpdate, then refresh the timeline.
+ // D2: composer submit — validate + save via saveProgressUpdate, then refresh the timeline.
+
+// D5b: validate + display the selected file on pick (reuses D5a constants). One file per update.
+function onDealFileSelected() {
+  const input = document.getElementById('deal-room-file-input');
+  const disp = document.getElementById('deal-room-file-selected');
+  const file = input && input.files && input.files[0];
+  if (!file) { if (disp) disp.style.display = 'none'; return; }
+
+  const ext = (String(file.name || '').split('.').pop() || '').toLowerCase();
+  if (!DEAL_FILE_ALLOWED_EXT.includes(ext)) {
+    showToast('File type not allowed');
+    input.value = '';
+    if (disp) disp.style.display = 'none';
+    return;
+  }
+  if (file.size > DEAL_FILE_MAX_BYTES) {
+    showToast('File exceeds 25MB');
+    input.value = '';
+    if (disp) disp.style.display = 'none';
+    return;
+  }
+
+  if (disp) {
+    disp.style.display = 'flex';
+    disp.innerHTML = '<i class="fas fa-paperclip" style="font-size:10px;color:#60a5fa;"></i>'
+      + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + sanitize(file.name) + '</span>'
+      + '<button type="button" onclick="clearDealFileInput()" style="background:none;border:none;color:#5a7a9a;cursor:pointer;font-size:13px;padding:0 4px;">✕</button>';
+  }
+}
+
+function clearDealFileInput() {
+  const input = document.getElementById('deal-room-file-input');
+  const disp = document.getElementById('deal-room-file-selected');
+  if (input) input.value = '';
+  if (disp) { disp.style.display = 'none'; disp.innerHTML = ''; }
+}
+
 async function submitProgressUpdate() {
+  async function submitProgressUpdate() {
   if (!_dealRoomActiveId) { showToast('No deal open'); return; }
 
   const btn = document.getElementById('deal-room-post-btn');
@@ -10095,7 +10134,36 @@ async function submitProgressUpdate() {
   }
 
     showToast('Update posted ✅');
+    
+// D5b: if a file was attached, upload it and link it to the just-created update row.
+// Flow: row already inserted (result.data.id) → upload → update row with file_path/file_name.
+// Partial-failure handling: never lose the written update; clean up orphans; never block.
+const fileInput = document.getElementById('deal-room-file-input');
+const selectedFile = fileInput && fileInput.files && fileInput.files[0];
 
+if (selectedFile && result.data && result.data.id) {
+  const newUpdateId = result.data.id;
+  const up = await uploadDealFile(selectedFile, _dealRoomActiveId, newUpdateId);
+
+  if (!up.ok) {
+    // Upload failed → keep the update, warn clearly.
+    showToast('Update posted, but file upload failed. Please try attaching the file again.');
+  } else {
+    // Upload succeeded → link it to the row.
+    const { error: linkErr } = await sb.from('deal_progress_updates')
+      .update({ file_path: up.path, file_name: up.name })
+      .eq('id', newUpdateId);
+
+    if (linkErr) {
+      // Path-save failed → remove the orphan file, warn.
+      const { error: rmErr } = await sb.storage.from('deal-files').remove([up.path]);
+      if (rmErr) {
+        console.warn('D5b: orphan file could not be removed (clean up later):', up.path, rmErr.message);
+      }
+      showToast('Update posted, but the file could not be attached. Please try again.');
+    }
+  }
+}
   // D4b: notify the counterparty when a FINAL DELIVERY is posted (meaningful-only — not routine updates).
   // Uses the existing addNotif pipeline; push automatic. Never touches settlement.
   if (update.update_type === 'final_delivery' && _dealRoomCounterparty) {
@@ -10110,7 +10178,7 @@ async function submitProgressUpdate() {
     const el = document.getElementById('deal-room-' + k + '-input');
     if (el) el.value = '';
   });
-
+clearDealFileInput();  // D5b: reset the file picker + filename display after post
 const typeEl = document.getElementById('deal-room-type');
   if (typeEl) typeEl.value = 'progress';
 
@@ -10245,6 +10313,7 @@ function dealRoomTimelineHtml(updates, reviewMap, viewerHandle, dealStatus) {
       ${u.image_url ? `<img src="${sanitize(u.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(u.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:140px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:6px;cursor:pointer;" alt="">` : ''}
            ${u.body ? `<div style="font-size:11.5px;color:#94a3b8;line-height:1.55;margin-bottom:${u.link?'6px':'0'};">${sanitize(u.body)}</div>` : ''}
       ${u.link ? `<a href="${sanitize(u.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+      ${u.file_name ? `<div style="margin-top:7px;display:inline-flex;align-items:center;gap:6px;font-size:10.5px;color:#94a3b8;background:rgba(255,255,255,0.03);border:1px solid #213a54;border-radius:7px;padding:5px 9px;"><i class="fas fa-paperclip" style="font-size:9px;color:#60a5fa;"></i>${sanitize(u.file_name)}</div>` : ''}
       ${dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus)}
     </div>`;
   }).join('')}</div>`;
@@ -17615,9 +17684,22 @@ window.nexarUpdateFabs = nexarUpdateFabs;
 
   <input type="url" id="deal-room-link-input" maxlength="500" placeholder="Link (optional — deliverable, repo, doc)" class="form-input" style="margin-bottom:8px;font-size:13px;">
 
-  <input type="url" id="deal-room-image-input" maxlength="500" placeholder="Image URL (optional — screenshot/preview)" class="form-input" style="margin-bottom:10px;font-size:13px;">
+<input type="url" id="deal-room-image-input" maxlength="500" placeholder="Image URL (optional — screenshot/preview)" class="form-input" style="margin-bottom:10px;font-size:13px;">
 
-  <button type="button" id="deal-room-post-btn" onclick="submitProgressUpdate()" style="width:100%;background:#60a5fa;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Post update</button>
+<!-- D5b: file attachment (one file per update; private bucket; participant-only) -->
+<div style="margin-bottom:10px;">
+  <input type="file" id="deal-room-file-input" onchange="onDealFileSelected()"
+    accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.zip"
+    style="display:none;">
+  <button type="button" onclick="document.getElementById('deal-room-file-input').click()"
+    style="width:100%;background:rgba(96,165,250,0.08);border:1px dashed rgba(96,165,250,0.35);color:#60a5fa;padding:9px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;">
+    <i class="fas fa-paperclip" style="font-size:10px;margin-right:5px;"></i>Attach file (optional)
+  </button>
+  <div id="deal-room-file-selected" style="display:none;margin-top:7px;font-size:11px;color:#94a3b8;align-items:center;gap:7px;"></div>
+  <div style="font-size:9.5px;color:#5a7a9a;line-height:1.45;margin-top:6px;">Allowed: pdf, png, jpg, jpeg, webp, doc, docx, xls, xlsx, zip · max 25MB · one file per update</div>
+</div>
+
+<button type="button" id="deal-room-post-btn" onclick="submitProgressUpdate()" style="width:100%;background:#60a5fa;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Post update</button>
 
   <div style="font-size:10px;color:#5a7a9a;text-align:center;line-height:1.5;margin-top:10px;">Private to deal participants.</div>
 </div>
