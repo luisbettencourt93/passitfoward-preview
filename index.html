@@ -16237,7 +16237,11 @@ async function showMyForgedDeals() {
           ${p.link ? `<a href="${sanitize(p.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
         </div>
       `).join('');
-      actions = `<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
+      // D6c.2a: settled+delivered Deal Room access — read-only room (composer + review
+     // actions self-gate on the 'settled' status arg; guidance banner shows the green
+    // completed state). Delivered-only per scope; other terminal states get no button.
+       actions = `<button onclick="openDealRoom(${d.id}, ${JSON.stringify(d.title).replace(/"/g,'&quot;')}, '${sanitize(other)}', ${JSON.stringify(String(d.amount||'')).replace(/"/g,'&quot;')}, 'settled')" style="width:100%;margin-top:6px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);color:#60a5fa;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;"><i class="fas fa-briefcase" style="font-size:10px;margin-right:5px;"></i>Deal Room</button>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);">
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">
           <i class="fas fa-folder-open" style="font-size:11px;color:#2dd4a0;"></i>
           <span style="font-size:11px;color:#2dd4a0;font-weight:700;letter-spacing:0.4px;">COMPLETION PROOF</span>
