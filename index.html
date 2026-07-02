@@ -12971,19 +12971,62 @@ function bumpDailyPostCount() {
   localStorage.setItem(key, (getDailyPostCount() + 1).toString());
 }
 
-// Anti-farming: check repeat deals between same 2 users
+// ── Anti-farming guard (HARDENED — handle-format tolerant + fail-closed).
+// Counts prior settled+delivered deals between two members. forged_deals is KNOWN to
+// store handles inconsistently (some rows '@handle', some bare — e.g. deal 90 vs 95),
+// and the old exact-match count silently missed cross-format history. Both inputs are
+// now canonicalized via pifNormalizeHandleKey (trim, strip '@', lowercase) and each
+// side matches bare AND '@'-prefixed stored forms, in both initiator/receiver
+// orderings — the same tolerance showMyForgedDeals already uses against this table.
+// FAIL-CLOSED: unusable inputs or ANY query error return 2 (the suppression threshold)
+// so a failure can never mint an XP bonus. Trade-off accepted: a transient error may
+// deny a legitimate bonus or show a spurious repeat-partner warning — recoverable and
+// non-inflationary, unlike the old behaviour (error → 0 → bonus minted). NOTE: the old
+// code never read the supabase `error` field, so every query failure counted as 0.
+// If the >=2 reward threshold ever changes, revisit FAIL_CLOSED to match.
+// Callers inherit unchanged: settleForge, resolveDispute, pre-forge warning.
+// Read-only. No settlement / XP-ledger / stake / dispute logic touched.
 async function getCompletedDealsBetween(handleA, handleB) {
-  if(!sb) return 0;
+  const FAIL_CLOSED = 2;
+  if (!sb) return FAIL_CLOSED;
+
   try {
-    const { data } = await sb.from('forged_deals')
+    const a = pifNormalizeHandleKey(handleA);
+    const b = pifNormalizeHandleKey(handleB);
+
+    if (!a || !b) return FAIL_CLOSED;
+
+    const combos = [];
+
+    for (const i of [a, '@' + a]) {
+      for (const r of [b, '@' + b]) {
+        combos.push(`and(initiator_handle.eq.${i},receiver_handle.eq.${r})`);
+      }
+    }
+
+    for (const i of [b, '@' + b]) {
+      for (const r of [a, '@' + a]) {
+        combos.push(`and(initiator_handle.eq.${i},receiver_handle.eq.${r})`);
+      }
+    }
+
+    const { data, error } = await sb.from('forged_deals')
       .select('id')
       .eq('status', 'settled')
       .eq('outcome', 'delivered')
-      .or(`and(initiator_handle.eq.${handleA},receiver_handle.eq.${handleB}),and(initiator_handle.eq.${handleB},receiver_handle.eq.${handleA})`);
-    return data?.length || 0;
-  } catch(e) { return 0; }
-}
+      .or(combos.join(','));
 
+    if (error) {
+      console.warn('getCompletedDealsBetween query error (fail-closed):', error);
+      return FAIL_CLOSED;
+    }
+
+    return data?.length || 0;
+  } catch (e) {
+    console.warn('getCompletedDealsBetween failed (fail-closed):', e);
+    return FAIL_CLOSED;
+  }
+}
 // Duplicate prevention: track recent XP events
 const _xpCooldowns = {};
 function xpAlreadyAwarded(actionKey, cooldownMs) {
