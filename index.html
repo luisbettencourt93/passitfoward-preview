@@ -10511,15 +10511,21 @@ function dealRoomGuidanceHtml(updates, reviewMap) {
   if (!s || !s.isParticipant || !s.deal) return '';
   const other = sanitize(s.otherHandle || '');
 
-  const box = (border, bg, color, primary, secondary) =>
-    `<div style="background:${bg};border:1px solid ${border};border-radius:9px;padding:10px 12px;margin-bottom:14px;">
-      <div style="font-size:11px;color:${color};font-weight:800;line-height:1.4;">${primary}</div>
-      ${secondary ? `<div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.5;">${secondary}</div>` : ''}
-    </div>`;
-  const amber = (p, sec) => box('rgba(245,158,11,0.22)', 'rgba(245,158,11,0.06)', '#f59e0b', p, sec);
+  const box = (border, bg, color, primary, secondary, actionHtml) =>
+  `<div style="background:${bg};border:1px solid ${border};border-radius:9px;padding:10px 12px;margin-bottom:14px;">
+    <div style="font-size:11px;color:${color};font-weight:800;line-height:1.4;">${primary}</div>
+    ${secondary ? `<div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.5;">${secondary}</div>` : ''}
+    ${actionHtml || ''}
+  </div>`;
+  const amber = (p, sec, act) => box('rgba(245,158,11,0.22)', 'rgba(245,158,11,0.06)', '#f59e0b', p, sec, act);  
   const blue  = (p, sec) => box('rgba(96,165,250,0.22)', 'rgba(96,165,250,0.06)', '#60a5fa', p, sec);
   const green = (p, sec) => box('rgba(45,212,160,0.22)', 'rgba(45,212,160,0.06)', '#2dd4a0', p, sec);
   const muted = (p, sec) => box('#2d4f6f', 'rgba(255,255,255,0.02)', '#7d9bbb', p, sec);
+
+// D6c.1: in-room Mark Outcome entry — close-then-open. Same purple as the deal card's
+// Mark Outcome button so it reads as the same action. Only rendered in the two states
+// where settling is the guided next step (waiting-on-you, approved-ready-to-complete).
+const markOutcomeBtn = `<button type="button" onclick="dealRoomMarkOutcome()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.28);padding:8px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;">Mark Outcome</button>`;
 
   // Closed / non-active states first (authoritative deal row).
   if (s.isSettled && s.deal.outcome === 'delivered') return green('✅ Deal completed — both of you marked it delivered.', 'Stakes released. This deal is closed.');
@@ -10532,7 +10538,7 @@ function dealRoomGuidanceHtml(updates, reviewMap) {
 
   // Active + outcome votes already moving → the vote flow is the next step.
   // (Deliberately does NOT reveal WHICH outcome the other party chose.)
-  if (s.waitingOn === 'me')    return amber(`⚡ Waiting on you — @${other} has marked their outcome.`, 'Mark yours from this deal\'s card in My Forged Deals to settle the deal.');
+  if (s.waitingOn === 'me')    return amber(`⚡ Waiting on you — @${other} has marked their outcome.`, 'Mark yours to settle the deal — the outcome form opens and this room closes.', markOutcomeBtn);
   if (s.waitingOn === 'other') return blue(`⌛ You marked ${sanitize(s.myOutcome || '')} — waiting for @${other}.`, 'The deal settles once both outcomes are in.');
 
   // Active, no votes yet → guidance follows the delivery stage.
@@ -10544,8 +10550,7 @@ function dealRoomGuidanceHtml(updates, reviewMap) {
   const iDelivered = pifDealProofNormalizeHandle(latest.author_handle || '') === pifDealProofNormalizeHandle(currentUser.handle || '');
 
   if (rev && rev.review_state === 'approved') {
-    return amber('✅ Final delivery approved — ready to complete.', 'Both of you: use Mark Outcome on this deal\'s card in My Forged Deals to settle it.');
-  }
+  return amber('✅ Final delivery approved — ready to complete.', 'Both of you need to mark an outcome to settle — the outcome form opens and this room closes.', markOutcomeBtn);  }
   if (rev && rev.review_state === 'changes_requested') {
     return iDelivered
       ? amber('🔁 Changes requested on your final delivery.', 'Post a revision or an updated Final Delivery below when it\'s ready.')
@@ -10564,11 +10569,25 @@ function renderDealRoomGuidance(updates, reviewMap) {
 }
 
 
+// ── D6c.1: close-then-open Mark Outcome entry. Closes the Deal Room FIRST (no modal
+// stacking — forge-outcome-modal sits at a LOWER z-index than the room), then opens the
+// EXISTING outcome flow. settleForge runs byte-for-byte untouched; after settlement the
+// user lands in My Forged Deals exactly like the tested card flow. Reopening the room
+// always re-fetches fresh state (D6a), so no stale room can survive a settlement. ──
+function dealRoomMarkOutcome() {
+  const s = _dealRoomState;
+  const id = (s && s.deal && s.deal.id) || _dealRoomActiveId;
+  if (!id) { showToast('No deal open'); return; }
+
+  closeModal('deal-room-modal');
+  openForgeOutcome(id);
+}
+
 // ── D4a: Final Delivery Package — read-only headline above the timeline.
 // Surfaces final_delivery updates (newest-first) + their D3 approval state + a prominent
 // deliverable link. Reuses the already-loaded updates + review map (no new query).
 // Read-only presentation. NEVER settlement (approval stays a signal). ──
-function dealRoomFinalDeliveryHtml(updates, reviewMap) {
+  function dealRoomFinalDeliveryHtml(updates, reviewMap) {
   if (!Array.isArray(updates)) return '';
   const finals = updates.filter(u => u.update_type === 'final_delivery').slice().reverse(); // newest-first
   if (!finals.length) return '';  // section hidden when no final delivery exists
