@@ -15642,16 +15642,39 @@ function renderXpProgress() {
   }
 }
 
-// Returns the existing pending/active deal between two handles, or null.
-// Used for HARD-BLOCK duplicate prevention.
+// ── Duplicate-deal HARD-BLOCK (HARDENED — handle-format tolerant + fail-closed).
+// Returns the existing pending/active/disputed deal between two members, or null.
+// forged_deals stores handles inconsistently ('@handle' vs bare — e.g. deal 90 vs 95),
+// and the old exact-match lookup could miss an existing deal across formats, letting a
+// second concurrent deal be forged with the same partner. Both inputs are canonicalized
+// via pifNormalizeHandleKey and each side matches bare AND '@'-prefixed stored forms in
+// both orderings — the same proven 8-combo pattern as getCompletedDealsBetween.
+// FAIL-CLOSED: unusable inputs or ANY query error return a truthy sentinel so the block
+// stays strict (callers treat any truthy return as "deal exists"). Both current callers
+// use the result as a boolean only; do NOT rely on real deal fields when failClosed is
+// set. Trade-off: a transient error temporarily blocks forging with that partner —
+// recoverable via retry, unlike the old behaviour (error → null → duplicate allowed;
+// the old code never read the supabase `error` field and had no try/catch at all).
+// Callers inherit unchanged: showForgeModal pre-check, forge-submit race re-check.
+// Read-only. No deal-creation / settlement / XP / stake / dispute logic touched.
 async function getActiveDealBetween(handleA, handleB) {
-  if (!sb || !handleA || !handleB) return null;
-  const { data } = await sb.from('forged_deals')
-    .select('id,title,status,initiator_handle,receiver_handle')
-    .in('status', ['pending', 'active', 'disputed'])
-    .or(`and(initiator_handle.eq.${handleA},receiver_handle.eq.${handleB}),and(initiator_handle.eq.${handleB},receiver_handle.eq.${handleA})`)
-    .limit(1);
-  return data?.[0] || null;
+  const FAIL_CLOSED = { id: null, title: null, status: 'unverified', failClosed: true };
+  if (!sb) return FAIL_CLOSED;
+  try {
+    const a = pifNormalizeHandleKey(handleA);
+    const b = pifNormalizeHandleKey(handleB);
+    if (!a || !b) return FAIL_CLOSED;
+    const combos = [];
+    for (const i of [a, '@' + a]) for (const r of [b, '@' + b]) combos.push(`and(initiator_handle.eq.${i},receiver_handle.eq.${r})`);
+    for (const i of [b, '@' + b]) for (const r of [a, '@' + a]) combos.push(`and(initiator_handle.eq.${i},receiver_handle.eq.${r})`);
+    const { data, error } = await sb.from('forged_deals')
+      .select('id,title,status,initiator_handle,receiver_handle')
+      .in('status', ['pending', 'active', 'disputed'])
+      .or(combos.join(','))
+      .limit(1);
+    if (error) { console.warn('getActiveDealBetween query error (fail-closed):', error); return FAIL_CLOSED; }
+    return data?.[0] || null;
+  } catch (e) { console.warn('getActiveDealBetween failed (fail-closed):', e); return FAIL_CLOSED; }
 }
 
 async function showForgeModal(oppId, oppTitle, posterHandle) {
