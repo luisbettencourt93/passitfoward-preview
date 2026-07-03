@@ -10485,11 +10485,20 @@ function dealRoomReviewSectionHtml(u, reviewMap, viewerHandle, dealStatus) {
   // "Ready to complete" signal — ONLY when an approved final_delivery exists. Signal only, NO settlement.
   let readyHtml = '';
   if (review && review.review_state === 'approved' && u.update_type === 'final_delivery') {
-    readyHtml = `<div style="margin-top:8px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.22);border-radius:8px;padding:9px 11px;">
-      <div style="font-size:10.5px;color:#2dd4a0;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-circle-check" style="font-size:11px;"></i>Final delivery approved — ready to complete</div>
-      <div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.45;">When you're both ready, mark the deal's outcome from the deal card to settle it.</div>
-    </div>`;
-  }
+  // D6c.2a-fix: active rooms keep the completion prompt; settled rooms show record copy.
+  const readyTitle = isActive
+    ? 'Final delivery approved — ready to complete'
+    : 'Final delivery approved';
+
+  const readySub = isActive
+    ? "When you're both ready, mark the deal's outcome from the deal card to settle it."
+    : 'This deal has since been completed and settled.';
+
+  readyHtml = `<div style="margin-top:8px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.22);border-radius:8px;padding:9px 11px;">
+    <div style="font-size:10.5px;color:#2dd4a0;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-circle-check" style="font-size:11px;"></i>${readyTitle}</div>
+    <div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.45;">${readySub}</div>
+  </div>`;
+}
 
   // Review actions — ONLY on the OTHER participant's updates, only while the deal is active.
   let actionsHtml = '';
@@ -10588,6 +10597,14 @@ function dealRoomMarkOutcome() {
 // deliverable link. Reuses the already-loaded updates + review map (no new query).
 // Read-only presentation. NEVER settlement (approval stays a signal). ──
   function dealRoomFinalDeliveryHtml(updates, reviewMap) {
+  // D6c.2a-fix: authoritative room status for COPY ONLY (the mark-outcome hint is wrong
+  // once settled). Reads _dealRoomState like the guidance banner does; if state is ever
+  // unavailable, falls back to the pre-fix active wording — no behaviour change.
+  const roomActive   = !(_dealRoomState && _dealRoomState.deal) || _dealRoomState.deal.status === 'active';
+  const fdReadyTitle = roomActive ? 'Final delivery approved — ready to complete' : 'Final delivery approved';
+  const fdReadySub   = roomActive
+    ? "When you're both ready, mark the deal's outcome from the deal card to settle it."
+    : 'This deal has since been completed and settled.';
   if (!Array.isArray(updates)) return '';
   const finals = updates.filter(u => u.update_type === 'final_delivery').slice().reverse(); // newest-first
   if (!finals.length) return '';  // section hidden when no final delivery exists
@@ -10617,8 +10634,8 @@ function dealRoomMarkOutcome() {
         <span style="font-size:9px;color:#5a7a9a;">by @${sanitize(review.reviewer_handle || '')}</span>
       </div>${review.note ? `<div style="margin-top:5px;font-size:10.5px;color:#94a3b8;line-height:1.5;background:rgba(255,255,255,0.02);border-left:2px solid ${sm.color};padding:6px 9px;border-radius:0 6px 6px 0;">${sanitize(review.note)}</div>` : ''}` : ''}
       ${isApproved ? `<div style="margin-top:9px;background:rgba(45,212,160,0.06);border:1px solid rgba(45,212,160,0.22);border-radius:8px;padding:9px 11px;">
-        <div style="font-size:10.5px;color:#2dd4a0;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-circle-check" style="font-size:11px;"></i>Final delivery approved — ready to complete</div>
-        <div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.45;">When you're both ready, mark the deal's outcome from the deal card to settle it.</div>
+        <div style="font-size:10.5px;color:#2dd4a0;font-weight:700;display:flex;align-items:center;gap:6px;"><i class="fas fa-circle-check" style="font-size:11px;"></i>${fdReadyTitle}</div>
+        <div style="font-size:9.5px;color:#5a7a9a;margin-top:3px;line-height:1.45;">${fdReadySub}</div>
       </div>` : ''}
     </div>`;
   }).join('');
