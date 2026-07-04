@@ -16234,19 +16234,28 @@ async function showMyForgedDeals() {
 
   // C-core: batch-load completion proofs for settled+delivered deals (C-async-A).
   // Read-only — queries deal_proofs (B2). Never touches forged_deals.
-  const dealProofsMap = {};
+ const dealProofsMap = {};
+  // D6c.2b-card: tri-state for the card-side proof CTA. True ONLY when the bulk read
+  // positively succeeded; on any error the Add buttons are hidden across all cards
+  // (deal_proofs has no uniqueness constraint — unknown must never invite a duplicate).
+  let proofsVerified = false;
   const deliveredIds = history.filter(d => d.outcome === 'delivered').map(d => d.id);
   if (deliveredIds.length && sb) {
     try {
-      const { data: proofRows } = await sb.from('deal_proofs')
+      const { data: proofRows, error: proofErr } = await sb.from('deal_proofs')
         .select('*')
         .in('deal_id', deliveredIds)
         .order('created_at', { ascending: true });
-      (proofRows || []).forEach(p => {
-        if (!dealProofsMap[p.deal_id]) dealProofsMap[p.deal_id] = [];
-        dealProofsMap[p.deal_id].push(p);
-      });
-    } catch (e) { /* proofs are non-critical; deal cards still render without them */ }
+      if (proofErr) {
+        console.warn('deal_proofs bulk read failed (card proof CTAs hidden):', proofErr);
+      } else if (Array.isArray(proofRows)) {
+        proofsVerified = true;
+        proofRows.forEach(p => {
+          if (!dealProofsMap[p.deal_id]) dealProofsMap[p.deal_id] = [];
+          dealProofsMap[p.deal_id].push(p);
+        });
+      }
+    } catch (e) { console.warn('deal_proofs bulk read failed (card proof CTAs hidden):', e); /* proofs are non-critical; deal cards still render without them */ }
   }
   function dealCard(d, canDelete) {
     const isInitiator  = d.initiator_handle === currentUser.handle;
@@ -16333,6 +16342,18 @@ async function showMyForgedDeals() {
       // C-core: completion proof — ONLY on settled+delivered deals. Additive.
       // Reads dealProofsMap (closure) + writes only via saveDealProof → deal_proofs.
       const proofs = dealProofsMap[d.id] || [];
+      // D6c.2b-card: same proof-aware tri-state rule as the Deal Room.
+      const meKey = pifDealProofNormalizeHandle(currentUser.handle || '');
+
+     const myProofExists = proofs.some(
+     p => pifDealProofNormalizeHandle(p.submitter_handle || '') === meKey
+  );
+
+const proofCta = !proofsVerified
+  ? ''
+  : myProofExists
+    ? `<div style="width:100%;background:rgba(45,212,160,0.05);border:1px solid rgba(45,212,160,0.18);color:#2dd4a0;padding:9px;border-radius:8px;font:700 11.5px/1 'Inter',sans-serif;text-align:center;">✓ Your proof added</div>`
+    : `<button type="button" onclick="openDealProofModal(${d.id}, ${JSON.stringify(d.title).replace(/"/g,'&quot;')}, '${sanitize(other)}')" style="width:100%;background:rgba(45,212,160,0.08);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:9px;border-radius:8px;font:700 11.5px/1 'Inter',sans-serif;cursor:pointer;">+ Add completion proof</button>`;
       const proofCards = proofs.map(p => `
         <div style="background:#0c1626;border:1px solid #213a54;border-radius:9px;padding:11px;margin-bottom:8px;">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:${p.description||p.image_url?'7px':'4px'};">
@@ -16354,8 +16375,7 @@ async function showMyForgedDeals() {
           ${proofs.length ? `<span style="font-size:10px;color:#5a7a9a;">· ${proofs.length}</span>` : ''}
         </div>
         ${proofCards}
-        <button type="button" onclick="openDealProofModal(${d.id}, ${JSON.stringify(d.title).replace(/"/g,'&quot;')}, '${sanitize(other)}')" style="width:100%;background:rgba(45,212,160,0.08);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:9px;border-radius:8px;font:700 11.5px/1 'Inter',sans-serif;cursor:pointer;">+ Add completion proof</button>
-      </div>`;
+        ${proofCta}      </div>`;
     }
 
     const deleteBtn = canDelete ? `<button onclick="deleteForge(${d.id})" title="Remove" style="background:none;border:none;color:#3d5a7a;cursor:pointer;font-size:14px;padding:2px;flex-shrink:0;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#3d5a7a'">🗑</button>` : '';
