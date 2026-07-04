@@ -10095,7 +10095,7 @@ let _dealRoomCounterparty = null;  // D4b: the other participant (recipient for 
 // Role derivation uses the SAME raw handle equality as settleForge/dealCard, so what this
 // reports always agrees with what settlement will actually do. ──
 let _dealRoomState = null;  // D6a: authoritative deal-row state for the open room (null until loaded / on failure)
-
+let _dealRoomMyProof = null;  // D6c.2b: viewer's proof state for settled+delivered rooms — true/false, or null when N/A (active room / unknown)
 async function loadDealRoomState(dealId) {
   _dealRoomState = null;
   try {
@@ -10156,7 +10156,46 @@ async function loadDealRoomState(dealId) {
     return null;
   }
 }
-  async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
+  // ── D6c.2b: room proof-state helper (TRI-STATE, fail-safe). Returns:
+//   true  → the viewer's proof for this deal was positively found
+//   false → the query positively succeeded and found no proof by the viewer
+//   null  → the read failed or state can't be verified → the banner renders NO CTA
+// Deliberately does NOT reuse loadDealProofs: that loader collapses "no rows" and
+// "read error" into the same [] return, which cannot satisfy the fail-safe rule
+// (deal_proofs has no uniqueness constraint, so an unknown state must never show the
+// Add button and invite a duplicate). loadDealProofs and the card's bulk proof query
+// are untouched. Read-only; select is minimal (submitter_handle only). ──
+async function loadDealRoomMyProofState(dealId) {
+  try {
+    if (!sb || !currentUser) return null;
+
+    const safeId = Number(dealId);
+    if (!Number.isFinite(safeId)) return null;
+
+    const { data, error } = await sb
+      .from('deal_proofs')
+      .select('submitter_handle')
+      .eq('deal_id', safeId);
+
+    if (error) {
+      console.warn('loadDealRoomMyProofState query error (no CTA):', error);
+      return null;
+    }
+
+    if (!Array.isArray(data)) return null;
+
+    const meKey = pifDealProofNormalizeHandle(currentUser.handle || '');
+
+    return data.some(
+      p => pifDealProofNormalizeHandle(p.submitter_handle || '') === meKey
+    );
+  } catch (e) {
+    console.warn('loadDealRoomMyProofState failed (no CTA):', e);
+    return null;
+  }
+}
+
+async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
   const modal = document.getElementById('deal-room-modal');
   if (!modal) return;
 
@@ -10177,7 +10216,22 @@ async function loadDealRoomState(dealId) {
   modal.style.display = 'flex';
 
    // D6a: fetch authoritative deal state (read-only, non-fatal). D6b's guidance banner renders from it.
-  await loadDealRoomState(dealId);
+   await loadDealRoomState(dealId);
+
+// D6c.2b: proof-aware CTA state — settled+delivered rooms only.
+// Active rooms make no deal_proofs request.
+// true = my proof found
+// false = query succeeded and confirmed absent
+// null = unverifiable, so the banner shows no CTA
+_dealRoomMyProof = null;
+
+if (
+  _dealRoomState &&
+  _dealRoomState.isSettled &&
+  _dealRoomState.deal.outcome === 'delivered'
+) {
+  _dealRoomMyProof = await loadDealRoomMyProofState(dealId);
+}
   const updates = await loadDealProgressUpdates(dealId);
   const reviews = await loadDealReviews(dealId);
   const reviewMap = buildLatestReviewMap(reviews);
@@ -10528,7 +10582,7 @@ function dealRoomGuidanceHtml(updates, reviewMap) {
   </div>`;
   const amber = (p, sec, act) => box('rgba(245,158,11,0.22)', 'rgba(245,158,11,0.06)', '#f59e0b', p, sec, act);  
   const blue  = (p, sec) => box('rgba(96,165,250,0.22)', 'rgba(96,165,250,0.06)', '#60a5fa', p, sec);
-  const green = (p, sec) => box('rgba(45,212,160,0.22)', 'rgba(45,212,160,0.06)', '#2dd4a0', p, sec);
+  const green = (p, sec, act) => box('rgba(45,212,160,0.22)', 'rgba(45,212,160,0.06)', '#2dd4a0', p, sec, act);
   const muted = (p, sec) => box('#2d4f6f', 'rgba(255,255,255,0.02)', '#7d9bbb', p, sec);
 
 // D6c.1: in-room Mark Outcome entry — close-then-open. Same purple as the deal card's
@@ -10537,8 +10591,23 @@ function dealRoomGuidanceHtml(updates, reviewMap) {
 const markOutcomeBtn = `<button type="button" onclick="dealRoomMarkOutcome()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.28);padding:8px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;">Mark Outcome</button>`;
 
   // Closed / non-active states first (authoritative deal row).
-  if (s.isSettled && s.deal.outcome === 'delivered') return green('✅ Deal completed — both of you marked it delivered.', 'Stakes released. This deal is closed.');
-  if (s.isSettled && s.deal.outcome === 'failed')    return muted('Deal closed — both of you marked it failed.', 'Stakes returned, no strikes.');
+if (s.isSettled && s.deal.outcome === 'delivered') {
+  // D6c.2b: strict tri-state proof CTA.
+  // false = confirmed absent → show Add
+  // true = proof found → show confirmation
+  // null = unknown/read failure → show no CTA
+  const proofAct = _dealRoomMyProof === false
+    ? `<button type="button" onclick="dealRoomAddProof()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;background:rgba(45,212,160,0.1);color:#2dd4a0;border:1px dashed rgba(45,212,160,0.4);padding:8px;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1;">+ Add Completion Proof</button>`
+    : (_dealRoomMyProof === true
+      ? `<div style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;background:rgba(45,212,160,0.05);color:#2dd4a0;border:1px solid rgba(45,212,160,0.18);padding:8px;border-radius:8px;font-size:11px;font-weight:800;line-height:1;">✓ Proof added</div>`
+      : '');
+
+  return green(
+    '✅ Deal completed — both of you marked it delivered.',
+    'Stakes released. This deal is closed.',
+    proofAct
+  );
+}  if (s.isSettled && s.deal.outcome === 'failed')    return muted('Deal closed — both of you marked it failed.', 'Stakes returned, no strikes.');
   if (s.deal.status === 'cancelled') return muted('This deal was cancelled.', '');
   if (s.deal.status === 'rejected')  return muted('This deal was rejected.', '');
   if (s.isDisputed) return amber('⚖️ Disputed — one of you marked delivered, the other failed.', 'Stakes stay locked until the founder resolves it. You\'ll be notified.');
@@ -10590,6 +10659,26 @@ function dealRoomMarkOutcome() {
 
   closeModal('deal-room-modal');
   openForgeOutcome(id);
+}
+
+// ── D6c.2b: close-then-open Completion Proof entry.
+// The Deal Room closes FIRST, then the existing add-only proof modal opens.
+// saveDealProof / submitDealProof remain untouched.
+function dealRoomAddProof() {
+  const s = _dealRoomState;
+
+  if (!s || !s.deal || !s.deal.id) {
+    showToast('No deal open');
+    return;
+  }
+
+  closeModal('deal-room-modal');
+
+  openDealProofModal(
+    s.deal.id,
+    s.deal.title || '',
+    s.otherHandle || ''
+  );
 }
 
 // ── D4a: Final Delivery Package — read-only headline above the timeline.
