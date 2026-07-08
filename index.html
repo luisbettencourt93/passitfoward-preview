@@ -9801,22 +9801,189 @@ function pifDealProofCleanUrl(value) {
 // ── C-core: Deal Completion Proof modal (writes via saveDealProof → deal_proofs only) ──
 let _activeDealProofId = null;
 
+// ══ D6c.2c.1: Completion Proof file attachments — frontend layer over the 2c.0
+// foundation. STRICT validation (no extension→MIME fallback), dedicated modal
+// lifecycle, sequential uploads → ONE bulk metadata insert, and gated
+// compensating cleanup (objects → confirm → rows → confirm → parent).
+// Touches nothing in settlement / XP / stakes / disputes / forged_deals. ══
+
+// P2 — strict whitelist. Each extension maps to its ONLY acceptable browser MIMEs.
+const PROOF_FILE_TYPES = {
+  pdf:  ['application/pdf'],
+  png:  ['image/png'],
+  jpg:  ['image/jpeg'],
+  jpeg: ['image/jpeg'],
+  webp: ['image/webp'],
+  doc:  ['application/msword'],
+  docx: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  xls:  ['application/vnd.ms-excel'],
+  xlsx: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  zip:  ['application/zip', 'application/x-zip-compressed']
+};
+const PROOF_FILE_MAX = 5;
+const PROOF_FILE_MAX_BYTES = 26214400; // 25 MB — mirrors the bucket's server-side limit
+
+let _proofFilesSelected = [];  // { file, name, size, lastModified, mime, ext, status:'ready'|'uploading'|'done'|'failed', path? }
+let _proofPublishBusy = false;
+
+function proofFileExt(name) {
+  const m = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+function proofFileSizeLabel(b) {
+  return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+}
+
+// STRICT: approved extension required; File.type must be non-empty AND exactly
+// match the approved list for that extension; octet-stream always rejected;
+// NO fallback to extension-derived MIME when the browser reports nothing.
+function validateProofFile(file) {
+  const ext = proofFileExt(file.name);
+  const allowed = PROOF_FILE_TYPES[ext];
+  if (!allowed) return 'file type .' + (ext || '?') + ' is not allowed';
+  if (!file.type) return 'browser did not report a file type';
+  if (file.type === 'application/octet-stream') return 'generic binary type not allowed';
+  if (!allowed.includes(file.type)) return 'type mismatch (' + file.type + ' for .' + ext + ')';
+  if (!(file.size > 0)) return 'file is empty';
+  if (file.size > PROOF_FILE_MAX_BYTES) return 'over the 25 MB limit';
+  return null;
+}
+
+// P3 — selection, validation, render
+function onProofFilesPicked(inputEl) {
+  if (_proofPublishBusy) { showToast('Publishing in progress — please wait'); if (inputEl) inputEl.value = ''; return; }
+  const picked = Array.from((inputEl && inputEl.files) || []);
+  for (const f of picked) {
+    if (_proofFilesSelected.length >= PROOF_FILE_MAX) { showToast('Maximum ' + PROOF_FILE_MAX + ' files per proof'); break; }
+    const reason = validateProofFile(f);
+    if (reason) { showToast('Rejected ' + f.name + ' — ' + reason); continue; }
+    if (_proofFilesSelected.some(it => it.name === f.name && it.size === f.size && it.lastModified === f.lastModified)) { showToast(f.name + ' is already attached'); continue; }
+    _proofFilesSelected.push({ file: f, name: f.name, size: f.size, lastModified: f.lastModified, mime: f.type, ext: proofFileExt(f.name), status: 'ready' });
+  }
+  if (inputEl) inputEl.value = '';   // same file can be re-picked after Remove
+  renderProofFileList();
+}
+
+function removeProofFile(i) {
+  if (_proofPublishBusy) return;
+  _proofFilesSelected.splice(i, 1);
+  renderProofFileList();
+}
+
+function renderProofFileList() {
+  const el = document.getElementById('deal-proof-file-list');
+  if (!el) return;
+  const icon = s => s === 'uploading' ? '⏳' : (s === 'done' ? '✅' : (s === 'failed' ? '❌' : '📄'));
+  el.innerHTML = _proofFilesSelected.map((it, i) => `
+    <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);border:1px solid #213a54;border-radius:7px;padding:6px 9px;margin-top:5px;font-size:10.5px;color:#94a3b8;">
+      <span>${icon(it.status)}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c7d6e5;" title="${sanitize(it.name)}">${sanitize(it.name)}</span>
+      <span style="color:#5a7a9a;">${it.ext.toUpperCase()} · ${proofFileSizeLabel(it.size)}</span>
+      ${_proofPublishBusy ? '' : `<button type="button" onclick="removeProofFile(${i})" style="background:transparent;border:none;color:#f87171;cursor:pointer;font-size:12px;padding:0 2px;" title="Remove">✕</button>`}
+    </div>`).join('');
+}
+
+// P4 — dedicated modal lifecycle. Reset on open, on cancel/close and after
+// success; PRESERVED after a publish failure (retry-friendly). Close is blocked
+// while publishing is active.
+function resetDealProofModal() {
+  _proofPublishBusy = false;
+  _proofFilesSelected = [];
+  ['title', 'description', 'link', 'image'].forEach(k => {
+    const el = document.getElementById('deal-proof-' + k);
+    if (el) el.value = '';
+  });
+  const fi = document.getElementById('deal-proof-files');
+  if (fi) fi.value = '';
+  const list = document.getElementById('deal-proof-file-list');
+  if (list) list.innerHTML = '';
+  const btn = document.getElementById('deal-proof-submit');
+  if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+}
+
+function closeDealProofModal() {
+  if (_proofPublishBusy) { showToast('Publishing in progress — please wait'); return; }
+  resetDealProofModal();
+  _activeDealProofId = null;
+  closeModal('deal-proof-modal');
+}
+
+// P5 — parent already inserted by caller; upload each object sequentially with
+// per-file status (supabase-js exposes no progress events), then insert ALL
+// metadata in ONE atomic statement. Returns uploadedPaths for compensation.
+async function publishProofFiles(proofId, dealId) {
+  const uploadedPaths = [];
+  for (const it of _proofFilesSelected) {
+    it.status = 'uploading'; renderProofFileList();
+    const path = `${dealId}/${proofId}/${crypto.randomUUID()}.${it.ext}`;
+    try {
+      const { error } = await sb.storage.from('proof-files')
+        .upload(path, it.file, { contentType: it.mime, upsert: false });
+      if (error) { it.status = 'failed'; renderProofFileList(); return { ok: false, uploadedPaths, failedName: it.name, error: error.message }; }
+    } catch (e) { it.status = 'failed'; renderProofFileList(); return { ok: false, uploadedPaths, failedName: it.name, error: String(e && e.message || e) }; }
+    it.path = path; it.status = 'done'; uploadedPaths.push(path); renderProofFileList();
+  }
+  const rows = _proofFilesSelected.map(it => ({
+    proof_id: proofId, deal_id: dealId,
+    file_name: String(it.name).slice(0, 200), file_path: it.path,
+    mime: it.mime, size_bytes: it.size
+  }));
+  const { error: metaErr } = await sb.from('proof_files').insert(rows);  // ONE bulk insert — atomic
+  if (metaErr) return { ok: false, uploadedPaths, failedName: '(metadata)', error: metaErr.message };
+  return { ok: true, uploadedPaths };
+}
+
+// P6 — GATED compensation. Order and confirmation are mandatory:
+//   1) remove uploaded objects  2) CONFIRM the prefix is empty via list()
+//   3) delete proof_files rows  4) CONFIRM zero child rows
+//   5) only then delete the parent deal_proofs row.
+// If storage cleanup cannot be confirmed: parent is KEPT, a loud recovery error
+// is shown, and proof UUID + paths are logged. Blind resubmission is blocked
+// mechanically by the (deal_id, submitter_id) unique constraint.
+async function compensateProofPublish(proofId, dealId, uploadedPaths) {
+  try {
+    if (uploadedPaths.length) {
+      const { error } = await sb.storage.from('proof-files').remove(uploadedPaths);
+      if (error) throw error;
+    }
+    const { data: leftover, error: listErr } = await sb.storage.from('proof-files').list(`${dealId}/${proofId}`);
+    if (listErr) throw listErr;
+    if ((leftover || []).length) throw new Error((leftover || []).length + ' object(s) still present');
+  } catch (e) {
+    console.error('PROOF PUBLISH RECOVERY NEEDED — storage cleanup UNCONFIRMED', { proofId, dealId, uploadedPaths, error: e });
+    return { ok: false, stage: 'storage' };
+  }
+  try {
+    const { error: delMetaErr } = await sb.from('proof_files').delete().eq('proof_id', proofId);
+    if (delMetaErr) throw delMetaErr;
+    const { data: remaining, error: chkErr } = await sb.from('proof_files').select('id').eq('proof_id', proofId);
+    if (chkErr) throw chkErr;
+    if ((remaining || []).length) throw new Error('child rows remain');
+  } catch (e) {
+    console.error('PROOF PUBLISH RECOVERY NEEDED — metadata cleanup UNCONFIRMED', { proofId, error: e });
+    return { ok: false, stage: 'metadata' };
+  }
+  const { error: delErr } = await sb.from('deal_proofs').delete().eq('id', proofId);
+  if (delErr) {
+    console.error('PROOF PUBLISH RECOVERY NEEDED — parent delete failed', { proofId, error: delErr });
+    return { ok: false, stage: 'parent' };
+  }
+  return { ok: true };
+}
+
 function openDealProofModal(dealId, dealTitle, counterparty) {
+  resetDealProofModal();  // D6c.2c.1: full lifecycle reset (fields + files + busy)
   _activeDealProofId = dealId;
   const titleEl = document.getElementById('deal-proof-context-title');
   const metaEl  = document.getElementById('deal-proof-context-meta');
   if (titleEl) titleEl.textContent = dealTitle || 'Deal';
   if (metaEl)  metaEl.textContent = 'with ' + (counterparty || '') + ' · Delivered ✓';
-  // clear inputs
-  ['title','description','link','image'].forEach(k => {
-    const el = document.getElementById('deal-proof-' + k);
-    if (el) el.value = '';
-  });
   const modal = document.getElementById('deal-proof-modal');
   if (modal) modal.style.display = 'flex';
 }
 
 async function submitDealProof() {
+  if (_proofPublishBusy) return;                    // double-click guard: one publish only
   if (!_activeDealProofId) { showToast('No deal selected'); return; }
   const proof = {
     title: (document.getElementById('deal-proof-title')?.value || '').trim(),
@@ -9825,13 +9992,43 @@ async function submitDealProof() {
     image_url: (document.getElementById('deal-proof-image')?.value || '').trim()
   };
   if (!proof.title) { showToast('Add a title for the proof'); return; }
-  // saveDealProof (B2) writes ONLY to deal_proofs; RLS enforces participant + settled+delivered.
-  const result = await saveDealProof(_activeDealProofId, proof);
-  if (!result.ok) { showToast('Could not add proof: ' + result.error); return; }
-  showToast('Completion proof added ✅');
-  closeModal('deal-proof-modal');
-  _activeDealProofId = null;
-  showMyForgedDeals(); // re-render deals — picks up the new proof via batch-load
+  _proofPublishBusy = true;
+  const btn = document.getElementById('deal-proof-submit');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+  renderProofFileList();                            // hides Remove buttons while busy
+  try {
+    // saveDealProof (B2) writes ONLY to deal_proofs; RLS enforces participant + settled+delivered.
+    const result = await saveDealProof(_activeDealProofId, proof);
+    if (!result.ok) {
+      if (result.code === '23505') showToast("You've already added a completion proof for this deal.");
+      else showToast('Could not add proof: ' + result.error);
+      return;                                       // fields + files preserved
+    }
+    if (_proofFilesSelected.length) {
+      const pub = await publishProofFiles(result.data.id, _activeDealProofId);
+      if (!pub.ok) {
+        showToast('Upload failed on ' + pub.failedName + ' — rolling back…');
+        const comp = await compensateProofPublish(result.data.id, _activeDealProofId, pub.uploadedPaths);
+        if (comp.ok) {
+          // retry-ready: clean rollback confirmed, so statuses return to 'ready'
+          // (files + fields preserved; Remove buttons re-enable when busy clears).
+          _proofFilesSelected.forEach(it => { it.status = 'ready'; delete it.path; });
+          showToast('Nothing was published — fix the file and resubmit.');
+        }
+        else showToast('⚠️ Publish failed and cleanup could NOT be confirmed. Do not resubmit — note proof id ' + result.data.id + ' (details in console).');
+        return;                                     // fields + files preserved for retry / recovery
+      }
+    }
+    showToast('Completion proof added ✅');
+    resetDealProofModal();
+    closeModal('deal-proof-modal');
+    _activeDealProofId = null;
+    showMyForgedDeals(); // re-render deals — picks up the new proof via batch-load
+  } finally {
+    _proofPublishBusy = false;
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    renderProofFileList();
+  }
 }
 
 // Insert a deal-linked completion proof. RLS enforces participant + settled+delivered + status.
@@ -9866,16 +10063,16 @@ async function submitDealProof() {
     status: 'deal_linked'
   };
 
-  const { data, error } = await sb
+ const { data, error } = await sb
     .from('deal_proofs')
     .insert(row)
     .select()
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  // D6c.2c.1: preserve Supabase error details so callers can map codes (e.g. 23505 duplicate).
+  if (error) return { ok: false, error: error.message, code: error.code, details: error.details, hint: error.hint };
   return { ok: true, data };
 }
-
 // Load all proofs for one deal.
 // Public read is allowed by RLS.
 async function loadDealProofs(dealId) {
@@ -18129,10 +18326,10 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       <div style="display:flex;align-items:center;gap:10px;">
         <div style="width:30px;height:30px;border-radius:9px;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.3);display:flex;align-items:center;justify-content:center;">
           <i class="fas fa-shield-check" style="font-size:13px;color:#2dd4a0;"></i>
-        </div>
+       </div>
         <div style="font-size:15px;font-weight:800;color:#fff;font-family:'Space Grotesk',sans-serif;">Add Completion Proof</div>
       </div>
-      <button onclick="closeModal('deal-proof-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;">✕</button>
+      <button onclick="closeDealProofModal()" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;">✕</button>
     </div>
     <div style="padding:16px 20px 20px;">
       <!-- Deal context (read-only, filled by openDealProofModal) -->
@@ -18147,10 +18344,15 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       <textarea id="deal-proof-description" maxlength="500" placeholder="Description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
       <input type="url" id="deal-proof-link" maxlength="500" placeholder="Proof link (https://...)" class="form-input" style="margin-bottom:8px;font-size:13px;">
       <input type="url" id="deal-proof-image" maxlength="500" placeholder="Image URL (optional — screenshot/result)" class="form-input" style="margin-bottom:14px;font-size:13px;">
+      <!-- D6c.2c.1: Attach files — published as part of the PUBLIC proof -->
+      <label for="deal-proof-files" style="display:flex;align-items:center;justify-content:center;gap:7px;background:rgba(45,212,160,0.05);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:9px;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:6px;">📎 Attach files (up to 5 · 25 MB each)</label>
+      <input type="file" id="deal-proof-files" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.zip" onchange="onProofFilesPicked(this)" style="display:none;">
+      <div id="deal-proof-file-list"></div>
+      <div style="font-size:9.5px;color:#f59e0b;margin:6px 0 8px;line-height:1.5;">⚠️ Files attached here are published as part of your <b>public</b> Completion Proof. Uploads show per-file status.</div>
 
       <div style="display:flex;gap:8px;">
-        <button type="button" onclick="submitDealProof()" style="flex:1;background:#2dd4a0;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Add proof</button>
-        <button type="button" onclick="closeModal('deal-proof-modal')" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:11px 16px;border-radius:9px;font:600 13px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
+        <button type="button" id="deal-proof-submit" onclick="submitDealProof()" style="flex:1;background:#2dd4a0;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Add proof</button>
+        <button type="button" onclick="closeDealProofModal()" style="background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:11px 16px;border-radius:9px;font:600 13px/1 'Inter',sans-serif;cursor:pointer;">Cancel</button>
       </div>
     </div>
   </div>
