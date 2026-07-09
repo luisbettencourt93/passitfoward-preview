@@ -14859,7 +14859,7 @@ setInterval(async () => {
 
 setInterval(async () => {
   if(currentUser) await loadNotifsFromSupabase();
-}, 15000);
+}, 60000);  // R2: realtime is primary; this poll is the slow fallback (was 15s)
 
 // -- DM polling REMOVED (April 2026) --
 // There used to be a setInterval here that called openThread() every 15s
@@ -15315,7 +15315,26 @@ function setupRealtimeSubscriptions() {
     });
   _rtChannels.push(msgChannel);
 
-  console.log('[realtime] setup complete — 3 channels active');
+  // -- 4. NOTIFICATIONS — instant bell (R2) --
+  // INSERT only, server-filtered to the current user's handle — the exact key the
+  // bell's reads already use, so realtime and the loader agree by construction.
+  // Realtime is the PRIMARY path; the poll below stays as a quiet 60s fallback
+  // for websocket drops, mobile sleep, and browser reconnect gaps.
+  const notifChannel = sb.channel('rt-notifications')
+    .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications',
+          filter: 'handle=eq.' + currentUser.handle },
+        (payload) => {
+          console.log('[realtime] notification insert');
+          try { loadNotifsFromSupabase(); } catch(e) { console.warn('rt notif:', e); }
+        })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') console.log('[realtime] ✓ notifications subscribed');
+      else if (status === 'CHANNEL_ERROR') console.warn('[realtime] notifications CHANNEL_ERROR — 60s poll remains the fallback');
+    });
+  _rtChannels.push(notifChannel);
+
+  console.log('[realtime] setup complete — 4 channels active');
 }
 
 async function init() {
