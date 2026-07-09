@@ -10557,6 +10557,83 @@ async function loadDealRoomMyProofState(dealId) {
   }
 }
 
+// ── R1: Deal Room Live (read-only realtime). One SCOPED channel per open room,
+// server-filtered to this deal on deal_progress_updates + deal_progress_reviews.
+// Handler = re-run openDealRoom's exact load tail (D6a state re-fetch, D6c.2b
+// proof state, updates, reviews, D6b guidance, final delivery, timeline) and
+// derive status LIVE from the re-fetched state, so a deal that settles while
+// the room is open flips to settled rendering in place. Strictly read+render:
+// no writes, no settlement/XP/stakes/dispute paths, composer input untouched.
+// Lifecycle: replace-on-open (fixed channel name), removed by closeDealRoom(),
+// one refresh on re-SUBSCRIBED so a dropped websocket can't leave stale state. ──
+let _dealRoomChannel = null;
+
+async function refreshDealRoomLive() {
+  const modal = document.getElementById('deal-room-modal');
+  if (!modal || modal.style.display === 'none' || !_dealRoomActiveId) return;
+  const dealId = _dealRoomActiveId;
+  try {
+    await loadDealRoomState(dealId);
+
+    _dealRoomMyProof = null;
+    if (
+      _dealRoomState &&
+      _dealRoomState.isSettled &&
+      _dealRoomState.deal.outcome === 'delivered'
+    ) {
+      _dealRoomMyProof = await loadDealRoomMyProofState(dealId);
+    }
+
+    // Live status from authoritative state (fallback 'active' mirrors openDealRoom).
+    const liveStatus = (_dealRoomState && _dealRoomState.isSettled)
+      ? 'settled'
+      : ((_dealRoomState && _dealRoomState.deal && _dealRoomState.deal.status) || 'active');
+
+    // If the deal left 'active' while the room was open, retire the composer too.
+    const composer = document.getElementById('deal-room-composer');
+    if (composer) composer.style.display = (liveStatus === 'active') ? 'block' : 'none';
+
+    const updates = await loadDealProgressUpdates(dealId);
+    const reviews = await loadDealReviews(dealId);
+    const reviewMap = buildLatestReviewMap(reviews);
+    renderDealRoomGuidance(updates, reviewMap);
+    const fdEl = document.getElementById('deal-room-final-delivery');
+    if (fdEl) fdEl.innerHTML = dealRoomFinalDeliveryHtml(updates, reviewMap);
+    const listEl = document.getElementById('deal-room-timeline');
+    if (listEl) listEl.innerHTML = dealRoomTimelineHtml(updates, reviewMap, pifDealProofNormalizeHandle(currentUser.handle), liveStatus);
+  } catch (e) { console.warn('[realtime] deal room refresh failed:', e); }
+}
+
+function setupDealRoomChannel(dealId) {
+  if (!sb || !dealId) return;
+  // Replace-on-open: a fixed name means reopening (same or different deal) swaps
+  // the filter cleanly instead of stacking channels.
+  if (_dealRoomChannel) { try { sb.removeChannel(_dealRoomChannel); } catch (_) {} _dealRoomChannel = null; }
+  let firstSubscribe = true;
+  _dealRoomChannel = sb.channel('rt-deal-room')
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'deal_progress_updates', filter: 'deal_id=eq.' + dealId },
+        () => { refreshDealRoomLive(); })
+    .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'deal_progress_reviews', filter: 'deal_id=eq.' + dealId },
+        () => { refreshDealRoomLive(); })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('[realtime] ✓ deal room subscribed (deal ' + dealId + ')');
+        // Reconnect after a drop → one refresh so missed events can't leave stale state.
+        if (!firstSubscribe) refreshDealRoomLive();
+        firstSubscribe = false;
+      } else if (status === 'CHANNEL_ERROR') {
+        console.warn('[realtime] deal room CHANNEL_ERROR — room falls back to action-driven refresh');
+      }
+    });
+}
+
+function closeDealRoom() {
+  if (_dealRoomChannel) { try { sb.removeChannel(_dealRoomChannel); } catch (_) {} _dealRoomChannel = null; }
+  closeModal('deal-room-modal');
+}
+
 async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealStatus) {
   const modal = document.getElementById('deal-room-modal');
   if (!modal) return;
@@ -10576,6 +10653,8 @@ async function openDealRoom(dealId, dealTitle, counterparty, dealAmount, dealSta
   if (listEl) listEl.innerHTML = `<div style="text-align:center;color:#5a7a9a;font-size:11px;padding:14px;">Loading…</div>`;
 
   modal.style.display = 'flex';
+
+  setupDealRoomChannel(Number(dealId));  // R1: live room — scoped, replace-on-open
 
    // D6a: fetch authoritative deal state (read-only, non-fatal). D6b's guidance banner renders from it.
    await loadDealRoomState(dealId);
@@ -11019,7 +11098,7 @@ function dealRoomMarkOutcome() {
   const id = (s && s.deal && s.deal.id) || _dealRoomActiveId;
   if (!id) { showToast('No deal open'); return; }
 
-  closeModal('deal-room-modal');
+  closeDealRoom();
   openForgeOutcome(id);
 }
 
@@ -11034,7 +11113,7 @@ function dealRoomAddProof() {
     return;
   }
 
-  closeModal('deal-room-modal');
+  closeDealRoom();
 
   openDealProofModal(
     s.deal.id,
@@ -15192,6 +15271,12 @@ function setupRealtimeSubscriptions() {
           if (dashTab && dashTab.style.display === 'block') {
             try { loadDashboardStats(); } catch(e) { console.warn('rt dash:', e); }
           }
+          // R1: if a Deal Room is open, refresh it — the other party's outcome vote
+          // or a settlement lands live instead of waiting for a reopen. Read-only.
+          const roomModal = document.getElementById('deal-room-modal');
+          if (roomModal && roomModal.style.display === 'flex') {
+            try { refreshDealRoomLive(); } catch(e) { console.warn('rt room:', e); }
+          }
         })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') console.log('[realtime] ✓ forged_deals subscribed');
@@ -18439,7 +18524,7 @@ window.nexarUpdateFabs = nexarUpdateFabs;
           <div id="deal-room-meta" style="font-size:11px;color:#94a3b8;margin-top:2px;"></div>
         </div>
       </div>
-      <button onclick="closeModal('deal-room-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;flex-shrink:0;">✕</button>
+      <button onclick="closeDealRoom()" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;flex-shrink:0;">✕</button>
     </div>
    <div style="padding:16px 22px 22px;">
        <!-- D6b: who-needs-to-act guidance banner (populated by renderDealRoomGuidance; hidden when empty) -->
