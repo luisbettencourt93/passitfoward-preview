@@ -9878,9 +9878,127 @@ function renderProofFileList() {
     <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);border:1px solid #213a54;border-radius:7px;padding:6px 9px;margin-top:5px;font-size:10.5px;color:#94a3b8;">
       <span>${icon(it.status)}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c7d6e5;" title="${sanitize(it.name)}">${sanitize(it.name)}</span>
-      <span style="color:#5a7a9a;">${it.ext.toUpperCase()} · ${proofFileSizeLabel(it.size)}</span>
+      <span style="color:#5a7a9a;">${it.ext.toUpperCase()} · ${proofFileSizeLabel(it.size)}</span>${it.source === 'delivery' ? `<span style="font-size:8px;background:rgba(45,212,160,0.12);color:#2dd4a0;padding:1px 5px;border-radius:4px;font-weight:800;flex-shrink:0;">DELIVERY</span>` : ''}
       ${_proofPublishBusy ? '' : `<button type="button" onclick="removeProofFile(${i})" style="background:transparent;border:none;color:#f87171;cursor:pointer;font-size:12px;padding:0 2px;" title="Remove">✕</button>`}
     </div>`).join('');
+}
+
+// ── D6c.2c.3: Copy from Final Delivery. Participant-authorized signed download →
+// re-upload as a NEW public proof object via the untouched 2c.1 publish pipeline.
+// The picker only APPENDS to _proofFilesSelected, so the shared 5-file cap,
+// per-file status, strict validateProofFile, bulk metadata insert and gated
+// compensation are all inherited unchanged. NEVER links to the private file:
+// the signed URL is consumed client-side and discarded; the original deal-files
+// object stays private and untouched. Render-time eligibility uses the private
+// object's real metadata (size + mimetype via participant-gated list()) so
+// ineligible files show a clear reason instead of silently disappearing. ──
+let _deliveryPickerFiles = null;   // null = not loaded yet; [] = loaded, none found
+let _deliveryPickerOpen = false;
+
+async function loadFinalDeliveryFilesFor(dealId) {
+  try {
+    if (!sb || !dealId) return [];
+    const { data: ups, error } = await sb.from('deal_progress_updates')
+      .select('id, file_name, file_path, created_at')
+      .eq('deal_id', dealId)
+      .eq('update_type', 'final_delivery')
+      .not('file_path', 'is', null)
+      .order('created_at', { ascending: true });
+    if (error || !Array.isArray(ups)) { console.warn('delivery picker: updates read failed:', error && error.message); return []; }
+    const out = [];
+    for (const u of ups) {
+      let size = null, mime = null;
+      try {
+        const parts = String(u.file_path).split('/');
+        const leaf = parts.pop();
+        const { data: objs } = await sb.storage.from('deal-files').list(parts.join('/'));
+        const o = (objs || []).find(x => x.name === leaf);
+        if (o && o.metadata) {
+          size = Number(o.metadata.size != null ? o.metadata.size : o.metadata.contentLength);
+          if (!Number.isFinite(size)) size = null;
+          mime = o.metadata.mimetype || null;
+        }
+      } catch (e) { /* size/mime stay unknown; copy-time validation still gates */ }
+      const ext = proofFileExt(u.file_name || '');
+      const allowed = PROOF_FILE_TYPES[ext];
+      let eligible = true, reason = '';
+      if (!allowed)                                            { eligible = false; reason = 'file type not allowed for public proof'; }
+      else if (size != null && size > PROOF_FILE_MAX_BYTES)    { eligible = false; reason = 'file over 25MB'; }
+      else if (size != null && !(size > 0))                    { eligible = false; reason = 'file is empty'; }
+      else if (mime && !allowed.includes(mime))                { eligible = false; reason = 'stored type mismatch (' + mime + ')'; }
+      out.push({ update_id: u.id, file_name: u.file_name, file_path: u.file_path, created_at: u.created_at, size, mime, ext, eligible, reason, busy: false });
+    }
+    return out;
+  } catch (e) { console.warn('delivery picker load failed:', e); return []; }
+}
+
+async function toggleDeliveryPicker() {
+  if (_proofPublishBusy) { showToast('Publishing in progress — please wait'); return; }
+  const panel = document.getElementById('deal-proof-delivery-panel');
+  const btn = document.getElementById('deal-proof-delivery-toggle');
+  if (!panel) return;
+  _deliveryPickerOpen = !_deliveryPickerOpen;
+  panel.style.display = _deliveryPickerOpen ? 'block' : 'none';
+  if (btn) btn.textContent = _deliveryPickerOpen ? '📂 Hide Final Delivery files' : '📂 Copy from Final Delivery';
+  if (!_deliveryPickerOpen) return;
+  if (_deliveryPickerFiles === null) {
+    const listEl = document.getElementById('deal-proof-delivery-list');
+    if (listEl) listEl.innerHTML = '<div style="font-size:10px;color:#5a7a9a;">Loading delivery files…</div>';
+    _deliveryPickerFiles = await loadFinalDeliveryFilesFor(_activeDealProofId);
+  }
+  renderDeliveryPicker();
+}
+
+function renderDeliveryPicker() {
+  const el = document.getElementById('deal-proof-delivery-list');
+  if (!el) return;
+  const files = _deliveryPickerFiles;
+  if (files === null) { el.innerHTML = ''; return; }
+  if (!files.length) { el.innerHTML = '<div style="font-size:10px;color:#5a7a9a;">No Final Delivery files on this deal.</div>'; return; }
+  el.innerHTML = files.map((f, i) => {
+    const attached = _proofFilesSelected.some(x => x.sourcePath === f.file_path);
+    const size = f.size != null ? proofFileSizeLabel(f.size) : 'size unknown';
+    const right = attached
+      ? '<span style="font-size:9px;color:#2dd4a0;font-weight:800;">✓ added</span>'
+      : f.busy
+        ? '<span style="font-size:9px;color:#7cc4ff;">⏳ fetching…</span>'
+        : f.eligible
+          ? `<button type="button" onclick="copyDeliveryFileToProof(${i})" style="background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.3);color:#2dd4a0;border-radius:6px;padding:3px 9px;font-size:9.5px;font-weight:800;cursor:pointer;">＋ Add</button>`
+          : `<span style="font-size:8.5px;color:#f87171;">${sanitize(f.reason)}</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);${(f.eligible || attached) ? '' : 'opacity:0.55;'}">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;color:#c7d6e5;" title="${sanitize(f.file_name)}">${sanitize(f.file_name)}</span>
+      <span style="font-size:9px;color:#5a7a9a;flex-shrink:0;">${size}</span>
+      <span style="flex-shrink:0;">${right}</span>
+    </div>`;
+  }).join('');
+}
+
+async function copyDeliveryFileToProof(i) {
+  if (_proofPublishBusy) { showToast('Publishing in progress — please wait'); return; }
+  const it = (_deliveryPickerFiles || [])[i];
+  if (!it || !it.eligible || it.busy) return;
+  if (_proofFilesSelected.length >= PROOF_FILE_MAX) { showToast('Maximum ' + PROOF_FILE_MAX + ' files per proof'); return; }
+  if (_proofFilesSelected.some(x => x.sourcePath === it.file_path)) { showToast(it.file_name + ' is already attached'); return; }
+  it.busy = true; renderDeliveryPicker();
+  try {
+    // Participant-authorized, short-lived signed URL — consumed here, never stored or rendered.
+    const res = await getDealFileSignedUrl(it.file_path, 300, false);
+    if (!res || !res.ok || !res.url) throw new Error((res && res.error) || 'could not authorize the private file');
+    const resp = await fetch(res.url);
+    if (!resp.ok) throw new Error('download failed (' + resp.status + ')');
+    const blob = await resp.blob();
+    // Deterministic lastModified (update timestamp) makes the 2c.1 triple-dedupe
+    // naturally block re-picking the same delivery file.
+    const f = new File([blob], it.file_name, { type: blob.type || it.mime || '', lastModified: Date.parse(it.created_at) || Date.now() });
+    const reason = validateProofFile(f);   // same STRICT gate as fresh uploads
+    if (reason) throw new Error(reason);
+    if (_proofFilesSelected.some(x => x.name === f.name && x.size === f.size && x.lastModified === f.lastModified)) { showToast(f.name + ' is already attached'); return; }
+    _proofFilesSelected.push({ file: f, name: f.name, size: f.size, lastModified: f.lastModified, mime: f.type, ext: proofFileExt(f.name), status: 'ready', source: 'delivery', sourcePath: it.file_path });
+    renderProofFileList();
+    showToast(it.file_name + ' copied — will publish with this proof');
+  } catch (e) {
+    showToast('Could not copy ' + it.file_name + ' — ' + ((e && e.message) || e));
+  } finally { it.busy = false; renderDeliveryPicker(); }
 }
 
 // P4 — dedicated modal lifecycle. Reset on open, on cancel/close and after
@@ -9897,6 +10015,15 @@ function resetDealProofModal() {
   if (fi) fi.value = '';
   const list = document.getElementById('deal-proof-file-list');
   if (list) list.innerHTML = '';
+  // D6c.2c.3: collapse + clear the delivery picker
+  _deliveryPickerFiles = null;
+  _deliveryPickerOpen = false;
+  const dpanel = document.getElementById('deal-proof-delivery-panel');
+  if (dpanel) dpanel.style.display = 'none';
+  const dlist = document.getElementById('deal-proof-delivery-list');
+  if (dlist) dlist.innerHTML = '';
+  const dtoggle = document.getElementById('deal-proof-delivery-toggle');
+  if (dtoggle) dtoggle.textContent = '📂 Copy from Final Delivery';
   const btn = document.getElementById('deal-proof-submit');
   if (btn) { btn.disabled = false; btn.style.opacity = ''; }
 }
@@ -18393,6 +18520,11 @@ window.nexarUpdateFabs = nexarUpdateFabs;
       <input type="file" id="deal-proof-files" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.zip" onchange="onProofFilesPicked(this)" style="display:none;">
       <div id="deal-proof-file-list"></div>
       <div style="font-size:9.5px;color:#f59e0b;margin:6px 0 8px;line-height:1.5;">⚠️ Files attached here are published as part of your <b>public</b> Completion Proof. Uploads show per-file status.</div>
+      <button type="button" id="deal-proof-delivery-toggle" onclick="toggleDeliveryPicker()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:rgba(96,165,250,0.06);border:1px dashed rgba(96,165,250,0.3);color:#7cc4ff;padding:8px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:8px;">📂 Copy from Final Delivery</button>
+      <div id="deal-proof-delivery-panel" style="display:none;background:rgba(255,255,255,0.02);border:1px solid #213a54;border-radius:8px;padding:9px;margin-bottom:8px;">
+        <div style="font-size:9.5px;color:#f59e0b;line-height:1.5;margin-bottom:7px;">⚠️ This copies the private deal file into your public Completion Proof. The original Final Delivery file stays private. Only copy files you are allowed to publish.</div>
+        <div id="deal-proof-delivery-list"></div>
+      </div>
 
       <div style="display:flex;gap:8px;">
         <button type="button" id="deal-proof-submit" onclick="submitDealProof()" style="flex:1;background:#2dd4a0;color:#0c1626;border:none;padding:11px;border-radius:9px;font:800 13px/1 'Inter',sans-serif;cursor:pointer;">Add proof</button>
