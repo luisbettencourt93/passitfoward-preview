@@ -10096,6 +10096,43 @@ async function loadDealProofs(dealId) {
   return Array.isArray(data) ? data : [];
 }
 
+// ══ D6c.2c.2: Completion Proof file chips (READ-ONLY RENDER). Loads proof_files
+// per batch of proof ids and renders public-URL chips on proof cards and the
+// Track Record. Display-only garnish: any load error means chips are simply
+// absent ({}), never a blocked action — nothing here can invite a duplicate.
+// getPublicUrl is a pure string builder (no request on render). No writes; no
+// settlement / XP / stakes / disputes / forged_deals / schema / RLS changes. ══
+async function loadProofFilesForProofIds(proofIds) {
+  const map = {};
+  try {
+    const ids = Array.from(new Set((proofIds || []).filter(Boolean)));
+    if (!ids.length || !sb) return map;
+    const { data, error } = await sb.from('proof_files')
+      .select('proof_id, file_name, file_path, mime, size_bytes, created_at')
+      .in('proof_id', ids)
+      .order('created_at', { ascending: true });
+    if (error) { console.warn('loadProofFilesForProofIds failed (chips hidden):', error.message); return map; }
+    (data || []).forEach(r => { (map[r.proof_id] = map[r.proof_id] || []).push(r); });
+  } catch (e) { console.warn('loadProofFilesForProofIds failed (chips hidden):', e); }
+  return map;
+}
+
+// Chip row for one proof's files. Empty array -> empty string (no empty container).
+function proofFileChipsHtml(files) {
+  if (!sb || !Array.isArray(files) || !files.length) return '';
+  const icon = m => m === 'application/pdf' ? '📄'
+    : String(m || '').indexOf('image/') === 0 ? '🖼️'
+    : (m === 'application/zip' || m === 'application/x-zip-compressed') ? '🗜️'
+    : (m === 'application/msword' || m === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') ? '📝'
+    : (m === 'application/vnd.ms-excel' || m === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') ? '📊'
+    : '📄';
+  return `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">` + files.map(f => {
+    const { data } = sb.storage.from('proof-files').getPublicUrl(f.file_path);
+    const url = (data && data.publicUrl) ? data.publicUrl : '#';
+    return `<a href="${sanitize(url)}" target="_blank" rel="noopener noreferrer" title="${sanitize(f.file_name)}" style="display:inline-flex;align-items:center;gap:5px;max-width:100%;background:rgba(96,165,250,0.07);border:1px solid #2d4f6f;border-radius:7px;padding:4px 9px;font-size:9.5px;color:#7cc4ff;text-decoration:none;font-weight:700;line-height:1.3;"><span>${icon(f.mime)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;">${sanitize(f.file_name)}</span><span style="color:#5a7a9a;font-weight:600;">${proofFileSizeLabel(f.size_bytes)}</span></a>`;
+  }).join('') + `</div>`;
+}
+
 // Future Track Record helper.
 // Loads proof submitted by a handle.
 async function loadDealProofsByHandle(handle) {
@@ -15598,6 +15635,8 @@ const { data: deals } = await sb.from('forged_deals')
   // Used to surface verified, deal-backed proof in the Verified on PIF zone. No writes.
   let memberDealProofs = [];
   try { memberDealProofs = await loadDealProofsByHandle(handle); } catch (e) { memberDealProofs = []; }
+  // D6c.2c.2: files for those proofs — display-only chips; {} on any error.
+  const memberProofFilesMap = await loadProofFilesForProofIds(memberDealProofs.map(p => p.id));
 
   const xp = profile?.xp || 0;
   const bio = profile?.bio || 'No bio yet.';
@@ -15703,6 +15742,7 @@ const dealLinkedProofsHtml = (Array.isArray(memberDealProofs) && memberDealProof
                </div>
           ${p.image_url ? `<img src="${sanitize(p.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(p.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:120px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;cursor:pointer;" alt="">` : ''}${p.description ? `<div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:7px;">${sanitize(p.description)}</div>` : ''}
           ${p.link ? `<a href="${sanitize(p.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+          ${proofFileChipsHtml(memberProofFilesMap[p.id] || [])}
         </div>`;
       }).join('')}
     </div>
@@ -16437,6 +16477,7 @@ async function showMyForgedDeals() {
   // positively succeeded; on any error the Add buttons are hidden across all cards
   // (deal_proofs has no uniqueness constraint — unknown must never invite a duplicate).
   let proofsVerified = false;
+  let proofFilesMap = {};  // D6c.2c.2: proof_id -> files for chip render (display-only)
   const deliveredIds = history.filter(d => d.outcome === 'delivered').map(d => d.id);
   if (deliveredIds.length && sb) {
     try {
@@ -16452,6 +16493,7 @@ async function showMyForgedDeals() {
           if (!dealProofsMap[p.deal_id]) dealProofsMap[p.deal_id] = [];
           dealProofsMap[p.deal_id].push(p);
         });
+        proofFilesMap = await loadProofFilesForProofIds(proofRows.map(p => p.id));  // D6c.2c.2
       }
     } catch (e) { console.warn('deal_proofs bulk read failed (card proof CTAs hidden):', e); /* proofs are non-critical; deal cards still render without them */ }
   }
@@ -16560,6 +16602,7 @@ const proofCta = !proofsVerified
           </div>
           ${p.image_url ? `<img src="${sanitize(p.image_url)}" loading="lazy" onerror="this.style.display='none'" onclick="window.open('${sanitize(p.image_url)}','_blank','noopener,noreferrer');" style="display:block;width:100%;max-height:120px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;cursor:pointer;" alt="">` : ''}${p.description ? `<div style="font-size:11px;color:#94a3b8;line-height:1.5;margin-bottom:7px;">${sanitize(p.description)}</div>` : ''}
           ${p.link ? `<a href="${sanitize(p.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
+          ${proofFileChipsHtml(proofFilesMap[p.id] || [])}
         </div>
       `).join('');
       // D6c.2a: settled+delivered Deal Room access — read-only room (composer + review
