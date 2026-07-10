@@ -5300,7 +5300,14 @@ body.light .nr-state-unread { color:#059669; }
     <textarea id="we-description" maxlength="280" placeholder="Short description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:8px;font-size:13px;"></textarea>
     <input type="text" id="we-outcome" maxlength="120" placeholder="Outcome (optional — e.g. +40% signups)" class="form-input" style="margin-bottom:6px;font-size:13px;">
     <input type="text" id="we-skills" maxlength="200" placeholder="Skills used (optional — comma-separated)" class="form-input" style="margin-bottom:8px;font-size:13px;">
-    <input type="url" id="we-image-url" maxlength="500" placeholder="Image URL (optional — link to a screenshot)" class="form-input" style="margin-bottom:6px;font-size:13px;">
+    <!-- W1r5: direct device/gallery upload — fills the Image URL field below; URL stays editable -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <button type="button" onclick="document.getElementById('we-image-file').click()" style="display:inline-flex;align-items:center;gap:6px;background:rgba(45,212,160,0.08);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">📷 Upload image from device</button>
+      <span id="we-image-upload-status" style="font-size:10px;color:#7cc4ff;" aria-live="polite"></span>
+    </div>
+    <input type="file" id="we-image-file" accept="image/png,image/jpeg,image/webp" onchange="onWorkImagePicked(this)" style="display:none;" aria-hidden="true" tabindex="-1">
+    <div style="font-size:9.5px;color:#f59e0b;margin-bottom:6px;line-height:1.45;">⚠️ Images uploaded here will be public on your Proof of Work profile.</div>
+    <input type="url" id="we-image-url" maxlength="500" oninput="onWorkImageUrlEdited(this)" placeholder="Image URL (optional — link to a screenshot)" class="form-input" style="margin-bottom:6px;font-size:13px;">
     <input type="url" id="we-video-url" maxlength="500" placeholder="Video URL (optional — YouTube, Loom, Vimeo)" class="form-input" style="margin-bottom:8px;font-size:13px;">
     <div style="display:flex;gap:6px;">
       <button type="button" onclick="saveWorkExample()" style="flex:1;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.4);color:#2dd4a0;padding:7px 12px;border-radius:6px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;">Add example</button>
@@ -5363,7 +5370,7 @@ body.light .nr-state-unread { color:#059669; }
 <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
   <button type="button" onclick="changePassword()" style="width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:8px 12px;border-radius:8px;font:600 12px/1 'Inter',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-lock" style="font-size:11px;"></i>Change password</button>
 </div>
-<button onclick="closeModal('profile-modal')" class="modal-cancel">Cancel</button>  </div>
+<button onclick="closeProfileEditor()" class="modal-cancel">Cancel</button>  </div>
 </div>
 
 <div id="dm-modal" class="modal">
@@ -9101,6 +9108,7 @@ const existingWE = (Array.isArray(currentUser?.work_examples) && currentUser.wor
   : (Array.isArray(p.work_examples) ? p.work_examples : []);
 
 pendingWorkExamples = pifSanitizeWorkExamples(existingWE);
+workImageAbandonEditSession();  // W1r5: fresh session — drop never-persisted leftovers, discard stale queue
 renderWorkExamplesPreview();
 
 // Reset the form to a clean state on modal open
@@ -9647,6 +9655,7 @@ function showProofOfWorkHub() {
   if (!currentUser) return;
   // Load current work_examples (Supabase truth via currentUser, sanitized).
   _powHubExamples = pifSanitizeWorkExamples(currentUser.work_examples || []);
+  hubImageAbandonSession();  // W1r5: fresh session — drop never-persisted leftovers
   powHubRender();
   powHubCancelForm(); // ensure form hidden on open
   const modal = document.getElementById('pow-hub-modal');
@@ -9680,7 +9689,7 @@ function powHubRender() {
           <button type="button" onclick="powHubRemove(${i})" title="Remove" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:2px 4px;"><i class="fas fa-trash"></i></button>
         </div>
       </div>
-      ${we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;width:100%;max-height:130px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;" alt="">` : ''}${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:7px;line-height:1.5;">${sanitize(we.description)}</div>` : ''}
+      ${pifValidateMediaUrl(we.image_url) ? `<a href="${sanitize(pifValidateMediaUrl(we.image_url))}" target="_blank" rel="noopener noreferrer" title="View full image" aria-label="View full image" style="display:block;margin-bottom:8px;"><img src="${sanitize(pifValidateMediaUrl(we.image_url))}" loading="lazy" onerror="this.parentElement.style.display='none'" style="display:block;width:100%;max-height:130px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);cursor:pointer;" alt="Work example image"></a>` : (we.image_url ? `<img src="${sanitize(we.image_url)}" loading="lazy" onerror="this.style.display='none'" style="display:block;width:100%;max-height:130px;object-fit:cover;border-radius:7px;border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;" alt="">` : '')}${we.description ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:7px;line-height:1.5;">${sanitize(we.description)}</div>` : ''}
       ${we.outcome ? `<div style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;font-weight:700;margin-bottom:7px;padding:4px 9px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);border-radius:6px;"><i class="fas fa-arrow-trend-up" style="font-size:9px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
       ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.1);color:#60a5fa;padding:2px 8px;border-radius:6px;font-weight:600;">${sanitize(s)}</span>`).join('')}</div>` : ''}
       <div style="display:flex;align-items:center;gap:12px;margin-top:2px;">
@@ -9692,6 +9701,7 @@ function powHubRender() {
 }
 
 function powHubShowForm() {
+  hubImageDropCurrent();  // W1r5 defensive
   if (_powHubExamples.length >= 5) { showToast('Maximum 5 work examples'); return; }
   const form = document.getElementById('pow-hub-form');
   const addBtn = document.getElementById('pow-hub-add-btn');
@@ -9700,6 +9710,7 @@ function powHubShowForm() {
 }
 
 function powHubCancelForm() {
+  hubImageDropCurrent();  // W1r5: cancel deletes ITS upload + invalidates in-flight; staged untouched
   const form = document.getElementById('pow-hub-form');
   const addBtn = document.getElementById('pow-hub-add-btn');
   if (form) form.style.display = 'none';
@@ -9714,6 +9725,7 @@ function powHubCancelForm() {
 }
 
 function powHubAddExample() {
+  if (_workImageBusy) { showToast('Please wait — image upload in progress'); return; }  // W1r7: before any validation/mutation
   if (_powHubExamples.length >= 5) { showToast('Maximum 5 work examples'); return; }
   // Build candidate from Hub inputs, reuse the PURE validation function.
   const candidate = {
@@ -9729,13 +9741,18 @@ function powHubAddExample() {
   const valid = pifValidateWorkExample(candidate);
   if (!valid) { showToast('Add a title and a valid https link'); return; }
   _powHubExamples.push(valid);
+  hubImageStageCurrent(valid.image_url);  // W1r5: staged — NOT persisted until saveProofOfWork succeeds
   powHubCancelForm();
   powHubRender();
 }
 
 function powHubRemove(index) {
   if (typeof index !== 'number' || index < 0 || index >= _powHubExamples.length) return;
+  const _hubRemovedUrl = _powHubExamples[index] && _powHubExamples[index].image_url;
   _powHubExamples.splice(index, 1);
+  // W1r5: staged-new -> delete now unless still referenced. Persisted-owned URLs
+  // are NOT deleted here; saveProofOfWork reconciles them after DB success.
+  hubImageDropStagedIfUnreferenced(_hubRemovedUrl, _powHubExamples.some(e => e && e.image_url === _hubRemovedUrl));
   powHubRender();
 }
 
@@ -9746,9 +9763,25 @@ function powHubRemove(index) {
 // the fuller independent proof-save; the Hub UI never changes.
 async function saveProofOfWork() {
   if (!currentUser) return;
+  if (_workImageBusy) { showToast('Please wait \u2014 image upload in progress'); return; }  // W1r5
   const toSave = pifSanitizeWorkExamples(_powHubExamples);
+  // W1r5: baseline = last successfully persisted list. DB-FIRST: nothing local
+  // is overwritten until the update succeeds, so a failed save leaves the
+  // baseline intact and a retry compares against the real database truth.
+  const prevExamples = pifSanitizeWorkExamples(Array.isArray(currentUser.work_examples) ? currentUser.work_examples : []);
 
-  // Update in-memory + localStorage immediately (optimistic, mirrors existing pattern).
+  if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
+    const { error } = await sb.from('profiles').update({ work_examples: toSave }).eq('id', currentUser.id);
+    if (error) {
+      showToast('Save failed: ' + error.message);
+      // W1r5 hook F: DB did NOT commit \u2014 currentUser/localStorage untouched,
+      // staged uploads retained for retry, no object deleted.
+      return;
+    }
+  }
+
+  // W1r5 hook E: DB committed (or demo local-only). Apply local state, then
+  // reconcile storage against exactly what is now persisted.
   currentUser.work_examples = toSave;
   try {
     const lsKey = 'pf_profile_' + currentUser.handle;
@@ -9756,18 +9789,13 @@ async function saveProofOfWork() {
     existing.work_examples = toSave;
     localStorage.setItem(lsKey, JSON.stringify(existing));
   } catch (e) {}
+  workImageCleanupRemovedOwned(prevExamples, toSave);
+  hubImageCommitAfterSave(toSave);
 
-  // Persist to Supabase — ONLY the work_examples column (focused write).
-  if (sb && currentUser?.id && !currentUser.id.startsWith('demo-')) {
-    const { error } = await sb.from('profiles').update({ work_examples: toSave }).eq('id', currentUser.id);
-    if (error) { showToast('Save failed: ' + error.message); return; }
-  }
-
-  showToast('Proof of Work saved ✅');
-  // Refresh the dashboard count + the Hub list.
+  showToast('Proof of Work saved \u2705');
   if (typeof ccUpdateStatusStats === 'function') ccUpdateStatusStats();
   powHubRender();
-  closeModal('pow-hub-modal');
+  closeProofOfWorkHub();
 }
 // ── B2: Deal Proof Storage Helpers (storage-only, no UI) ──
 // These helpers write/read deal-linked completion proof from deal_proofs.
@@ -12206,6 +12234,7 @@ function ccRenderNexarRecs(recs) {
 let pendingWorkExamples = [];
 
 function showWorkExampleForm() {
+  workImageDropCurrent();  // W1r5 defensive + in-flight invalidation
   if (pendingWorkExamples.length >= 5) {
     showToast('Max 5 work examples — remove one first');
     return;
@@ -12227,13 +12256,277 @@ if (t) setTimeout(() => { try { t.focus(); } catch(_) {} }, 50);
 }
 
 function cancelWorkExampleForm() {
+  workImageDropCurrent();  // W1r5 A: subform cancel deletes ITS upload; staged untouched
   const form = document.getElementById('work-example-form');
   const addBtn = document.getElementById('we-add-btn');
   if (form) form.style.display = 'none';
   if (addBtn) addBtn.style.display = '';
 }
 
+// ══ W1r5: Proof of Work image upload — ONE race-safe core, TWO surfaces.
+// Surfaces: the Edit Profile subform (we-*) and the Proof of Work Hub form
+// (pow-hub-*), which is the surface the original report came from. All
+// security-relevant logic (strict validation, opaque uid path, atomic token
+// capture, staleness checks, publicUrl requirement, owned-path parsing) lives
+// ONCE in the shared core; each surface contributes only its DOM ids and its
+// current/staged state. Lifecycle is bound to each surface's REAL persistence
+// transaction: saveProfile (queue + commit) and saveProofOfWork (DB-FIRST,
+// prev-vs-final reconcile + staged commit). Token/busy are global: any exit on
+// any surface invalidates any in-flight upload anywhere.
+let _workImageBusy = false;
+let _workImageOpToken = 0;
+const WORK_IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+
+// profile-surface state
+let _workImageCurrentPath = null;
+let _workImageCurrentUrl = null;
+let _workImageStagedNew = new Map();
+let _workImageDeleteQueue = new Map();
+// hub-surface state (no delete queue: persisted removals are reconciled at save)
+let _hubImageCurrentPath = null;
+let _hubImageCurrentUrl = null;
+let _hubImageStagedNew = new Map();
+
+function validateWorkImage(file) {
+  if (!file) return 'no file selected';
+  if (!file.type || !WORK_IMAGE_EXT[file.type]) return 'only PNG, JPEG or WEBP images are allowed';
+  if (!(file.size > 0)) return 'file is empty';
+  if (file.size > 5242880) return 'image is over the 5 MB limit';
+  return null;
+}
+
+function workImagePathFromUrl(url) {
+  try {
+    if (!url || !sb || !currentUser || !currentUser.id) return null;
+    const probe = sb.storage.from('work-images').getPublicUrl('x');
+    const basePrefix = probe && probe.data && probe.data.publicUrl ? probe.data.publicUrl.slice(0, -1) : null;
+    if (!basePrefix || !url.startsWith(basePrefix)) return null;
+    const path = url.slice(basePrefix.length);
+    if (!path.startsWith(currentUser.id + '/')) return null;
+    if (!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(png|jpg|jpeg|webp)$/.test(path)) return null;
+    return path;
+  } catch (_) { return null; }
+}
+
+async function deleteWorkImageByPath(path) {
+  try {
+    const { error } = await sb.storage.from('work-images').remove([path]);
+    if (error) throw error;
+  } catch (e) { console.warn('[work-images] cleanup failed (harmless orphan left):', path, e); }
+}
+
+function _workImageStatus(statusId, text, color) {
+  const st = document.getElementById(statusId);
+  if (st) { if (color) st.style.color = color; st.textContent = text; }
+}
+
+// Shared post-DB-success reconciler: delete owned objects referenced before but
+// absent from what the DB now holds. External/other-user URLs are never touched;
+// a URL still referenced in the final set is preserved.
+function workImageCleanupRemovedOwned(prevList, savedList) {
+  const finalUrls = new Set((Array.isArray(savedList) ? savedList : []).map(e => e && e.image_url).filter(Boolean));
+  for (const e of (Array.isArray(prevList) ? prevList : [])) {
+    const u = e && e.image_url;
+    if (!u || finalUrls.has(u)) continue;
+    const p = workImagePathFromUrl(u);
+    if (p) deleteWorkImageByPath(p);
+  }
+}
+
+// ── SHARED CORE: race-safe pick flow. ui = { statusId, urlId, getCur, setCur, clearCur } ──
+async function workImagePickCore(inputEl, ui) {
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if (inputEl) inputEl.value = '';
+  if (_workImageBusy) { showToast('An image upload is already in progress'); return; }
+  if (!file) return;
+  const reason = validateWorkImage(file);
+  if (reason) { showToast('Rejected — ' + reason); return; }
+  if (!sb || !currentUser) { showToast('Not connected'); return; }
+  _workImageBusy = true;
+  // RACE-SAFE ORDER: clear previous SYNCHRONOUSLY, capture generation BEFORE ANY
+  // await, then delete the previous object. Any exit bumps the token AFTER myOp
+  // is fixed, so the in-flight upload always detects it.
+  // W1r6: the previous upload's URL is removed from the field NOW (client
+  // validation has already passed), so no failure, missing-publicUrl, or stale
+  // path can leave a dead, saveable URL pointing at the object deleted below.
+  // A different, manually entered URL is never touched.
+  const urlInput = document.getElementById(ui.urlId);
+  const prev = ui.getCur();
+  if (prev && prev.path && urlInput && urlInput.value.trim() === prev.url) {
+    urlInput.value = '';
+  }
+  ui.clearCur();
+  const myOp = ++_workImageOpToken;
+  _workImageStatus(ui.statusId, '\u23f3 uploading\u2026', '#7cc4ff');
+  try {
+    if (prev && prev.path) await deleteWorkImageByPath(prev.path);
+    const path = currentUser.id + '/' + crypto.randomUUID() + '.' + WORK_IMAGE_EXT[file.type];
+    const { error } = await sb.storage.from('work-images')
+      .upload(path, file, { contentType: file.type, upsert: false });
+    if (error) throw error;
+    if (myOp !== _workImageOpToken) { await deleteWorkImageByPath(path); _workImageStatus(ui.statusId, ''); return; }
+    const { data } = sb.storage.from('work-images').getPublicUrl(path);
+    if (!data || !data.publicUrl) { await deleteWorkImageByPath(path); throw new Error('no public URL produced'); }
+    if (myOp !== _workImageOpToken) { await deleteWorkImageByPath(path); _workImageStatus(ui.statusId, ''); return; }
+    if (urlInput) urlInput.value = data.publicUrl;
+    ui.setCur(path, data.publicUrl);
+    _workImageStatus(ui.statusId, '\u2713 uploaded', '#2dd4a0');
+  } catch (e) {
+    console.warn('work image upload failed:', e);
+    if (myOp === _workImageOpToken) {
+      _workImageStatus(ui.statusId, '\u2717 upload failed', '#f87171');
+      showToast('Upload failed \u2014 ' + ((e && e.message) || e));
+    }
+  } finally { _workImageBusy = false; }
+}
+
+// ── SHARED CORE: manual edit of the URL field. Editing WHILE an upload is
+// in flight invalidates its token: the finishing op deletes its own object and
+// never overwrites the manually typed value. ──
+function workImageUrlEditedCore(inputEl, ui) {
+  if (_workImageBusy) { _workImageOpToken++; return; }
+  const cur = ui.getCur();
+  if (!cur || !cur.path) return;
+  const v = ((inputEl && inputEl.value) || '').trim();
+  if (v === cur.url) return;
+  _workImageOpToken++;
+  ui.clearCur();
+  _workImageStatus(ui.statusId, '');
+  deleteWorkImageByPath(cur.path);
+}
+
+// ── PROFILE surface adapters + lifecycle (queue architecture, as approved) ──
+const _profileImgUi = {
+  statusId: 'we-image-upload-status', urlId: 'we-image-url',
+  getCur: () => ({ path: _workImageCurrentPath, url: _workImageCurrentUrl }),
+  setCur: (p, u) => { _workImageCurrentPath = p; _workImageCurrentUrl = u; },
+  clearCur: () => { _workImageCurrentPath = null; _workImageCurrentUrl = null; }
+};
+function onWorkImagePicked(inputEl) { return workImagePickCore(inputEl, _profileImgUi); }
+function onWorkImageUrlEdited(inputEl) { return workImageUrlEditedCore(inputEl, _profileImgUi); }
+
+async function workImageDropCurrent() {
+  _workImageOpToken++;
+  if (!_workImageCurrentPath) return;
+  const p = _workImageCurrentPath;
+  _profileImgUi.clearCur();
+  _workImageStatus('we-image-upload-status', '');
+  await deleteWorkImageByPath(p);
+}
+
+function workImageStageCurrent(savedUrl) {
+  if (!_workImageCurrentPath) return;
+  const p = _workImageCurrentPath, u = _workImageCurrentUrl;
+  _profileImgUi.clearCur();
+  if (savedUrl && savedUrl === u) { _workImageStagedNew.set(u, p); return; }
+  deleteWorkImageByPath(p);
+}
+
+function workImageQueueOrDropForEntry(imageUrl, stillReferenced) {
+  if (!imageUrl) return;
+  if (_workImageStagedNew.has(imageUrl)) {
+    if (stillReferenced) return;
+    const p = _workImageStagedNew.get(imageUrl);
+    _workImageStagedNew.delete(imageUrl);
+    deleteWorkImageByPath(p);
+    return;
+  }
+  const owned = workImagePathFromUrl(imageUrl);
+  if (owned) _workImageDeleteQueue.set(imageUrl, owned);
+}
+
+function workImageAbandonEditSession() {
+  _workImageOpToken++;
+  if (_workImageCurrentPath) { const p = _workImageCurrentPath; _profileImgUi.clearCur(); deleteWorkImageByPath(p); }
+  for (const p of _workImageStagedNew.values()) deleteWorkImageByPath(p);
+  _workImageStagedNew.clear();
+  _workImageDeleteQueue.clear();
+  _workImageStatus('we-image-upload-status', '');
+}
+
+function workImageCommitAfterProfileSave(savedList) {
+  const finalUrls = new Set((Array.isArray(savedList) ? savedList : []).map(e => e && e.image_url).filter(Boolean));
+  if (_workImageCurrentPath) {
+    const p = _workImageCurrentPath, u = _workImageCurrentUrl;
+    _profileImgUi.clearCur();
+    if (!(u && finalUrls.has(u))) deleteWorkImageByPath(p);
+  }
+  for (const [u, p] of _workImageStagedNew) { if (!finalUrls.has(u)) deleteWorkImageByPath(p); }
+  _workImageStagedNew.clear();
+  for (const [u, p] of _workImageDeleteQueue) { if (!finalUrls.has(u)) deleteWorkImageByPath(p); }
+  _workImageDeleteQueue.clear();
+  _workImageStatus('we-image-upload-status', '');
+}
+
+function closeProfileEditor() {
+  workImageAbandonEditSession();
+  closeModal('profile-modal');
+}
+
+// ── HUB surface adapters + lifecycle (staged only; persisted removals are
+// reconciled against the final saved set inside saveProofOfWork) ──
+const _hubImgUi = {
+  statusId: 'pow-hub-image-upload-status', urlId: 'pow-hub-image',
+  getCur: () => ({ path: _hubImageCurrentPath, url: _hubImageCurrentUrl }),
+  setCur: (p, u) => { _hubImageCurrentPath = p; _hubImageCurrentUrl = u; },
+  clearCur: () => { _hubImageCurrentPath = null; _hubImageCurrentUrl = null; }
+};
+function onHubImagePicked(inputEl) { return workImagePickCore(inputEl, _hubImgUi); }
+function onHubImageUrlEdited(inputEl) { return workImageUrlEditedCore(inputEl, _hubImgUi); }
+
+async function hubImageDropCurrent() {
+  _workImageOpToken++;
+  if (!_hubImageCurrentPath) return;
+  const p = _hubImageCurrentPath;
+  _hubImgUi.clearCur();
+  _workImageStatus('pow-hub-image-upload-status', '');
+  await deleteWorkImageByPath(p);
+}
+
+function hubImageStageCurrent(savedUrl) {
+  if (!_hubImageCurrentPath) return;
+  const p = _hubImageCurrentPath, u = _hubImageCurrentUrl;
+  _hubImgUi.clearCur();
+  if (savedUrl && savedUrl === u) { _hubImageStagedNew.set(u, p); return; }
+  deleteWorkImageByPath(p);
+}
+
+function hubImageDropStagedIfUnreferenced(imageUrl, stillReferenced) {
+  if (!imageUrl || !_hubImageStagedNew.has(imageUrl) || stillReferenced) return;
+  const p = _hubImageStagedNew.get(imageUrl);
+  _hubImageStagedNew.delete(imageUrl);
+  deleteWorkImageByPath(p);
+}
+
+function hubImageAbandonSession() {
+  _workImageOpToken++;
+  if (_hubImageCurrentPath) { const p = _hubImageCurrentPath; _hubImgUi.clearCur(); deleteWorkImageByPath(p); }
+  for (const p of _hubImageStagedNew.values()) deleteWorkImageByPath(p);
+  _hubImageStagedNew.clear();
+  _workImageStatus('pow-hub-image-upload-status', '');
+}
+
+function hubImageCommitAfterSave(savedList) {
+  const finalUrls = new Set((Array.isArray(savedList) ? savedList : []).map(e => e && e.image_url).filter(Boolean));
+  if (_hubImageCurrentPath) {
+    const p = _hubImageCurrentPath, u = _hubImageCurrentUrl;
+    _hubImgUi.clearCur();
+    if (!(u && finalUrls.has(u))) deleteWorkImageByPath(p);
+  }
+  for (const [u, p] of _hubImageStagedNew) { if (!finalUrls.has(u)) deleteWorkImageByPath(p); }
+  _hubImageStagedNew.clear();
+  _workImageStatus('pow-hub-image-upload-status', '');
+}
+
+// Single close path for the Hub. After a successful save, the commit has
+// already cleared collections, so the abandon step no-ops.
+function closeProofOfWorkHub() {
+  hubImageAbandonSession();
+  closeModal('pow-hub-modal');
+}
+
 function saveWorkExample() {
+  if (_workImageBusy) { showToast('Please wait — image upload in progress'); return; }  // W1r5
   const title = (document.getElementById('we-title')?.value || '').trim();
   const link = (document.getElementById('we-link')?.value || '').trim();
   const category = (document.getElementById('we-category')?.value || 'Other').trim();
@@ -12276,13 +12569,18 @@ if (imageRaw && !valid.image_url) {
   }
 
   pendingWorkExamples.push(valid);
+  workImageStageCurrent(valid.image_url);  // W1r5 B: staged — NOT persisted until saveProfile succeeds
   cancelWorkExampleForm();
   renderWorkExamplesPreview();
 }
 
 function removeWorkExample(index) {
   if (typeof index !== 'number' || index < 0 || index >= pendingWorkExamples.length) return;
+  const _weRemovedUrl = pendingWorkExamples[index] && pendingWorkExamples[index].image_url;
   pendingWorkExamples.splice(index, 1);
+  // W1r5: staged-new -> delete now unless still referenced; persisted-owned -> queue
+  // until profile save SUCCEEDS; external/other users' URLs -> never touched.
+  workImageQueueOrDropForEntry(_weRemovedUrl, pendingWorkExamples.some(e => e && e.image_url === _weRemovedUrl));
   renderWorkExamplesPreview();
 
   const addBtn = document.getElementById('we-add-btn');
@@ -12539,6 +12837,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 1000);
 });
   async function saveProfile() {
+    if (_workImageBusy) { showToast('Please wait — image upload in progress'); return; }  // W1r5
   const displayName = document.getElementById('edit-display-name')?.value.trim() || '';
   const bio = document.getElementById('edit-bio').value.trim();
   const xUrlRaw = document.getElementById('edit-x-url').value.trim();
@@ -12578,6 +12877,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (error) {
       console.error('Profile save error:', error);
       showToast('Save failed: ' + error.message);
+      // W1r5 hook F: DB did NOT commit — collections untouched (retry keeps state); nothing deleted.
       return;
     }
   }
@@ -12595,7 +12895,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Track 1.3 — refresh dashboard nudge in case user just added/removed Stripe or USDT
   try { renderDashboardPaymentNudge(); } catch(_) {}
   currentUser.avatar_url = avatarUrl;
-  closeModal('profile-modal');
+  // W1r5 hook E: DB committed — reconcile storage against exactly what was saved, then close.
+  workImageCommitAfterProfileSave(workExamplesToSave);
+  closeProfileEditor();
 renderProfile();
 updateAvatars();
 showToast("Profile saved to database!");
@@ -14960,7 +15262,7 @@ document.getElementById('apply-form')?.addEventListener('submit', async e => {
 });
 
 // -- MODAL BACKDROPS -----------------------------------------------
-document.querySelectorAll('.modal').forEach(modal=>{modal.addEventListener('click',e=>{if(e.target===modal){modal.style.display='none';if(modal.id==='add-funds-modal'){_pendingContrib=null;_stripeWindow=null;document.getElementById('fund-step-1').style.display='block';document.getElementById('fund-step-2').style.display='none';}}});});
+document.querySelectorAll('.modal').forEach(modal=>{modal.addEventListener('click',e=>{if(e.target===modal){if(modal.id==='profile-modal'){closeProfileEditor();return;}modal.style.display='none';if(modal.id==='add-funds-modal'){_pendingContrib=null;_stripeWindow=null;document.getElementById('fund-step-1').style.display='block';document.getElementById('fund-step-2').style.display='none';}}});});
 
 // -- LOGIN / LOGOUT ------------------------------------------------
 try {
@@ -18650,7 +18952,7 @@ window.nexarUpdateFabs = nexarUpdateFabs;
           <div style="font-size:10.5px;color:#7d9bbb;margin-top:1px;">Build trust before deals</div>
         </div>
       </div>
-      <button onclick="closeModal('pow-hub-modal')" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;">✕</button>
+      <button onclick="closeProofOfWorkHub()" style="background:transparent;border:none;color:#5a7a9a;cursor:pointer;font-size:20px;">✕</button>
     </div>
 
     <div style="padding:18px 22px 22px;">
@@ -18692,7 +18994,14 @@ window.nexarUpdateFabs = nexarUpdateFabs;
         <textarea id="pow-hub-description" maxlength="280" placeholder="Short description (optional)" class="form-input" style="height:60px;resize:vertical;margin-bottom:7px;font-size:13px;"></textarea>
         <input type="text" id="pow-hub-outcome" maxlength="120" placeholder="Outcome (optional — e.g. +40% signups)" class="form-input" style="margin-bottom:7px;font-size:13px;">
         <input type="text" id="pow-hub-skills" maxlength="200" placeholder="Skills used (optional — comma-separated)" class="form-input" style="margin-bottom:7px;font-size:13px;">
-        <input type="url" id="pow-hub-image" maxlength="500" placeholder="Image URL (optional — link to a screenshot)" class="form-input" style="margin-bottom:7px;font-size:13px;">
+        <!-- W1r5: direct device/gallery upload — fills the Image URL field below; URL stays editable -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <button type="button" onclick="document.getElementById('pow-hub-image-file').click()" style="display:inline-flex;align-items:center;gap:6px;background:rgba(45,212,160,0.08);border:1px dashed rgba(45,212,160,0.35);color:#2dd4a0;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;">📷 Upload image from device</button>
+          <span id="pow-hub-image-upload-status" style="font-size:10px;color:#7cc4ff;" aria-live="polite"></span>
+        </div>
+        <input type="file" id="pow-hub-image-file" accept="image/png,image/jpeg,image/webp" onchange="onHubImagePicked(this)" style="display:none;" aria-hidden="true" tabindex="-1">
+        <div style="font-size:9.5px;color:#f59e0b;margin-bottom:6px;line-height:1.45;">⚠️ Images uploaded here will be public on your Proof of Work profile.</div>
+        <input type="url" id="pow-hub-image" maxlength="500" oninput="onHubImageUrlEdited(this)" placeholder="Image URL (optional — link to a screenshot)" class="form-input" style="margin-bottom:7px;font-size:13px;">
         <input type="url" id="pow-hub-video" maxlength="500" placeholder="Video URL (optional — YouTube, Loom, Vimeo)" class="form-input" style="margin-bottom:9px;font-size:13px;">
         <div style="display:flex;gap:7px;">
           <button type="button" onclick="powHubAddExample()" style="flex:1;background:rgba(45,212,160,0.12);border:1px solid rgba(45,212,160,0.4);color:#2dd4a0;padding:8px 12px;border-radius:7px;font:700 12px/1 'Inter',sans-serif;cursor:pointer;">Add proof</button>
