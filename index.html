@@ -9237,9 +9237,9 @@ if (Array.isArray(obj.skills_used)) {
   }
 }
 
-// V2 media: optional image_url + video_url — same URL rules as link, but
-// optional. An invalid media URL is silently dropped to '' and does NOT
-// invalidate the work example. (saveWorkExample shows a toast at save time.)
+// W1.1 media: image_url and video_url remain optional.
+// When supplied, each must pass the same strict HTTP/HTTPS media validation.
+// A supplied-but-invalid media URL invalidates the whole work example.
 const rawImageUrl = typeof obj.image_url === 'string'
   ? obj.image_url.trim()
   : '';
