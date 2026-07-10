@@ -9188,23 +9188,28 @@ function pifValidateWorkExample(obj) {
   if (!title || title.length > 60) return null;
 
   const link = typeof obj.link === 'string' ? obj.link.trim() : '';
-  if (!link || link.length > 500) return null;
+  // W1.1: the Proof link is OPTIONAL — evidence can instead be a valid image
+  // or video URL (gate below). If a link IS supplied it must still pass every
+  // original check unchanged; a supplied-but-invalid link rejects the example.
+  if (link) {
+    if (link.length > 500) return null;
 
-  const lowerLink = link.toLowerCase();
-  if (lowerLink.startsWith('javascript:') ||
-      lowerLink.startsWith('data:') ||
-      lowerLink.startsWith('vbscript:') ||
-      lowerLink.startsWith('file:')) return null;
+    const lowerLink = link.toLowerCase();
+    if (lowerLink.startsWith('javascript:') ||
+        lowerLink.startsWith('data:') ||
+        lowerLink.startsWith('vbscript:') ||
+        lowerLink.startsWith('file:')) return null;
 
-  // Require http/https and a parseable URL with a real hostname
-  if (!/^https?:\/\/.+/i.test(link)) return null;
+    // Require http/https and a parseable URL with a real hostname
+    if (!/^https?:\/\/.+/i.test(link)) return null;
 
-  try {
-    const u = new URL(link);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    if (!u.hostname || u.hostname.length < 3 || !u.hostname.includes('.')) return null;
-  } catch (_) {
-    return null;
+    try {
+      const u = new URL(link);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+      if (!u.hostname || u.hostname.length < 3 || !u.hostname.includes('.')) return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   const description = typeof obj.description === 'string'
@@ -9235,8 +9240,24 @@ if (Array.isArray(obj.skills_used)) {
 // V2 media: optional image_url + video_url — same URL rules as link, but
 // optional. An invalid media URL is silently dropped to '' and does NOT
 // invalidate the work example. (saveWorkExample shows a toast at save time.)
-var image_url = pifValidateMediaUrl(obj.image_url);
-var video_url = pifValidateMediaUrl(obj.video_url);
+const rawImageUrl = typeof obj.image_url === 'string'
+  ? obj.image_url.trim()
+  : '';
+const rawVideoUrl = typeof obj.video_url === 'string'
+  ? obj.video_url.trim()
+  : '';
+const image_url = pifValidateMediaUrl(rawImageUrl);
+const video_url = pifValidateMediaUrl(rawVideoUrl);
+
+// W1.1r2 strict media: a SUPPLIED image/video URL that fails validation
+// rejects the whole example — no silent discard behind other valid evidence.
+// Absent/empty media fields remain optional.
+if (rawImageUrl && !image_url) return null;
+if (rawVideoUrl && !video_url) return null;
+
+// W1.1 evidence gate: a work example needs a title AND at least one valid
+// evidence source — Proof link, Image URL, or Video URL (each validated above).
+if (!link && !image_url && !video_url) return null;
 
 return { title, link, description, category, outcome, skills_used, image_url, video_url };
 }
@@ -9693,7 +9714,7 @@ function powHubRender() {
       ${we.outcome ? `<div style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;font-weight:700;margin-bottom:7px;padding:4px 9px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);border-radius:6px;"><i class="fas fa-arrow-trend-up" style="font-size:9px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
       ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.1);color:#60a5fa;padding:2px 8px;border-radius:6px;font-weight:600;">${sanitize(s)}</span>`).join('')}</div>` : ''}
       <div style="display:flex;align-items:center;gap:12px;margin-top:2px;">
-        <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>
+        ${we.link ? `<a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#2dd4a0;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:8px;"></i></a>` : ''}
         ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#60a5fa;text-decoration:none;font-weight:700;"><i class="fas fa-play-circle" style="font-size:10px;"></i> Video</a>` : ''}
       </div>
     </div>
@@ -9739,7 +9760,7 @@ function powHubAddExample() {
     video_url: (document.getElementById('pow-hub-video')?.value || '').trim()
   };
   const valid = pifValidateWorkExample(candidate);
-  if (!valid) { showToast('Add a title and a valid https link'); return; }
+  if (!valid) { showToast('Add a title and at least one valid proof link, image, or video.'); return; }
   _powHubExamples.push(valid);
   hubImageStageCurrent(valid.image_url);  // W1r5: staged — NOT persisted until saveProofOfWork succeeds
   powHubCancelForm();
@@ -12549,9 +12570,9 @@ var videoRaw = (document.getElementById('we-video-url')?.value || '').trim();
 const valid = pifValidateWorkExample({ title, link, category, description, outcome, skills_used, image_url: imageRaw, video_url: videoRaw });
 if (!valid) {
   if (!title) { showToast('Title required'); return; }
-  if (!link) { showToast('Link required'); return; }
-  if (!/^https?:\/\/.+/i.test(link)) { showToast('Link must start with http:// or https://'); return; }
-  showToast('Invalid example — check link format');
+  if (!link && !imageRaw && !videoRaw) { showToast('Add a title and at least one valid proof link, image, or video.'); return; }
+  if (link && !/^https?:\/\/.+/i.test(link)) { showToast('Link must start with http:// or https://'); return; }
+  showToast('Invalid example \u2014 check that supplied URLs are valid http(s) links');
   return;
 }
 
@@ -12610,7 +12631,7 @@ function renderWorkExamplesPreview() {
         ${ex.outcome ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;font-weight:600;margin-bottom:6px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(ex.outcome)}</span></div>` : ''}
         ${(Array.isArray(ex.skills_used) && ex.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${ex.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.12);color:#60a5fa;padding:2px 7px;border-radius:8px;font-weight:500;">${sanitize(s)}</span>`).join('')}</div>` : ''}
         <div style="display:flex;align-items:center;gap:14px;margin-top:2px;">
-          <a href="${sanitize(ex.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
+          ${ex.link ? `<a href="${sanitize(ex.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#2dd4a0;text-decoration:none;font-weight:600;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>` : ''}
           ${ex.video_url ? `<a href="${sanitize(ex.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:600;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
         </div>
       </div>
@@ -16328,7 +16349,7 @@ ${failed > 0 ? `<div style="margin-top:8px;font-size:10px;color:#ef4444;font-wei
             ${we.outcome ? `<div style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#2dd4a0;font-weight:700;margin-bottom:9px;padding:5px 10px;background:rgba(45,212,160,0.08);border:1px solid rgba(45,212,160,0.2);border-radius:7px;"><i class="fas fa-arrow-trend-up" style="font-size:10px;"></i><span>${sanitize(we.outcome)}</span></div>` : ''}
             ${(Array.isArray(we.skills_used) && we.skills_used.length) ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:11px;">${we.skills_used.map(s => `<span style="font-size:9px;background:rgba(96,165,250,0.1);color:#60a5fa;padding:3px 9px;border-radius:6px;font-weight:600;">${sanitize(s)}</span>`).join('')}</div>` : ''}
             <div style="display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:11px;border-top:1px solid rgba(255,255,255,0.05);">
-              <a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#0c1626;background:#2dd4a0;padding:7px 13px;border-radius:7px;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>
+              ${we.link ? `<a href="${sanitize(we.link)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#0c1626;background:#2dd4a0;padding:7px 13px;border-radius:7px;text-decoration:none;font-weight:700;">Open proof <i class="fas fa-arrow-right" style="font-size:9px;"></i></a>` : ''}
               ${we.video_url ? `<a href="${sanitize(we.video_url)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#60a5fa;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.25);padding:7px 13px;border-radius:7px;text-decoration:none;font-weight:700;"><i class="fas fa-play-circle" style="font-size:11px;"></i> Watch video</a>` : ''}
             </div>
           </div>
