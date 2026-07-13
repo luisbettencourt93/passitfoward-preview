@@ -7514,7 +7514,33 @@ window._oppLocationWarned = false;
   postToX = false;
   const sw = document.getElementById('x-switch'); if(sw) sw.classList.remove('on');
   markTaskDone(3);
-  addXp(10, 'opp', 'Posted an opportunity');
+  // XP1: real accounts claim the trusted, source-linked server reward.
+  // Demo accounts keep their local-only XP behaviour.
+  if (String(currentUser.id || '').startsWith('demo-')) {
+    await addXp(10, 'opp', 'Posted an opportunity');
+  } else if (sb && newOpp.id) {
+    const { data: xpClaimData, error: xpClaimError } = await sb.rpc(
+      'claim_opportunity_post_xp',
+      { p_opportunity_id: newOpp.id }
+    );
+
+    if (xpClaimError) {
+      const xpClaimMessage = xpClaimError.message || '';
+
+      // Expected only during the controlled deployment and activation window.
+      if (!/permission denied|not active/i.test(xpClaimMessage)) {
+        console.error('Opportunity XP claim failed:', xpClaimError);
+      }
+    } else {
+      const xpClaim = Array.isArray(xpClaimData)
+        ? xpClaimData[0]
+        : xpClaimData;
+
+      if (xpClaim?.awarded) {
+        await hydrateXpFromDb('opportunity_post_reward');
+      }
+    }
+  }
   bumpWeekly('opps');
   showToast(shouldPostToX ? "Posted & shared on X! 🔥" : "Opportunity posted! 🔥");
 }
