@@ -1,0 +1,180 @@
+diff --git a/index.html b/index.html
+index 02d6366..8e7b529 100644
+--- a/index.html
++++ b/index.html
+@@ -8133,37 +8133,151 @@ function replyToPost(handle) {
+ }
+ async function submitCommunityPost() {
+   if (rateLimited('comm_post', 5000)) return;
+-  const body = (document.getElementById('comm-post-text') || document.getElementById('comm-post-input'))?.value.trim();
+-  const category = (document.getElementById('comm-post-channel') || document.getElementById('comm-cat-select'))?.value || 'General';
++
++  const inp =
++    document.getElementById('comm-post-text') ||
++    document.getElementById('comm-post-input');
++
++  const body = inp?.value.trim();
++
++  const category =
++    (document.getElementById('comm-post-channel') ||
++      document.getElementById('comm-cat-select'))?.value || 'General';
++
+   if (!body) return showToast("Write something first");
+   if (!currentUser) return showToast("Login first");
+-  const time = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+-  const newP = { handle: currentUser.handle, user_id: currentUser.id, body, category, likes: 0, time };
+-  if (sb && !currentUser.id.startsWith('demo-')) {
+-    // Get fresh session to ensure auth.uid() matches
+-    const { data: { session } } = await sb.auth.getSession();
+-    if (!session) return showToast("Session expired — please log in again");
+-    const { data, error } = await sb.from('community_posts')
+-      .insert({ handle: currentUser.handle, user_id: session.user.id, body, category, likes: 0 })
+-      .select().single();
+-    if (error) {
+-      console.error('Community post error:', error);
+-      return showToast("Error: " + error.message);
++
++  const isDemo =
++    String(currentUser.id || '').startsWith('demo-');
++
++  let submission = null;
++  let newP = null;
++
++  if (isDemo) {
++    // Demo accounts remain local-only.
++    const awardedLocally = getDailyPostCount() < 3;
++
++    if (awardedLocally) {
++      await addXp(3, 'post', 'Posted in community');
++      bumpDailyPostCount();
+     }
+-    newP.id = data.id;
+-    newP.user_id = session.user.id;
++
++    submission = {
++      awarded: awardedLocally,
++      reason: awardedLocally
++        ? 'awarded'
++        : 'daily_cap_reached'
++    };
++
++    newP = {
++      id: Date.now(),
++      handle: currentUser.handle,
++      user_id: currentUser.id,
++      body,
++      category,
++      likes: 0,
++      time: new Date().toLocaleDateString(
++        'en-US',
++        { month: 'short', day: 'numeric' }
++      )
++    };
+   } else {
+-    newP.id = Date.now();
++    if (!sb) {
++      return showToast(
++        "Service unavailable — please try again"
++      );
++    }
++
++    const sessionResult = await sb.auth.getSession();
++    const session = sessionResult?.data?.session;
++    const sessionError = sessionResult?.error;
++
++    if (sessionError || !session) {
++      return showToast(
++        "Session expired — please log in again"
++      );
++    }
++
++    const {
++      data: submissionData,
++      error: submissionError
++    } = await sb.rpc(
++      'submit_community_post_with_xp',
++      { p_body: body, p_category: category }
++    );
++
++    if (submissionError) {
++      console.error(
++        'Trusted community post submission failed:',
++        submissionError
++      );
++
++      return showToast(
++        "Error: " + submissionError.message
++      );
++    }
++
++    submission = Array.isArray(submissionData)
++      ? submissionData[0]
++      : submissionData;
++
++    if (!submission?.community_post_id) {
++      console.error(
++        'Trusted community post submission returned no source record:',
++        submissionData
++      );
++
++      return showToast(
++        "Error posting — please try again"
++      );
++    }
++
++    newP = {
++      id: submission.community_post_id,
++      handle: submission.author_handle,
++      user_id: submission.author_user_id,
++      body: submission.post_body,
++      category: submission.post_category,
++      likes: submission.likes ?? 0,
++      stars: submission.stars ?? 0,
++      upvotes: submission.upvotes ?? 0,
++      downvotes: submission.downvotes ?? 0,
++      comments: submission.comments ?? [],
++      created_at: submission.post_created_at,
++      time: new Date(
++        submission.post_created_at
++      ).toLocaleDateString(
++        'en-US',
++        { month: 'short', day: 'numeric' }
++      )
++    };
++
++    if (submission.awarded) {
++      await hydrateXpFromDb(
++        'community_post_reward'
++      );
++    }
+   }
++
+   communityPosts.unshift(newP);
+-  const inp = document.getElementById('comm-post-text') || document.getElementById('comm-post-input');
+-  if(inp) inp.value='';
+-  if(getDailyPostCount() < 3) {
+-    addXp(3,'post','Posted in community');
+-    bumpDailyPostCount();
+-  }
++
++  if (inp) inp.value = '';
++
+   bumpWeekly('comm');
+-  renderCommunity(); showToast("Posted! 🙌");
++
++  if (submission?.awarded) {
++    showToast("Post published! +3 XP 🙌");
++  } else if (
++    submission?.reason === 'daily_cap_reached'
++  ) {
++    showToast(
++      "Post published! Daily XP limit reached 🙌"
++    );
++  } else {
++    showToast("Post published! 🙌");
++  }
++
++  renderCommunity();
+ }
+ async function voteCommunityPost(id, dir) {
+   if (!currentUser) return showToast("Login first");
