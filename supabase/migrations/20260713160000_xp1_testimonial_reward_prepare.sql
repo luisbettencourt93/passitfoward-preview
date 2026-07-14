@@ -5,33 +5,7 @@ begin;
 
 do $migration_preflight$
 begin
-  if to_regprocedure(
-    'public.submit_testimonial_with_xp(text)'
-  ) is not null then
-    raise exception
-      'submit_testimonial_with_xp(text) already exists';
-  end if;
-
-  if to_regprocedure(
-    'public.protect_testimonial_reward_identity()'
-  ) is not null then
-    raise exception
-      'protect_testimonial_reward_identity() already exists';
-  end if;
-
-  if exists (
-    select 1
-    from pg_trigger
-    where tgrelid = 'public.testimonials'::regclass
-      and tgname =
-        'protect_testimonial_reward_identity_trg'
-      and not tgisinternal
-  ) then
-    raise exception
-      'testimonial reward identity trigger already exists';
-  end if;
-
-  if exists (
+if exists (
     select 1
     from public.testimonials
     where author_id is null
@@ -57,6 +31,11 @@ $migration_preflight$;
 alter table public.testimonials
   alter column author_id set not null,
   alter column created_at set not null;
+
+alter table public.testimonials
+  drop constraint if exists testimonials_author_handle_not_blank,
+  drop constraint if exists testimonials_body_not_blank,
+  drop constraint if exists testimonials_body_length_check;
 
 alter table public.testimonials
   add constraint testimonials_author_handle_not_blank
@@ -98,6 +77,9 @@ begin
   return new;
 end;
 $function$;
+
+drop trigger if exists protect_testimonial_reward_identity_trg
+on public.testimonials;
 
 create trigger
   protect_testimonial_reward_identity_trg
