@@ -7884,28 +7884,100 @@ function showPostModal() {
 }
 async function submitTestimonial() {
   if (rateLimited('testimonial', 10000)) return;
-  // Get from community textarea (the only one now)
-  const inp = document.getElementById('comm-new-testimonial') || document.getElementById('new-testimonial');
+
+  const inp =
+    document.getElementById('comm-new-testimonial') ||
+    document.getElementById('new-testimonial');
+
   const text = inp?.value.trim();
+
   if (!text) return showToast("Write your testimonial first");
   if (!currentUser) return showToast("Login required");
-  if (sb && !currentUser.id.startsWith('demo-')) {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) return showToast("Session expired — please log in again");
-    const { error } = await sb.from('testimonials').insert({
-      author_handle: currentUser.handle,
-      author_id: session.user.id,
-      body: text
-    });
-    if (error) {
-      console.error('Testimonial error:', error);
-      return showToast("Error saving: " + error.message);
+
+  const isDemo =
+    String(currentUser.id || '').startsWith('demo-');
+
+  let submission = null;
+
+  if (isDemo) {
+    // Demo accounts remain local-only.
+    await addXp(10, 'test', 'Posted a testimonial');
+  } else {
+    if (!sb) {
+      return showToast(
+        "Service unavailable — please try again"
+      );
+    }
+
+    const sessionResult = await sb.auth.getSession();
+    const session = sessionResult?.data?.session;
+    const sessionError = sessionResult?.error;
+
+    if (sessionError || !session) {
+      return showToast(
+        "Session expired — please log in again"
+      );
+    }
+
+    const {
+      data: submissionData,
+      error: submissionError
+    } = await sb.rpc(
+      'submit_testimonial_with_xp',
+      { p_body: text }
+    );
+
+    if (submissionError) {
+      console.error(
+        'Trusted testimonial submission failed:',
+        submissionError
+      );
+
+      return showToast(
+        "Error saving: " + submissionError.message
+      );
+    }
+
+    submission = Array.isArray(submissionData)
+      ? submissionData[0]
+      : submissionData;
+
+    if (!submission?.testimonial_id) {
+      console.error(
+        'Trusted testimonial submission returned no source record:',
+        submissionData
+      );
+
+      return showToast(
+        "Error saving testimonial — please try again"
+      );
+    }
+
+    if (submission.awarded) {
+      await hydrateXpFromDb(
+        'testimonial_post_reward'
+      );
     }
   }
+
   if (inp) inp.value = '';
-  markTaskDone(1); addXp(10, 'test', 'Posted a testimonial'); bumpWeekly('comm');
-  showToast("Testimonial posted! 🙏");
-  loadAndRenderTestimonials();
+
+  markTaskDone(1);
+  bumpWeekly('comm');
+
+  if (submission?.awarded) {
+    showToast("Testimonial posted! +10 XP 🙏");
+  } else if (
+    submission?.reason === 'daily_cap_reached'
+  ) {
+    showToast(
+      "Testimonial posted! Daily XP limit reached 🙏"
+    );
+  } else {
+    showToast("Testimonial posted! 🙏");
+  }
+
+  await loadAndRenderTestimonials();
 }
 async function deleteTestimonial(id) {
   if (!confirm("Delete this testimonial?")) return;
