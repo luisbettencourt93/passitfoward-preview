@@ -1,0 +1,40 @@
+name: Apply reviewed community cutover
+
+on:
+  push:
+    branches:
+      - xp1-community-post-frontend-cutover
+    paths:
+      - .github/workflows/apply-reviewed-community-cutover.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-reviewed-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: xp1-community-post-frontend-cutover
+          fetch-depth: 0
+
+      - name: Apply and verify reviewed patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum .github/xp1-community-post-frontend-cutover.patch | awk '{print toupper($1)}')" = "1C7EB3156A24B6BA58FB5D961FAD9E704B532FC55F3D6A32E677C44F191940F5"
+          git apply --check .github/xp1-community-post-frontend-cutover.patch
+          git apply .github/xp1-community-post-frontend-cutover.patch
+          test "$(sha256sum index.html | awk '{print toupper($1)}')" = "A4903176E9C131BE2F99472ACEAEB587A0777CBC7F31813AE210284D5F07FCC6"
+
+      - name: Commit reviewed frontend cutover
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Route community posts through trusted XP RPC"
+          git push origin HEAD:xp1-community-post-frontend-cutover
