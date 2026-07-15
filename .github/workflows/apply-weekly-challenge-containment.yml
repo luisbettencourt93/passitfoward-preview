@@ -1,0 +1,31 @@
+name: Apply reviewed weekly challenge containment
+
+on:
+  push:
+    branches:
+      - xp1-weekly-challenge-containment
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: xp1-weekly-challenge-containment
+          fetch-depth: 0
+
+      - name: Apply reviewed containment patch
+        run: |
+          git apply --check .github/xp1-weekly-challenge-containment.patch
+          git apply .github/xp1-weekly-challenge-containment.patch
+          rm .github/xp1-weekly-challenge-containment.patch
+          rm .github/workflows/apply-weekly-challenge-containment.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Contain browser-controlled weekly challenge XP"
+          git push origin HEAD:xp1-weekly-challenge-containment
