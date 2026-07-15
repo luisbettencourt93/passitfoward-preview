@@ -9157,7 +9157,11 @@ async function saveGoal(){
 },{onConflict:'handle'}); 
   }
   closeModal('goal-modal');
-  markTaskDone(2);addXp(5,'goal','Set a 30-day goal');bumpWeekly('goal');
+  markTaskDone(2);
+  // XP1 containment: real accounts must not receive browser-controlled Goal XP.
+  // Trusted set_goal_with_xp RPC will award this once enforcement is live.
+  if(String(currentUser.id||'').startsWith('demo-')) addXp(5,'goal','Set a 30-day goal');
+  bumpWeekly('goal');
   showToast("🔒 Goal locked for 30 days! Stay focused. 🎯");
   renderGoal();
 }
@@ -9184,7 +9188,9 @@ async function markGoalReached(){
     },{onConflict:'handle'});
   }
   localStorage.removeItem('pf_goal_set_at_'+currentUser.handle);
-  addXp(40,'goal','Reached 30-day goal! 🎯');
+  // XP1 containment: real accounts must not receive browser-controlled Goal XP.
+  // Trusted mark_goal_reached_with_xp RPC will award this once enforcement is live.
+  if(String(currentUser.id||'').startsWith('demo-')) addXp(40,'goal','Reached 30-day goal! 🎯');
   showToast("🎉 Congrats! Goal marked as reached — the community can see this!");
   renderGoalsReached();
 }
