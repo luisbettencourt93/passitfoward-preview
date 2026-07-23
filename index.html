@@ -5666,8 +5666,27 @@ create policy "raises_delete" on member_raises for delete using (auth.uid() = po
 //   → Your site is live instantly — share the URL
 // ======================================================================
 
-const SUPABASE_URL     = 'https://liujbjfjdycacmaujawu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpdWpiamZqZHljYWNtYXVqYXd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzQxMjYsImV4cCI6MjA4ODIxMDEyNn0.g8P98rM5OVFml5_bQY3V5x7nX5CHnVRqITSMu72Wy2Y';
+// ── ENV SWITCH (E0) ─────────────────────────────────────────────
+// Default = PRODUCTION. Append ?env=staging to the URL to point THIS SAME FILE
+// at the S4a staging project for testing. Both keys are PUBLIC anon keys
+// (role=anon), not secrets. No effect on the deployed prod default.
+const PIF_ENVS = {
+  production: {
+    url: 'https://liujbjfjdycacmaujawu.supabase.co',
+    anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpdWpiamZqZHljYWNtYXVqYXd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzQxMjYsImV4cCI6MjA4ODIxMDEyNn0.g8P98rM5OVFml5_bQY3V5x7nX5CHnVRqITSMu72Wy2Y'
+  },
+  staging: {
+    url: 'https://kjkhvhwykbeblyomiuxj.supabase.co',
+    anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtqa2h2aHd5a2JlYmx5b21pdXhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNzUwMDcsImV4cCI6MjA5OTk1MTAwN30.px1jO1L0wMxmSIEqDsw6ZVKETO1ZjXUsEOf7vLeQios'
+  }
+};
+let PIF_ENV = 'production';
+try {
+  if (new URLSearchParams(location.search).get('env') === 'staging') PIF_ENV = 'staging';
+} catch (e) {}
+const SUPABASE_URL     = PIF_ENVS[PIF_ENV].url;
+const SUPABASE_ANON_KEY = PIF_ENVS[PIF_ENV].anon;
+if (PIF_ENV === 'staging') console.info('%cPIF ENV: STAGING (' + SUPABASE_URL + ')', 'color:#b45309;font-weight:bold');
 const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/bJebIUgIS6Yy8VU1B2dEs00';
 const FOUNDER_EMAIL = null;
 // Init Supabase safely — never crashes even if CDN is slow or keys are missing
