@@ -8931,20 +8931,17 @@ async function founderRecordContribution() {
   const { data: profile } = await sb.from('profiles').select('id,handle').eq('handle', handle).single();
   if(!profile) return showToast("⚠️ Member " + handle + " not found");
 
-  // Insert verified contribution (use founder's auth for RLS, contributor's handle for display)
-  const { data: { session } } = await sb.auth.getSession();
-  if(!session) return showToast("Session expired — please refresh");
-  const { error } = await sb.from('fund_contributions').insert({
-    handle: profile.handle,
-    user_id: session.user.id,
-    amount: amount,
-    note: note || 'Verified by founder'
+  // E3 (S4a): record contribution + award +15 XP atomically via founder-gated,
+  // ledger-backed RPC (server enforces founder + writes xp via apply_xp_delta).
+  const { data: fc, error } = await sb.rpc('founder_record_fund_contribution', {
+    p_target_handle: profile.handle,
+    p_amount: amount,
+    p_note: note || null
   });
-  if(error) { console.warn('Fund insert:', error.message); return showToast("Error recording contribution"); }
-
-  // Award XP to the contributor
-  const { data: p } = await sb.from('profiles').select('xp').eq('handle', handle).single();
-  if(p) await sb.from('profiles').update({ xp: (p.xp || 0) + 15 }).eq('handle', handle);
+  if (error || !fc || fc.ok === false) {
+    console.warn('Fund contribution RPC:', error?.message || (fc && fc.error));
+    return showToast("Error recording contribution");
+  }
 
   // Notify the member
   await sb.from('notifications').insert({
