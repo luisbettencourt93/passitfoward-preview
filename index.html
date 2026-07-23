@@ -16980,49 +16980,51 @@ async function _doAcceptForge(dealId) {
     return showToast("This deal is already locked");
   }
 
-  // -- ESCROW LOCK: deduct both stakes from available, add to locked --
-  // Initiator's stake comes from the deal row (they chose it at submit time)
   const initiatorStake = deal.initiator_xp_stake;
 
-  // Lock initiator first
-  const initResult = await applyXpDelta(deal.initiator_handle, -initiatorStake, +initiatorStake, 'forged_lock', `Locked stake: "${deal.title}"`);
-  if (!initResult) {
+  // Group C (S4a): server-authoritative accept via forge_accept RPC. It atomically re-validates
+  // (Gate A tier cap on raw xp; Gate B spendable-xp 30% + sufficiency), locks both stakes, activates,
+  // and enqueues the initiator notification server-side. The former client-side escrow writes and
+  // rollbacks are removed (client XP mutation and the direct table update were revoked post-07).
+  try {
+    const { data, error } = await sb.rpc('forge_accept', {
+      p_deal_id: dealId,
+      p_receiver_stake: myStake
+    });
+
+    if (error) {
+      const msg = String(error?.message || '');
+      document.getElementById('accept-forge-modal')?.remove();
+      if (msg.includes('deal_exceeds_tier_cap'))              return showToast("This deal exceeds your tier limit. Earn more XP to unlock bigger deals.");
+      if (msg.includes('stake_min_10'))                       return showToast("Minimum stake is 10 XP.");
+      if (msg.includes('stake_exceeds_30pct_available'))      return showToast("Stake exceeds 30% of your available XP.");
+      if (msg.includes('receiver_insufficient_available_xp')) return showToast("Not enough available XP to accept.");
+      if (msg.includes('initiator_insufficient_available_xp'))return showToast("The other party no longer has enough XP for their stake.");
+      if (msg.includes('not_receiver'))                       return showToast("Only the deal receiver can accept this proposal.");
+      if (msg.includes('deal_not_found'))                     return showToast("Deal not found.");
+      console.warn('forge_accept failed:', error);
+      return showToast("Couldn't accept this deal. Please try again.");
+    }
+
+    if (data?.status === 'active' && !data?.replay) {
+      document.getElementById('accept-forge-modal')?.remove();
+      showToast(`✅ Deal accepted! ${initiatorStake + myStake} XP locked total. Get to work.`);
+      showMyForgedDeals();
+      return;
+    }
+    if (data?.replay === true) {
+      document.getElementById('accept-forge-modal')?.remove();
+      showToast('This deal is no longer pending.');
+      showMyForgedDeals();
+      return;
+    }
     document.getElementById('accept-forge-modal')?.remove();
-    return showToast("⚠️ Could not lock initiator's stake. Deal not accepted.");
-  }
-
-  // Lock receiver
-  const recvResult = await applyXpDelta(currentUser.handle, -myStake, +myStake, 'forged_lock', `Locked stake: "${deal.title}"`);
-  if (!recvResult) {
-    // Roll back initiator lock
-    await applyXpDelta(deal.initiator_handle, +initiatorStake, -initiatorStake, 'forged_rollback', `Rollback lock: "${deal.title}"`);
+    return showToast("Couldn't accept this deal. Please try again.");
+  } catch (e) {
+    console.warn('forge_accept crashed:', e);
     document.getElementById('accept-forge-modal')?.remove();
-    return showToast("⚠️ Could not lock your stake. Deal not accepted.");
+    showToast("Couldn't accept this deal. Please try again.");
   }
-
-  // Now flip the deal to active and persist receiver's stake + lock flag
-  const { error: updErr } = await sb.from('forged_deals').update({
-    status: 'active',
-    receiver_xp_stake: myStake,
-    xp_locked: true
-  }).eq('id', dealId).eq('status', 'pending');  // double-check status hasn't changed
-
-  if (updErr) {
-    // Roll back BOTH locks
-    await applyXpDelta(deal.initiator_handle, +initiatorStake, -initiatorStake, 'forged_rollback', `Rollback: "${deal.title}"`);
-    await applyXpDelta(currentUser.handle, +myStake, -myStake, 'forged_rollback', `Rollback: "${deal.title}"`);
-    document.getElementById('accept-forge-modal')?.remove();
-    return showToast("Error activating deal: " + updErr.message);
-  }
-
- addNotif(
-  `✅ ${currentUser.handle} accepted your Forge proposal for "${deal.title}"! They staked ${myStake} XP. Both stakes are now LOCKED. The deal is ACTIVE — do the work, then mark the outcome.`,
-  deal.initiator_handle,
-  { type: 'deal_accepted', target_type: 'deal', target_id: dealId, actor_handle: currentUser.handle }
-);
-  document.getElementById('accept-forge-modal')?.remove();
-  showToast(`✅ Deal accepted! ${initiatorStake + myStake} XP locked total. Get to work.`);
-  showMyForgedDeals();
 }
 
 async function rejectForge(dealId) {
