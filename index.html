@@ -6200,15 +6200,17 @@ if (!cleanHandle) {
   if (error) return showToast("❌ " + error.message);
 
   if (data.user) {
+    // E1 (S4a): plain INSERT ... ON CONFLICT (id) DO NOTHING; xp omitted (server default 0).
+    // xp is no longer client-writable post-07; a DO-NOTHING upsert needs only INSERT
+    // privilege on the listed columns (id,handle,bio,skills,x_url,last_seen).
     const { error: pErr } = await sb.from('profiles').upsert({
       id: data.user.id,
       handle: cleanHandle,
       bio: '',
       skills: [],
       x_url: '',
-      xp: 0,
       last_seen: new Date().toISOString()
-    });
+    }, { onConflict: 'id', ignoreDuplicates: true });
 
    // INVITE-TRACK-1: redeem invite code via SECURITY DEFINER RPC.
 // Old direct .update() was silently blocked by founder-only RLS.
@@ -6230,7 +6232,12 @@ try {
   console.warn('Invite redeem call failed:', e);
 }
 
-if (pErr) console.warn('Profile create:', pErr.message);
+if (pErr) {
+  console.warn('Profile create:', pErr.message);
+  if (pErr.code === '23505' || /duplicate key|unique/i.test(pErr.message || '')) {
+    return showToast("❌ That handle is already taken — please choose another");
+  }
+}
 
 // Surface invite redemption outcome.
 // Account is already created by this point, so this is logged for diagnosis.
