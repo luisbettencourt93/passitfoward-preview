@@ -4551,7 +4551,7 @@ body.light .nr-state-unread { color:#059669; }
       <div style="background:linear-gradient(135deg,rgba(45,212,160,0.08),#111e2e);border:1px solid rgba(45,212,160,0.15);border-radius:12px;padding:14px 16px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#5a7a9a;">Opportunities</span></div><div style="font-size:26px;font-weight:700;color:#2dd4a0;margin-top:4px;font-family:'Space Grotesk',sans-serif;" id="lf-stat-opps">0</div></div>
       <div style="background:linear-gradient(135deg,rgba(167,139,250,0.06),#111e2e);border:1px solid rgba(167,139,250,0.15);border-radius:12px;padding:14px 16px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#5a7a9a;">Deals forged</span></div><div style="font-size:26px;font-weight:700;color:#a78bfa;margin-top:4px;font-family:'Space Grotesk',sans-serif;" id="lf-stat-deals">0</div></div>
       <div style="background:linear-gradient(135deg,rgba(96,165,250,0.06),#111e2e);border:1px solid rgba(96,165,250,0.15);border-radius:12px;padding:14px 16px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#5a7a9a;">Members active</span></div><div style="font-size:26px;font-weight:700;color:#60a5fa;margin-top:4px;font-family:'Space Grotesk',sans-serif;" id="lf-stat-active">0</div></div>
-      <div style="background:linear-gradient(135deg,rgba(245,158,11,0.06),#111e2e);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:14px 16px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#5a7a9a;">Total value</span><span style="font-size:9px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;" id="lf-stat-today-badge">this week</span></div><div style="font-size:26px;font-weight:700;color:#f59e0b;margin-top:4px;font-family:'Space Grotesk',sans-serif;" id="lf-stat-today">$0</div></div>
+      <div style="background:linear-gradient(135deg,rgba(245,158,11,0.06),#111e2e);border:1px solid rgba(245,158,11,0.15);border-radius:12px;padding:14px 16px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span style="font-size:11px;color:#5a7a9a;">Total value</span><span style="font-size:9px;color:#f59e0b;background:rgba(245,158,11,0.1);padding:2px 6px;border-radius:4px;" id="lf-stat-today-badge">all-time</span></div><div style="font-size:26px;font-weight:700;color:#f59e0b;margin-top:4px;font-family:'Space Grotesk',sans-serif;" id="lf-stat-today">$0</div></div>
     </div>
 
     <!-- 🔥 TRENDING OPPORTUNITIES -->
@@ -5988,23 +5988,29 @@ async function updateLfStats() {
   const el1 = document.getElementById('lf-stat-opps'); if(el1) el1.textContent = oppCount;
   // Count deals
   if(sb) {
+    // C0 (S4a): platform deal stats via privacy-safe RPC (base-table reads RLS-blocked for non-participants post-07).
+    // On RPC failure show '—' (never a misleading fake 0/$0); a successful 0 still renders legitimately.
     try {
-      const { count: dealCount } = await sb.from('forged_deals').select('*',{count:'exact',head:true});
-      const el2 = document.getElementById('lf-stat-deals'); if(el2) el2.textContent = dealCount || 0;
-    } catch(e){}
-    // Active members (last 5 min)
+      const { data: stats, error: statsErr } = await sb.rpc('platform_deal_stats');
+      if (!statsErr && stats) {
+        const el2 = document.getElementById('lf-stat-deals'); if(el2) el2.textContent = Number(stats.total_deals) || 0;
+        const el4 = document.getElementById('lf-stat-today');
+        if(el4){ const v = Number(stats.active_settled_value) || 0; el4.textContent = v >= 1000 ? '$' + (v/1000).toFixed(1) + 'k' : '$' + v.toLocaleString(); }
+      } else {
+        if (statsErr) console.warn('platform_deal_stats:', statsErr.message);
+        const el2 = document.getElementById('lf-stat-deals'); if(el2) el2.textContent = '—';
+        const el4 = document.getElementById('lf-stat-today'); if(el4) el4.textContent = '—';
+      }
+    } catch(e){
+      console.warn('platform_deal_stats crashed:', e);
+      const el2 = document.getElementById('lf-stat-deals'); if(el2) el2.textContent = '—';
+      const el4 = document.getElementById('lf-stat-today'); if(el4) el4.textContent = '—';
+    }
+    // Active members (last 5 min) — unchanged (profiles read, not forged_deals)
     try {
       const fiveMinAgo = new Date(Date.now()-5*60*1000).toISOString();
       const { count: activeCount } = await sb.from('profiles').select('*',{count:'exact',head:true}).gte('last_seen',fiveMinAgo);
       const el3 = document.getElementById('lf-stat-active'); if(el3) el3.textContent = activeCount || 0;
-    } catch(e){}
-    // Total deal value
-    try {
-      const { data: allDeals } = await sb.from('forged_deals').select('amount').in('status',['active','settled']);
-      let totalVal = 0;
-      if(allDeals) allDeals.forEach(d => { const amt = parseFloat((d.amount||'0').toString().replace(/[^0-9.]/g,'')); if(!isNaN(amt)) totalVal += amt; });
-      const el4 = document.getElementById('lf-stat-today');
-      if(el4) el4.textContent = totalVal >= 1000 ? '$' + (totalVal/1000).toFixed(1) + 'k' : '$' + totalVal.toLocaleString();
     } catch(e){}
   }
 }
@@ -6588,6 +6594,27 @@ function switchTab(tabId) {
 }
 
 // -- LIVE FEED (opportunities + forged deals) ----------------------
+// C0 (S4a): opportunity in-progress/fulfilled sets via privacy-safe RPC (replaces direct forged_deals reads).
+// Preserves the previously-loaded sets on RPC error (never clobbers valid state with empty).
+async function loadForgeOppStates() {
+  window._activeForgeOppIds = window._activeForgeOppIds || new Set();
+  window._fulfilledOppIds = window._fulfilledOppIds || new Set();
+  window._completedForgeOppIds = window._completedForgeOppIds || window._fulfilledOppIds;
+  if (!sb) return;
+  try {
+    const { data, error } = await sb.rpc('opportunity_deal_states');
+    if (error) { console.warn('opportunity_deal_states:', error.message); return; }
+    const active = new Set(), fulfilled = new Set();
+    (data||[]).forEach(r => {
+      if (r.opportunity_id == null) return;
+      if (r.state === 'fulfilled') fulfilled.add(String(r.opportunity_id));
+      else if (r.state === 'in_progress') active.add(String(r.opportunity_id));
+    });
+    window._activeForgeOppIds = active;
+    window._fulfilledOppIds = fulfilled;
+    window._completedForgeOppIds = fulfilled;
+  } catch(e){ console.warn('opportunity_deal_states crashed:', e); }
+}
 async function loadLiveFeed(opts) {
   const silent = opts && opts.silent === true;
 
@@ -6663,48 +6690,7 @@ async function loadLiveFeed(opts) {
       expires_at: r.expires_at || null
     }));
 
-    try {
-      const { data: activeDeals, error: activeDealsError } = await sb
-        .from('forged_deals')
-        .select('opportunity_id')
-        .in('status', ['pending', 'pending_acceptance', 'active', 'disputed']);
-
-      if (activeDealsError) {
-        console.warn('Live Market active deals load failed:', activeDealsError);
-      }
-
-      window._activeForgeOppIds = new Set(
-        (activeDeals || [])
-          .filter(d => d.opportunity_id)
-          .map(d => String(d.opportunity_id))
-      );
-    } catch (e) {
-      console.warn('Live Market active deals load crashed:', e);
-      window._activeForgeOppIds = new Set();
-    }
-
-    try {
-      const { data: completedDeals, error: completedDealsError } = await sb
-        .from('forged_deals')
-        .select('opportunity_id')
-        .eq('status', 'settled')
-        .eq('outcome', 'delivered');
-
-      if (completedDealsError) {
-        console.warn('Live Market completed deals load failed:', completedDealsError);
-      }
-
-      window._completedForgeOppIds = new Set(
-        (completedDeals || [])
-          .filter(d => d.opportunity_id)
-          .map(d => String(d.opportunity_id))
-      );
-    } catch (e) {
-      console.warn('Live Market completed deals load crashed:', e);
-      window._completedForgeOppIds = new Set();
-    }
-
-    window._fulfilledOppIds = window._completedForgeOppIds || new Set();
+    await loadForgeOppStates();
 
     renderLiveFeedOpps();
     renderTrendingOpps();
@@ -7160,13 +7146,7 @@ async function loadOpportunitiesAndRender() {
   expires_at: r.expires_at || null
 }));
     }
-   // Load active forged deals (in-progress lock — shows "Deal in Progress" badge)
-const { data: activeDeals } = await sb.from('forged_deals').select('opportunity_id').in('status',['pending','pending_acceptance','active','disputed']);
-window._activeForgeOppIds = new Set((activeDeals||[]).filter(d=>d.opportunity_id).map(d=>String(d.opportunity_id)));
-
-// Load fulfilled forged deals (hard lock — removes opportunity from main feed)
-const { data: fulfilledDeals } = await sb.from('forged_deals').select('opportunity_id').eq('status','settled').eq('outcome','delivered');
-window._fulfilledOppIds = new Set((fulfilledDeals||[]).filter(d=>d.opportunity_id).map(d=>String(d.opportunity_id)));
+  await loadForgeOppStates();
   }
   renderOpportunities();
   // Also refresh Live Market views if that tab is visible — fixes "trending
@@ -15472,10 +15452,13 @@ async function loadHeroStats() {
     const el1 = document.getElementById('hero-stat-members');
     if(el1) el1.textContent = (members||0) + '+';
 
-    // Deals forged (count of all settled deals)
-    const { count: dealCount } = await sb.from('forged_deals').select('*',{count:'exact',head:true}).eq('status','settled');
+    // Deals forged (settled count) — via privacy-safe platform_deal_stats RPC (C0). '—' on failure (no fake 0+).
+    const { data: hstats, error: hErr } = await sb.rpc('platform_deal_stats');
     const el2 = document.getElementById('hero-stat-deals');
-    if(el2) el2.textContent = (dealCount||0) + '+';
+    if(el2){
+      if(!hErr && hstats) el2.textContent = (Number(hstats.settled_count)||0) + '+';
+      else { if(hErr) console.warn('platform_deal_stats (hero):', hErr.message); el2.textContent = '—'; }
+    }
 
     // Total XP earned
     const { data: profiles } = await sb.from('profiles').select('xp');
