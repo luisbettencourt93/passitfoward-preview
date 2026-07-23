@@ -11486,7 +11486,7 @@ async function ccGetForgedDeals() {
     var res = await sb
       .from('forged_deals')
       .select('title, status, created_at, initiator_handle, receiver_handle')
-      .or('initiator_handle.eq.' + handle + ',receiver_handle.eq.' + handle)
+      .or('initiator_id.eq.' + currentUser.id + ',receiver_id.eq.' + currentUser.id)
       .order('created_at', { ascending: false });
     if (!res || !Array.isArray(res.data)) return EMPTY;
 
@@ -11530,7 +11530,7 @@ async function ccGetTrackRecord() {
     var res = await sb
       .from('forged_deals')
       .select('title, status, created_at, initiator_handle, receiver_handle')
-      .or('initiator_handle.eq.' + handle + ',receiver_handle.eq.' + handle)
+      .or('initiator_id.eq.' + currentUser.id + ',receiver_id.eq.' + currentUser.id)
       .order('created_at', { ascending: false });
     if (!res || !Array.isArray(res.data)) return EMPTY;
     var rows = res.data;
@@ -15574,7 +15574,7 @@ function renderDashboardPaymentNudge() {
   try {
     const handle = currentUser.handle;
     // Get all forged deals involving this user
-    const { data: allDeals } = await sb.from('forged_deals').select('*').or(`initiator_handle.eq.${handle},receiver_handle.eq.${handle}`);
+    const { data: allDeals } = await sb.from('forged_deals').select('*').or(`initiator_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`);
     const deals = allDeals || [];
     
     // Settled deals (earnings)
@@ -15636,7 +15636,7 @@ function renderDashboardPaymentNudge() {
         feedEl.innerHTML = settled.slice(0,5).map(d => {
           const amt = parseFloat((d.amount||'0').toString().replace(/[^0-9.]/g,''));
           const amtStr = !isNaN(amt) && amt > 0 ? '+$' + amt.toLocaleString() : '+XP';
-          return `<div style="padding:8px 0;border-bottom:1px solid rgba(30,47,66,0.5);display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:12px;color:#e8f0f8;">${sanitize(d.title||'Deal')}</div><div style="font-size:10px;color:#5a7a9a;">with ${sanitize(d.initiator_handle===handle?d.receiver_handle:d.initiator_handle)}</div></div><div style="font-size:13px;font-weight:700;color:#2dd4a0;">${amtStr}</div></div>`;
+          return `<div style="padding:8px 0;border-bottom:1px solid rgba(30,47,66,0.5);display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:12px;color:#e8f0f8;">${sanitize(d.title||'Deal')}</div><div style="font-size:10px;color:#5a7a9a;">with ${sanitize(d.initiator_id===currentUser.id?d.receiver_handle:d.initiator_handle)}</div></div><div style="font-size:13px;font-weight:700;color:#2dd4a0;">${amtStr}</div></div>`;
         }).join('');
       }
     }
@@ -15648,7 +15648,7 @@ function renderDashboardPaymentNudge() {
       else {
         activeFeedEl.innerHTML = active.slice(0,5).map(d => {
           const isPending = d.status === 'pending';
-          const isInit = d.initiator_handle === handle;
+          const isInit = d.initiator_id === currentUser.id;
           const otherHandle = isInit ? d.receiver_handle : d.initiator_handle;
           // Pending: receiver hasn't picked yet (handle legacy mirrored data)
           const recvKnown = d.status !== 'pending';
@@ -17163,15 +17163,12 @@ window.addEventListener('load', () => setTimeout(startForgedAutoRefresh, 2000));
 async function showMyForgedDeals() {
   if(!currentUser || !sb) return;
 
-  // Handle-format tolerance: forged_deals may store handles with or without a leading '@'.
-  // Query both forms so deals load regardless of stored format.
-  // Read/query fix only — no settlement/XP/stake/dispute/C-proof logic touched.
-  const bareHandle = pifNormalizeHandleKey(currentUser.handle);
-  const atHandle = '@' + bareHandle;
-
+  // E6 (S4a): participant-scoped read by auth.uid() — matches the forged_deals RLS
+  // (initiator_id/receiver_id = auth.uid()); removes the '@'/bare handle-format workaround.
+  const uid = currentUser.id;
   const { data } = await sb.from('forged_deals')
     .select('*')
-    .or(`initiator_handle.eq.${bareHandle},receiver_handle.eq.${bareHandle},initiator_handle.eq.${atHandle},receiver_handle.eq.${atHandle}`)
+    .or(`initiator_id.eq.${uid},receiver_id.eq.${uid}`)
     .order('created_at', { ascending: false });
   const modal = document.getElementById('forged-deals-modal');
   modal.style.display = 'flex';
@@ -17219,7 +17216,7 @@ async function showMyForgedDeals() {
     } catch (e) { console.warn('deal_proofs bulk read failed (card proof CTAs hidden):', e); /* proofs are non-critical; deal cards still render without them */ }
   }
   function dealCard(d, canDelete) {
-    const isInitiator  = d.initiator_handle === currentUser.handle;
+    const isInitiator  = d.initiator_id === currentUser.id;
     const other        = isInitiator ? d.receiver_handle : d.initiator_handle;
     // For PENDING deals, the receiver hasn't picked their stake yet — force it to null
     // regardless of what's in the DB. This handles legacy mirrored data from before the rewrite.
