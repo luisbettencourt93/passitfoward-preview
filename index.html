@@ -4579,10 +4579,7 @@ body.light .nr-state-unread { color:#059669; }
     <div>
       <div style="font-size:14px;font-weight:600;color:#e8f0f8;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;"><span style="color:#f59e0b;">Deal board</span><div style="flex:1;height:1px;background:#2d4f6f;"></div></div>
       <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;" id="deal-board-tabs">
-        <button class="filter-btn active" onclick="setDealBoardTab('all',this)">All</button>
-        <button class="filter-btn" onclick="setDealBoardTab('active',this)">⚡ Active</button>
-        <button class="filter-btn" onclick="setDealBoardTab('delivered',this)">✅ Delivered</button>
-        <button class="filter-btn" onclick="setDealBoardTab('failed',this)">❌ Failed</button>
+        <span style="font-size:0.75rem;color:#64748b;font-weight:600;">✅ Completed deals — verified, delivered</span>
       </div>
       <div id="deal-board-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1rem;"></div>
       <div id="deal-board-feed" class="opportunities-feed lf-animate"></div>
@@ -6769,12 +6766,17 @@ async function loadLfTicker() {
     if(recentOpps) recentOpps.forEach(o => {
       items.push({ color:'#2dd4a0', text:`<b>${sanitize(o.poster_handle)}</b> posted: ${sanitize(o.title)}`, time:o.created_at });
     });
-    // Recent deals
-    const { data: recentDeals } = await sb.from('forged_deals').select('title,initiator_handle,receiver_handle,amount,status,created_at').order('created_at',{ascending:false}).limit(5);
-    if(recentDeals) recentDeals.forEach(d => {
-      if(d.status==='settled') items.push({ color:'#f59e0b', text:`<b>${sanitize(d.initiator_handle)}</b> settled deal with <b>${sanitize(d.receiver_handle)}</b> — ${sanitize(d.amount||'XP')}`, time:d.created_at });
-      else items.push({ color:'#a78bfa', text:`<b>${sanitize(d.initiator_handle)}</b> forged a deal with <b>${sanitize(d.receiver_handle)}</b> — ${sanitize(d.amount||'XP')}`, time:d.created_at });
-    });
+    // Recent deals — S4a E5: completed (delivered) showcase via deal_board (no amount/status; identity may be null for anon).
+    // Isolated so an RPC error never disrupts the opportunities ticker items already collected above.
+    try {
+      const { data: recentDeals, error: dbErr } = await sb.rpc('deal_board', { p_limit:5, p_cursor_completed_at:null, p_cursor_id:null });
+      if(!dbErr && Array.isArray(recentDeals)) recentDeals.forEach(d => {
+        const iName = d.initiator_display_name || d.initiator_handle;
+        const rName = d.receiver_display_name || d.receiver_handle;
+        const who = (iName && rName) ? `<b>${sanitize(iName)}</b> completed a deal with <b>${sanitize(rName)}</b>` : `Two members completed a deal`;
+        items.push({ color:'#f59e0b', text:`${who} — ✅ delivered`, time:d.completed_at });
+      });
+    } catch(e) { console.warn('Ticker deals:', e.message||e); }
     // Sort by time
     items.sort((a,b) => new Date(b.time) - new Date(a.time));
     if(items.length === 0) { el.innerHTML = '<span class="lf-ticker-item"><span style="color:#2dd4a0;">●</span> No recent activity yet — be the first!</span>'; return; }
@@ -7011,11 +7013,7 @@ ${(() => {
 async function renderLiveFeedForges(opts) {
   const silent = opts && opts.silent === true;
   const el = document.getElementById('livefeed-forges'); if (!el) return;
-
-  // DOM-state guard — if the panel is currently showing a loading spinner,
-  // force a real render regardless of fingerprint. Same pattern as Edit B's repair.
   const isLoading = el.querySelector('.fa-spinner');
-
   if (!sb) {
     if (window._lfForgesFingerprint !== 'unavailable' || isLoading) {
       el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">Not available</div>';
@@ -7023,215 +7021,115 @@ async function renderLiveFeedForges(opts) {
     }
     return;
   }
-
-  // Only show spinner on manual calls, not silent auto-refresh
-  if (!silent) {
-    el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin" style="color:var(--primary);"></i></div>';
-  }
-
-  // Only show active/pending deals, or settled ones completed within last 4 hours
-  const { data: deals } = await sb.from('forged_deals')
-    .select('*')
-    .in('status', ['pending', 'active', 'settled'])
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  // Re-check DOM state after the await — could have changed during the network call
+  if (!silent) el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin" style="color:var(--primary);"></i></div>';
+  // S4a E5: only completed (delivered) deals are public — via deal_board.
+  const { data, error } = await sb.rpc('deal_board', { p_limit:30, p_cursor_completed_at:null, p_cursor_id:null });
+  const visible = (!error && Array.isArray(data)) ? data : [];
   const stillLoading = el.querySelector('.fa-spinner');
-
-  if (!deals?.length) {
-    if (window._lfForgesFingerprint !== 'empty' || stillLoading) {
-      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No active forged deals right now.</div>';
-      window._lfForgesFingerprint = 'empty';
-    }
-    return;
-  }
-
-  const fourHoursAgo = Date.now() - (4 * 60 * 60 * 1000);
-  const visible = deals.filter(d => {
-    if (d.status === 'settled' && d.outcome === 'delivered') {
-      // Only show delivered deals for 4 hours after completion
-      return d.completed_at && new Date(d.completed_at).getTime() > fourHoursAgo;
-    }
-    if (d.status === 'settled' && d.outcome === 'failed') return false; // failures stay on profiles, not feed
-    return true; // pending and active always show
-  });
-
   if (!visible.length) {
     if (window._lfForgesFingerprint !== 'empty' || stillLoading) {
-      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No active forged deals right now.</div>';
+      el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#4b5563;font-size:0.88rem;">No completed deals yet.</div>';
       window._lfForgesFingerprint = 'empty';
     }
     return;
   }
-
-  // Track polish — change-aware re-render. Build fingerprint of all data
-  // that affects the rendered output. Skip DOM update if unchanged.
-  const fingerprint = JSON.stringify(visible.map(d => ({
-    id: d.id,
-    t: d.title,
-    s: d.status,
-    o: d.outcome,
-    a: d.amount,
-    i: d.initiator_handle,
-    r: d.receiver_handle,
-    xp: d.initiator_xp_stake,
-    c: d.created_at,
-    co: d.completed_at
-  })));
+  const fingerprint = JSON.stringify(visible.map(d => ({ id:d.id, t:d.title, i:d.initiator_handle, r:d.receiver_handle, c:d.completed_at })));
   if (window._lfForgesFingerprint === fingerprint && !stillLoading) return;
   window._lfForgesFingerprint = fingerprint;
-
   el.innerHTML = visible.map(d => {
-    let statusColor, statusLabel;
-    if (d.outcome === 'delivered')   { statusColor = '#10b981'; statusLabel = '✅ Delivered'; }
-    else if (d.outcome === 'failed') { statusColor = '#ef4444'; statusLabel = '❌ Failed'; }
-    else if (d.status === 'disputed'){ statusColor = '#f59e0b'; statusLabel = '⚖️ Disputed'; }
-    else if (d.status === 'cancelled'){ statusColor = '#5a7a9a'; statusLabel = '🚫 Cancelled'; }
-    else if (d.status === 'active')  { statusColor = '#60a5fa'; statusLabel = '⚡ Active'; }
-    else                             { statusColor = '#f59e0b'; statusLabel = '⏳ Pending Acceptance'; }
-
-    const timeStr = new Date(d.created_at).toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+    const timeStr = d.completed_at ? new Date(d.completed_at).toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : '';
+    const ih = d.initiator_handle, rh = d.receiver_handle;
+    const iName = d.initiator_display_name || d.initiator_handle;
+    const rName = d.receiver_display_name || d.receiver_handle;
+    const between = (ih || rh)
+      ? `${ih ? `<span style="color:#10b981;font-weight:600;cursor:pointer;" onclick="viewMemberProfile('${sanitize(ih)}')">${sanitize(iName)}</span>` : '<span style="color:#94a3b8;">a member</span>'} &amp; ${rh ? `<span style="color:#10b981;font-weight:600;cursor:pointer;" onclick="viewMemberProfile('${sanitize(rh)}')">${sanitize(rName)}</span>` : '<span style="color:#94a3b8;">a member</span>'}`
+      : `<span style="color:#94a3b8;">two members</span>`;
     return `<div class="opp-item" style="border-left:3px solid #7c3aed;">
-      <div class="opp-top">
-        <div style="flex:1;min-width:0;">
-          <strong style="color:white;font-size:0.97rem;">🔨 ${sanitize(d.title)}</strong>
-          <div class="opp-meta" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
-            <span style="background:rgba(124,58,237,0.12);color:#a78bfa;border:1px solid rgba(124,58,237,0.3);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">Forged Deal</span>
-            ${d.amount ? `<span style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);color:#10b981;padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">${sanitize(d.amount)}</span>` : ''}
-            <span style="color:${statusColor};font-weight:700;font-size:0.75rem;">${statusLabel}</span>
-          </div>
-          <div class="opp-meta" style="margin-top:4px;">
-            <span style="color:#94a3b8;font-size:0.82rem;">Between <span style="color:#10b981;font-weight:600;cursor:pointer;" onclick="viewMemberProfile('${sanitize(d.initiator_handle)}')">${sanitize(d.initiator_handle)}</span> &amp; <span style="color:#10b981;font-weight:600;cursor:pointer;" onclick="viewMemberProfile('${sanitize(d.receiver_handle)}')">${sanitize(d.receiver_handle)}</span></span>
-          </div>
-          <div class="opp-meta" style="margin-top:4px;">
-            <span style="color:#4b5563;font-size:0.78rem;">🔒 ${d.initiator_xp_stake || 0} XP staked · ${timeStr}</span>
-          </div>
+      <div class="opp-top"><div style="flex:1;min-width:0;">
+        <strong style="color:white;font-size:0.97rem;">🔨 ${sanitize(d.title || 'Untitled deal')}</strong>
+        <div class="opp-meta" style="margin-top:4px;flex-wrap:wrap;gap:6px;">
+          <span style="background:rgba(124,58,237,0.12);color:#a78bfa;border:1px solid rgba(124,58,237,0.3);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;">Forged Deal</span>
+          <span style="color:#10b981;font-weight:700;font-size:0.75rem;">✅ Delivered</span>
         </div>
-      </div>
+        <div class="opp-meta" style="margin-top:4px;"><span style="color:#94a3b8;font-size:0.82rem;">Between ${between}</span></div>
+        <div class="opp-meta" style="margin-top:4px;"><span style="color:#4b5563;font-size:0.78rem;">${timeStr}</span></div>
+      </div></div>
     </div>`;
   }).join('');
 }
 
-// -- DEAL BOARD ----------------------------------------------------
-let _dealBoardData = [];
-let _dealBoardTab = 'all';
-let _dealBoardPage = 0;
-const _dealBoardPageSize = 20;
-
-function setDealBoardTab(tab, btn) {
-  _dealBoardTab = tab;
-  _dealBoardPage = 0;
-  document.querySelectorAll('#deal-board-tabs .filter-btn').forEach(b => b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
-  renderDealBoard();
-}
+// -- DEAL BOARD (S4a E5: delivered-only Completed Showcase via deal_board RPC) ----
+let _dealBoardRows = [];
+let _dealBoardCursor = null;      // { completed_at, id } of the last loaded row
+let _dealBoardDone = false;
+const _dealBoardPageSize = 50;    // server max
 
 async function loadDealBoard() {
   if(!sb) return;
-  if(!window._dealBoardTab) window._dealBoardTab = 'active';
   const el = document.getElementById('deal-board-feed'); if(!el) return;
   el.innerHTML = '<div style="padding:1.5rem;text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin" style="color:var(--primary);"></i></div>';
+  _dealBoardRows = []; _dealBoardCursor = null; _dealBoardDone = false;
   try {
-    const tab = window._dealBoardTab || 'active';
-    let q = sb.from('forged_deals').select('*').order('created_at',{ascending:false});
-    if(tab==='active') q = q.in('status',['pending','pending_acceptance','active','disputed']);
-    else if(tab==='delivered') q = q.eq('status','settled').eq('outcome','delivered');
-    else if(tab==='failed') q = q.or('and(status.eq.settled,outcome.eq.failed),status.eq.cancelled');
-    const { data } = await q;
-    _dealBoardData = data || [];
-    const board = document.getElementById('deal-board-feed');
-    const existingTabs = document.getElementById('deal-board-tabs');
-    if (existingTabs) existingTabs.remove();
-    if (board) {
-      const mk=(id,lbl)=>`<button id="dbt-${id}" onclick="window._dealBoardTab='${id}';loadDealBoard()" style="background:${tab===id?'rgba(139,92,246,0.2)':'transparent'};color:${tab===id?'#a78bfa':'#64748b'};border:1.5px solid rgba(139,92,246,0.3);padding:6px 14px;border-radius:999px;font-size:0.75rem;font-weight:600;cursor:pointer;margin-right:6px;">${lbl}</button>`;
-      const tabs = document.createElement('div');
-      tabs.id = 'deal-board-tabs';
-      tabs.style.cssText = 'padding:0 1rem 0.75rem;';
-      tabs.innerHTML = mk('active','Active')+mk('delivered','Delivered')+mk('failed','Failed');
-      board.parentNode.insertBefore(tabs, board);
-    }
-  } catch(e) {
-    _dealBoardData = [];
-  }
-  _dealBoardPage = 0;
+    const { data, error } = await sb.rpc('deal_board', { p_limit:_dealBoardPageSize, p_cursor_completed_at:null, p_cursor_id:null });
+    if (error) throw error;
+    _dealBoardRows = Array.isArray(data) ? data : [];
+    _dealBoardDone = _dealBoardRows.length < _dealBoardPageSize;
+    const last = _dealBoardRows[_dealBoardRows.length - 1];
+    _dealBoardCursor = last ? { completed_at:last.completed_at, id:last.id } : null;
+  } catch(e) { _dealBoardRows = []; _dealBoardDone = true; console.warn('Deal board load:', e.message||e); }
+  renderDealBoardStats();
   renderDealBoard();
 }
 
 async function loadMoreDeals() {
-  _dealBoardPage++;
+  if(!sb || _dealBoardDone || !_dealBoardCursor) return;
+  try {
+    const { data, error } = await sb.rpc('deal_board', { p_limit:_dealBoardPageSize, p_cursor_completed_at:_dealBoardCursor.completed_at, p_cursor_id:_dealBoardCursor.id });
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    _dealBoardRows = _dealBoardRows.concat(rows);
+    _dealBoardDone = rows.length < _dealBoardPageSize;
+    const last = rows[rows.length - 1];
+    if (last) _dealBoardCursor = { completed_at:last.completed_at, id:last.id };
+  } catch(e) { console.warn('Deal board load-more:', e.message||e); }
+  renderDealBoardStats();
   renderDealBoard();
 }
 
 function renderDealBoardStats() {
   const el = document.getElementById('deal-board-stats'); if(!el) return;
-  const active = _dealBoardData.filter(d => d.status === 'active').length;
-  const delivered = _dealBoardData.filter(d => d.outcome === 'delivered').length;
-  const failed = _dealBoardData.filter(d => d.outcome === 'failed').length;
-  const total = delivered + failed;
-  const rate = total > 0 ? Math.round((delivered / total) * 100) : 0;
-  el.innerHTML = `
-    <div style="background:linear-gradient(135deg,rgba(45,212,160,0.06),#111e2e);border:1px solid rgba(45,212,160,0.15);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#2dd4a0;font-family:'Space Grotesk',sans-serif;">${active}</div><div style="font-size:11px;color:#5a7a9a;margin-top:2px;">Active</div></div>
-    <div style="background:linear-gradient(135deg,rgba(96,165,250,0.06),#111e2e);border:1px solid rgba(96,165,250,0.15);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#60a5fa;font-family:'Space Grotesk',sans-serif;">${delivered}</div><div style="font-size:11px;color:#5a7a9a;margin-top:2px;">Delivered</div></div>
-    <div style="background:linear-gradient(135deg,rgba(239,68,68,0.06),#111e2e);border:1px solid rgba(239,68,68,0.15);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#ef4444;font-family:'Space Grotesk',sans-serif;">${failed}</div><div style="font-size:11px;color:#5a7a9a;margin-top:2px;">Failed</div></div>
-    <div style="background:linear-gradient(135deg,rgba(245,158,11,0.06),#111e2e);border:1px solid rgba(245,158,11,0.15);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:24px;font-weight:700;color:${rate>=80?'#2dd4a0':rate>=50?'#f59e0b':'#ef4444'};font-family:'Space Grotesk',sans-serif;">${total>0?rate+'%':'—'}</div><div style="font-size:11px;color:#5a7a9a;margin-top:2px;">Success rate</div></div>`;
+  el.style.gridTemplateColumns = '1fr';
+  el.innerHTML = `<div style="background:linear-gradient(135deg,rgba(16,185,129,0.06),#111e2e);border:1px solid rgba(16,185,129,0.15);border-radius:10px;padding:16px;text-align:center;"><div style="font-size:24px;font-weight:700;color:#10b981;font-family:'Space Grotesk',sans-serif;">${_dealBoardRows.length}${_dealBoardDone?'':'+'}</div><div style="font-size:11px;color:#5a7a9a;margin-top:2px;">Completed deals shown</div></div>`;
 }
 
 function renderDealBoard() {
   const el = document.getElementById('deal-board-feed'); if(!el) return;
-  let filtered = _dealBoardData;
-
-  if(!filtered.length) {
-    el.innerHTML = `<div style="padding:2rem;text-align:center;color:#4b5563;font-size:0.88rem;">No ${window._dealBoardTab||''} deals yet.</div>`;
+  if(!_dealBoardRows.length) {
+    el.innerHTML = `<div style="padding:2rem;text-align:center;color:#4b5563;font-size:0.88rem;">No completed deals yet.</div>`;
     return;
   }
-
-  const showCount = (_dealBoardPage + 1) * _dealBoardPageSize;
-  const visible = filtered.slice(0, showCount);
-  const hasMore = filtered.length > showCount;
-
-  el.innerHTML = visible.map(d => {
-    let statusColor, statusLabel, borderColor;
-    if(d.outcome === 'delivered')      { statusColor='#10b981'; statusLabel='✅ Delivered'; borderColor='rgba(16,185,129,0.3)'; }
-    else if(d.outcome === 'failed')    { statusColor='#ef4444'; statusLabel='❌ Failed'; borderColor='rgba(239,68,68,0.25)'; }
-    else if(d.status === 'disputed')   { statusColor='#f59e0b'; statusLabel='⚖️ Disputed'; borderColor='rgba(245,158,11,0.25)'; }
-    else if(d.status === 'cancelled')  { statusColor='#5a7a9a'; statusLabel='🚫 Cancelled'; borderColor='#2d4f6f'; }
-    else if(d.status === 'active')     { statusColor='#60a5fa'; statusLabel='⚡ Active'; borderColor='rgba(59,130,246,0.25)'; }
-    else                               { statusColor='#f59e0b'; statusLabel='⏳ Pending'; borderColor='var(--border)'; }
-
-    const ago = d.created_at ? timeAgo(d.created_at) : '';
+  el.innerHTML = _dealBoardRows.map(d => {
     const completedAgo = d.completed_at ? timeAgo(d.completed_at) : '';
-    const initStakeStr = (d.initiator_xp_stake || 0) + ' XP';
-    // Receiver stake shows '—' for pending deals (legacy mirrored data fix)
-    const recvStakeStr = d.status === 'pending' ? '—' : ((d.receiver_xp_stake || 0) + ' XP');
-
-    return `<div class="opp-item" style="border-left:3px solid ${borderColor};">
-      <div class="opp-top">
-        <div style="flex:1;min-width:0;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
-            <strong style="color:white;font-size:0.95rem;">🔨 ${sanitize(d.title)}</strong>
-            <span style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;">${statusLabel}</span>
-          </div>
-          <div class="opp-meta" style="gap:8px;">
-            ${d.amount ? `<span style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);color:#10b981;padding:2px 9px;border-radius:999px;font-size:0.75rem;font-weight:600;">${sanitize(d.amount)}</span>` : ''}
-            <span style="color:#94a3b8;">Between <span onclick="viewMemberProfile('${sanitize(d.initiator_handle)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(d.initiator_handle)}</span> & <span onclick="viewMemberProfile('${sanitize(d.receiver_handle)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(d.receiver_handle)}</span></span>
-          </div>
-          <div class="opp-meta" style="margin-top:4px;gap:10px;">
-            <span style="color:#4b5563;font-size:0.75rem;">🔒 ${sanitize(d.initiator_handle)}: <strong>${initStakeStr}</strong> · ${sanitize(d.receiver_handle)}: <strong>${recvStakeStr}</strong></span>
-            ${ago ? `<span style="color:#374151;font-size:0.75rem;">• created ${ago}</span>` : ''}
-            ${d.outcome === 'delivered' && completedAgo ? `<span style="color:#10b981;font-size:0.75rem;">• completed ${completedAgo}</span>` : ''}
-            ${d.outcome === 'failed' && completedAgo ? `<span style="color:#f87171;font-size:0.75rem;">• failed ${completedAgo}</span>` : ''}
-          </div>
-          ${d.outcome === 'delivered' ? `<div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);padding:3px 10px;border-radius:999px;font-size:0.7rem;color:#10b981;font-weight:700;">+25 XP earned by both parties</div>` : ''}
-          ${d.outcome === 'failed' ? `<div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);padding:3px 10px;border-radius:999px;font-size:0.7rem;color:#f87171;font-weight:700;">⚠️ Strike issued — permanent record</div>` : ''}
+    const ih = d.initiator_handle, rh = d.receiver_handle;
+    const iName = d.initiator_display_name || d.initiator_handle;
+    const rName = d.receiver_display_name || d.receiver_handle;
+    const between = (ih || rh)
+      ? `Between ${ih ? `<span onclick="viewMemberProfile('${sanitize(ih)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(iName)}</span>` : '<span style="color:#94a3b8;">a member</span>'} & ${rh ? `<span onclick="viewMemberProfile('${sanitize(rh)}')" style="color:#10b981;cursor:pointer;font-weight:600;">${sanitize(rName)}</span>` : '<span style="color:#94a3b8;">a member</span>'}`
+      : `<span style="color:#94a3b8;">Between two members</span>`;
+    return `<div class="opp-item" style="border-left:3px solid rgba(16,185,129,0.3);">
+      <div class="opp-top"><div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          <strong style="color:white;font-size:0.95rem;">🔨 ${sanitize(d.title || 'Untitled deal')}</strong>
+          <span style="background:#10b98120;color:#10b981;border:1px solid #10b98140;padding:2px 10px;border-radius:999px;font-size:0.72rem;font-weight:700;">✅ Delivered</span>
         </div>
-      </div>
+        <div class="opp-meta" style="gap:8px;"><span style="color:#94a3b8;">${between}</span></div>
+        <div class="opp-meta" style="margin-top:4px;gap:10px;">${completedAgo ? `<span style="color:#10b981;font-size:0.75rem;">• completed ${completedAgo}</span>` : ''}</div>
+        <div style="margin-top:6px;display:inline-flex;align-items:center;gap:5px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);padding:3px 10px;border-radius:999px;font-size:0.7rem;color:#10b981;font-weight:700;">Verified delivery</div>
+      </div></div>
     </div>`;
-  }).join('') + (hasMore ? `
-    <div style="padding:1rem;text-align:center;">
-      <button onclick="loadMoreDeals()" style="background:rgba(16,185,129,0.08);border:1.5px solid rgba(16,185,129,0.25);color:var(--primary);padding:0.6rem 2rem;border-radius:999px;font-weight:700;font-size:0.85rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s;" onmouseover="this.style.background='rgba(16,185,129,0.15)'" onmouseout="this.style.background='rgba(16,185,129,0.08)'">Load more (${filtered.length - showCount} remaining)</button>
-    </div>` : `
-    <div style="padding:0.8rem;text-align:center;color:#374151;font-size:0.75rem;">Showing all ${filtered.length} deal${filtered.length!==1?'s':''}</div>`);
+  }).join('') + (!_dealBoardDone ? `
+    <div style="padding:1rem;text-align:center;"><button onclick="loadMoreDeals()" style="background:rgba(16,185,129,0.08);border:1.5px solid rgba(16,185,129,0.25);color:var(--primary);padding:0.6rem 2rem;border-radius:999px;font-weight:700;font-size:0.85rem;cursor:pointer;font-family:'DM Sans',sans-serif;">Load more</button></div>` : `
+    <div style="padding:0.8rem;text-align:center;color:#374151;font-size:0.75rem;">Showing all completed deals</div>`);
 }
 
 async function loadOpportunitiesAndRender() {
