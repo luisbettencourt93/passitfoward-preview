@@ -16345,12 +16345,22 @@ async function viewMemberProfile(handle) {
   modal.style.display = 'flex';
 
   const { data: profile } = await sb.from('profiles').select('*').eq('handle', handle).single();
-const { data: deals } = await sb.from('forged_deals')
-    .select('*')
-    .or(`initiator_handle.eq.${handle},receiver_handle.eq.${handle}`)
-    .eq('status', 'settled')
-    .order('created_at', { ascending: false })
-    .limit(5);
+  // E7 (S4a): delivered-only public track record via member_track_record RPC
+  // (participant RLS blocks non-participants from reading forged_deals directly).
+  let trackCompleted = 0;
+  let recentDelivered = [];
+  try {
+    const { data: tr, error: trErr } = await sb.rpc('member_track_record', {
+      p_handle: handle
+    });
+    if (trErr) throw trErr;
+    if (tr) {
+      trackCompleted = Number(tr.completed) || 0;
+      recentDelivered = Array.isArray(tr.recent) ? tr.recent : [];
+    }
+  } catch (e) {
+    console.warn('member_track_record:', e.message || e);
+  }
 
   // C-phase-2: load this member's deal-linked completion proofs (read-only, deal_proofs public-read).
   // Used to surface verified, deal-backed proof in the Verified on PIF zone. No writes.
@@ -16371,10 +16381,7 @@ const { data: deals } = await sb.from('forged_deals')
   const avatarUrl = profile?.avatar_url || '';
   const lastSeen = profile?.last_seen || '';
   const initials = handle.replace('@','').substring(0,2).toUpperCase();
-  const completed = deals?.filter(d => d.outcome === 'delivered').length || 0;
-  const failed = deals?.filter(d => d.outcome === 'failed').length || 0;
-  const total = deals?.length || 0;
-  const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+  const completed = trackCompleted;
 
   // Tier
   let tier;
@@ -16401,33 +16408,25 @@ const { data: deals } = await sb.from('forged_deals')
   const tagTextColors = ['#2dd4a0','#60a5fa','#a78bfa','#f97316','#ec4899','#f59e0b'];
 
   // Deal rows (compact dot style)
-  const dealsHtml = deals?.length ? `<div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:10px;overflow:hidden;">${deals.map(d => {
-    const other = d.initiator_handle === handle ? d.receiver_handle : d.initiator_handle;
-    const isDelivered = d.outcome === 'delivered';
-    const dotColor = isDelivered ? '#2dd4a0' : '#ef4444';
-    const checkMark = isDelivered ? `<span style="color:#2dd4a0;font-weight:700;">✓</span>` : `<span style="color:#ef4444;font-weight:700;">✕</span>`;
+  const dealsHtml = recentDelivered.length ? `<div style="background:#111e2e;border:1px solid #2d4f6f;border-radius:10px;overflow:hidden;">${recentDelivered.map(d => {
+    const other = d.other_handle;
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid rgba(45,79,111,0.5);">
-      <div style="width:6px;height:6px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
-      <div style="flex:1;font-size:11px;color:#e8f0f8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sanitize(d.title)} <span style="color:#5a7a9a;">· ${sanitize(other)} · ${sanitize(d.amount||'—')}</span></div>
-      ${checkMark}
+      <div style="width:6px;height:6px;border-radius:50%;background:#2dd4a0;flex-shrink:0;"></div>
+      <div style="flex:1;font-size:11px;color:#e8f0f8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sanitize(d.title||'Deal')}${other ? ` <span style="color:#5a7a9a;">· ${sanitize(other)}</span>` : ''}</div>
+      <span style="color:#2dd4a0;font-weight:700;">✓</span>
     </div>`;
   }).join('').replace(/border-bottom:1px solid rgba\(45,79,111,0\.5\);">\s*$/, '">')}</div>` : '<div style="font-size:12px;color:#5a7a9a;text-align:center;padding:12px;">No completed deals yet.</div>';
  // --- Increment A: Track Record trust-surface precompute ---
-  const hasVerified = total > 0;
+  const hasVerified = completed > 0;
   const hasProof = workExamples.length > 0;
-  const rateColor = rate >= 80 ? '#2dd4a0' : (rate >= 50 ? '#f59e0b' : '#ef4444');
 
   
-  // A2: premium trust-summary cards — delivery rate as hero, all elevated.
+  // E7 (S4a): DELIVERY RATE tile removed — rate/total derive from failures, which are private.
   const trackSummary = `
-    <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-bottom:16px;">
-      <div style="background:linear-gradient(160deg,#13243a,#0c1626);border:1px solid ${hasVerified ? (rate>=80?'rgba(45,212,160,0.4)':rate>=50?'rgba(245,158,11,0.4)':'rgba(239,68,68,0.4)') : '#2d4f6f'};border-radius:13px;padding:15px 10px;text-align:center;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
-        <div style="font-size:30px;font-weight:800;color:${hasVerified ? rateColor : '#3d5a7a'};line-height:0.95;letter-spacing:-0.5px;">${hasVerified ? rate + '<span style="font-size:17px;font-weight:700;">%</span>' : '—'}</div>
-        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:1.2px;font-weight:700;">DELIVERY RATE</div>
-      </div>
-      <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:13px;padding:15px 8px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
-        <div style="font-size:26px;font-weight:800;color:${completed > 0 ? '#2dd4a0' : '#3d5a7a'};line-height:0.95;">${completed}</div>
-        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:0.8px;font-weight:700;">COMPLETED<br>DEALS</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+      <div style="background:linear-gradient(160deg,#13243a,#0c1626);border:1px solid ${completed>0?'rgba(45,212,160,0.4)':'#2d4f6f'};border-radius:13px;padding:15px 10px;text-align:center;position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
+        <div style="font-size:30px;font-weight:800;color:${completed>0?'#2dd4a0':'#3d5a7a'};line-height:0.95;letter-spacing:-0.5px;">${completed}</div>
+        <div style="font-size:8.5px;color:#7d9bbb;margin-top:7px;letter-spacing:1.2px;font-weight:700;">COMPLETED DEALS</div>
       </div>
       <div style="background:#0d1828;border:1px solid #2d4f6f;border-radius:13px;padding:15px 8px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);">
         <div style="font-size:26px;font-weight:800;color:${hasProof ? '#60a5fa' : '#3d5a7a'};line-height:0.95;">${workExamples.length}</div>
@@ -16438,11 +16437,8 @@ const { data: deals } = await sb.from('forged_deals')
   // C-phase-2: deal-linked completion proof cards (verified-tier — backed by completed deals).
 // Matches each proof to its deal (from the loaded `deals`) for context. Green/verified palette.
 const dealTitleById = {};
-(deals || []).forEach(d => {
-  dealTitleById[d.id] = {
-    title: d.title,
-    other: (d.initiator_handle === handle ? d.receiver_handle : d.initiator_handle)
-  };
+recentDelivered.forEach(d => {
+  dealTitleById[d.id] = { title: d.title, other: d.other_handle };
 });
 
 const dealLinkedProofsHtml = (Array.isArray(memberDealProofs) && memberDealProofs.length) ? `
@@ -16483,7 +16479,6 @@ const verifiedBlock = hasVerified ? `
       </div>
       ${dealsHtml}
 ${dealLinkedProofsHtml}
-${failed > 0 ? `<div style="margin-top:8px;font-size:10px;color:#ef4444;font-weight:600;text-align:center;">${failed} failed deal${failed>1?'s':''} on record</div>` : ''}
 </div>` : '';
 
 // A2: Proof of Work — self-submitted evidence zone (blue-tinted, case-study cards).
