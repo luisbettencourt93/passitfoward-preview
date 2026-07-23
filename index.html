@@ -6470,14 +6470,9 @@ if (pn) pn.textContent = xIdentity;
   const nw = document.getElementById('notif-wrap'); if (nw) nw.classList.add('visible');
   setTimeout(()=>loadNotifsFromSupabase(), 1000);
   setTimeout(()=>loadWeeklyProgFromSupabase(), 1200);
-  // Sync current XP to Supabase on login so leaderboard shows it
-  setTimeout(async ()=>{
-    const xp=getXp();
-    if(sb && currentUser) {
-      const {error} = await sb.from('profiles').update({xp}).eq('id',currentUser.id);
-      if(error) console.warn('XP sync error:',error.message);
-    }
-  }, 1500);
+  // E2 (S4a): removed the login-time browser->server XP "sync" write. XP is now
+  // server-authoritative; the client hydrates XP FROM the profile row on load
+  // (loadCurrentUser). A direct client xp write is obsolete and blocked post-07.
   if (!sb) {
     const w = document.getElementById('auth-no-sb-warning'); if (w) w.style.display = 'block';
   }
