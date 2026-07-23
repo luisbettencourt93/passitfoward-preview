@@ -8539,9 +8539,24 @@ async function rsvpEvent(id) {
   if (!currentUser) return showToast("Login first");
   const ev = eventsData.find(e=>String(e.id)===String(id)); if(!ev) return;
   const going = ev.rsvps.includes(currentUser.handle);
+  const isDemo = String(currentUser.id||'').startsWith('demo-');
   if (going) { ev.rsvps=ev.rsvps.filter(h=>h!==currentUser.handle); showToast("RSVP removed"); }
-  else { ev.rsvps.push(currentUser.handle); addXp(2,'opp',"RSVP'd to event"); bumpWeekly('rsvps'); showToast("You're going! 🎉"); }
-  if (sb && !currentUser.id.startsWith('demo-')) await sb.from('events').update({rsvps:ev.rsvps}).eq('id',id);
+  else { ev.rsvps.push(currentUser.handle); bumpWeekly('rsvps'); showToast("You're going! 🎉"); }
+  let rsvpWriteOk = true;
+  if (sb && !isDemo) {
+    const { error: rsvpErr } = await sb.from('events').update({rsvps:ev.rsvps}).eq('id',id);
+    if (rsvpErr) { rsvpWriteOk = false; console.warn('RSVP update:', rsvpErr.message); }
+  }
+  // E4 (S4a): +2 XP only when newly RSVP'ing. Demo = local; real = trusted RPC AFTER the RSVP write succeeds.
+  if (!going) {
+    if (isDemo) {
+      addXp(2,'opp',"RSVP'd to event");
+    } else if (sb && rsvpWriteOk) {
+      const { data: rx, error: rxErr } = await sb.rpc('claim_event_rsvp_xp', { p_event_id: Number(id) });
+      if (rxErr) console.warn('RSVP XP claim:', rxErr.message);
+      else if (rx?.awarded) await hydrateXpFromDb('rsvp');
+    }
+  }
   renderEvents();
 }
 async function deleteEvent(id) {
@@ -8638,7 +8653,15 @@ async function submitEvent() {
   ['ev-title-inp','ev-desc-inp','ev-day-inp','ev-time-inp','ev-link-inp'].forEach(i=>{const e=document.getElementById(i);if(e)e.value='';});
   document.getElementById('ev-month-inp').value=''; document.getElementById('ev-type-inp').value='';
   _evXSpaces = false;
-  addXp(10,'opp','Posted an event'); renderEvents();
+  // E4 (S4a): +10 XP for posting. Demo = local; real = trusted RPC (runs after the events insert above succeeded).
+  if (String(currentUser.id||'').startsWith('demo-')) {
+    addXp(10,'opp','Posted an event');
+  } else if (sb && newEv.id) {
+    const { data: ex, error: exErr } = await sb.rpc('claim_event_post_xp', { p_event_id: Number(newEv.id) });
+    if (exErr) console.warn('Event post XP claim:', exErr.message);
+    else if (ex?.awarded) await hydrateXpFromDb('event-post');
+  }
+  renderEvents();
   showToast(type === 'X Space' ? "Event posted! X Spaces opening... 🎙️" : "Event posted! 📅");
 }
 
