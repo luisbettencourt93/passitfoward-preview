@@ -16745,7 +16745,7 @@ async function showForgeModal(oppId, oppTitle, posterHandle) {
   else { recEl.readOnly = false; recEl.style.opacity = '1'; recEl.style.cursor = 'text'; }
   // -- Read live xp from DB so we never block on stale localStorage --
   const live = await fetchLiveXp();
-  const availXp = live.available;
+  const availXp = Math.max(0, live.xp);
   document.getElementById('forge-xp-available').textContent = availXp + (live.locked > 0 ? ` (${live.locked} locked)` : '');
   const maxStake = Math.max(10, Math.floor(availXp * 0.3));
   document.getElementById('forge-xp').max = maxStake;
@@ -16829,9 +16829,9 @@ if (forgeContext.oppId) {
   }
   // Validate XP stake against live AVAILABLE xp (locked xp can't be staked twice)
   if(xpStake < 10) return showToast("Minimum XP stake is 10");
-  const maxStake = Math.floor(live.available * 0.3);
+  const maxStake = Math.floor(Math.max(0, live.xp) * 0.3);
   if(xpStake > maxStake) return showToast(`⚠️ Max stake is 30% of your available XP (${maxStake} XP)`);
-  if(xpStake > live.available) return showToast(`Not enough available XP (have ${live.available}, need ${xpStake})`);
+  if(xpStake > Math.max(0, live.xp)) return showToast(`Not enough available XP (have ${Math.max(0, live.xp)}, need ${xpStake})`);
   // Anti-farming: warn if repeat deals with same partner
   const priorDeals = await getCompletedDealsBetween(currentUser.handle, receiver);
   if(priorDeals >= 2) {
