@@ -17028,17 +17028,36 @@ async function _doAcceptForge(dealId) {
 async function rejectForge(dealId) {
   if(!currentUser || !sb) return;
   if(!confirm("Reject this deal proposal?")) return;
-  const { data: deal } = await sb.from('forged_deals').select('*').eq('id', dealId).single();
-  await sb.from('forged_deals').update({ status: 'rejected', outcome: 'rejected' }).eq('id', dealId);
-  if(deal) {
-    addNotif(
-  `❌ ${currentUser.handle} declined your Forge proposal for "${deal.title}".`,
-  deal.initiator_handle,
-  { type: 'deal_rejected', target_type: 'deal', target_id: dealId, actor_handle: currentUser.handle }
-);
+  // Group C (S4a): server-authoritative reject via forge_reject RPC (receiver-only, pending-only).
+  // Direct table read/update is revoked post-07; no client addNotif (RPC enqueues deal_rejected server-side).
+  try {
+    const { data, error } = await sb.rpc('forge_reject', {
+      p_deal_id: Number(dealId)
+    });
+
+    if (error) {
+      if (/not_receiver/.test(error.message || '')) {
+        return showToast("Only the deal receiver can reject this proposal.");
+      }
+      if (/deal_not_found/.test(error.message || '')) {
+        return showToast("Deal not found.");
+      }
+      return showToast("Error: " + error.message);
+    }
+
+    if (data && data.status === 'rejected') {
+      showToast("Deal proposal rejected.");
+      showMyForgedDeals();
+    } else if (data && data.replay === true) {
+      showToast("This deal is no longer pending.");
+      showMyForgedDeals();
+    } else {
+      showToast("Couldn't reject this deal.");
+    }
+  } catch (e) {
+    console.warn('forge_reject crashed:', e);
+    showToast("Couldn't reject this deal. Please try again.");
   }
-  showToast("Deal proposal rejected.");
-  showMyForgedDeals();
 }
 
 async function cancelForge(dealId) {
