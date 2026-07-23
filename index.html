@@ -17487,16 +17487,21 @@ const proofCta = !proofsVerified
 
 async function deleteForge(id) {
   if(!currentUser || !sb) return;
-  if(!confirm("Remove this rejected deal from your list?")) return;
-  // .select() after .delete() returns the rows that were actually deleted.
-  // If RLS blocks it, we get [] back (not an error), so we can detect & explain.
-  const { data, error } = await sb.from('forged_deals').delete().eq('id', id).select();
-  if(error) return showToast("Error: " + error.message);
-  if(!data || data.length === 0) {
-    return showToast("⚠️ Couldn't remove — DB permissions issue. Run the RLS policy SQL.");
+  if(!confirm("Remove this rejected or cancelled deal from your list?")) return;
+  // Group C (S4a): server-authoritative delete via forge_delete RPC (participant-only,
+  // rejected/cancelled only). Direct table DELETE is revoked post-07.
+  const { data, error } = await sb.rpc('forge_delete', { p_deal_id: Number(id) });
+  if (error) {
+    if (/deal_not_deletable/.test(error.message || '')) return showToast("Only rejected or cancelled deals can be removed.");
+    if (/not_participant/.test(error.message || ''))   return showToast("You can only remove your own deals.");
+    return showToast("Error: " + error.message);
   }
-  showToast("Removed.");
-  showMyForgedDeals();
+  if (data && (data.deleted === true || data.replay === true)) {
+    showToast("Removed.");
+    showMyForgedDeals();
+  } else {
+    showToast("Couldn't remove this deal.");
+  }
 }
 
 async function showPaymentInfo(handle) {
