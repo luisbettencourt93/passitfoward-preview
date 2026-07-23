@@ -17062,66 +17062,58 @@ async function rejectForge(dealId) {
 
 async function cancelForge(dealId) {
   if(!currentUser || !sb) return;
+  // Group C (S4a): server-authoritative cancel/withdraw.
+  //   pending -> forge_withdraw (initiator-only, no XP/penalty)
+  //   active  -> forge_cancel_active (either participant; releases both stakes,
+  //             applies round(caller stake*25%) penalty clamped to available XP)
+  // Direct forged_deals update, applyXpDelta and client notifications are revoked/duplicated post-07.
   const { data: deal } = await sb.from('forged_deals').select('*').eq('id', dealId).single();
   if(!deal) return showToast("Deal not found");
 
-  const isInitiator = deal.initiator_handle === currentUser.handle;
+  const isInitiator = deal.initiator_id === currentUser.id;
   const otherHandle = isInitiator ? deal.receiver_handle : deal.initiator_handle;
   const myStake     = isInitiator ? deal.initiator_xp_stake : (deal.receiver_xp_stake || 0);
   const otherStake  = isInitiator ? (deal.receiver_xp_stake || 0) : deal.initiator_xp_stake;
 
-  if(deal.status === 'pending') {
-    // PENDING — no XP locked yet, free cancel
-    if(!isInitiator) return showToast("Only the deal creator can cancel a pending deal");
-    if(!confirm("Cancel this deal proposal? No penalty.")) return;
-    await sb.from('forged_deals').update({ status: 'cancelled', outcome: 'cancelled', completed_at: new Date().toISOString() }).eq('id', dealId);
-    await sb.from('notifications').insert({
-      handle: otherHandle,
-      text: `🚫 ${currentUser.handle} withdrew their Forge proposal for "${deal.title}".`,
-      created_at: new Date().toISOString(), read: false
-    });
-    showToast("Deal cancelled — no penalty.");
-
-  } else if(deal.status === 'active') {
-    // ACTIVE — both stakes are locked. Release both, then penalize canceller 25% of THEIR own stake.
-    const penalty = Math.round(myStake * 0.25);
-    if(!confirm(`Cancel this active deal?\n\nYour ${myStake} XP stake will be released, but you will lose ${penalty} XP (25% of your stake) as a cancellation penalty.\n\n${otherHandle}'s ${otherStake} XP stake will be returned to them in full.`)) return;
-
-    // Idempotency guard: only release if currently locked
-    if (deal.xp_locked) {
-      // Release my stake (locked → available)
-      await applyXpDelta(currentUser.handle, +myStake, -myStake, 'forged_release', `Stake released (cancelled): "${deal.title}"`);
-      // Release other party's stake
-      if (otherStake > 0) {
-        await applyXpDelta(otherHandle, +otherStake, -otherStake, 'forged_release', `Stake released (other cancelled): "${deal.title}"`);
+  try {
+    if(deal.status === 'pending') {
+      if(!isInitiator) return showToast("Only the deal creator can cancel a pending deal");
+      if(!confirm("Cancel this deal proposal? No penalty.")) return;
+      const { data, error } = await sb.rpc('forge_withdraw', { p_deal_id: Number(dealId) });
+      if (error) {
+        if (/not_initiator/.test(error.message || '')) return showToast("Only the deal creator can cancel a pending deal.");
+        if (/deal_not_found/.test(error.message || '')) return showToast("Deal not found.");
+        return showToast("Error: " + error.message);
       }
-      // Apply penalty to canceller
-      if (penalty > 0) {
-        await applyXpDelta(currentUser.handle, -penalty, 0, 'forged_penalty', `Cancellation penalty: "${deal.title}"`);
+      if (data && data.status === 'cancelled') showToast("Deal cancelled — no penalty.");
+      else if (data && data.replay === true)   showToast("This deal is no longer pending.");
+      else showToast("Couldn't cancel this deal.");
+
+    } else if(deal.status === 'active') {
+      const estPenalty = Math.round(myStake * 0.25);
+      if(!confirm(`Cancel this active deal?\n\nYour ${myStake} XP stake will be released. You will lose approximately ${estPenalty} XP (25% of your stake).\n\n${otherHandle}'s ${otherStake} XP stake will be returned to them in full.`)) return;
+      const { data, error } = await sb.rpc('forge_cancel_active', { p_deal_id: Number(dealId) });
+      if (error) {
+        if (/not_participant/.test(error.message || '')) return showToast("You can only cancel your own deals.");
+        if (/deal_not_found/.test(error.message || '')) return showToast("Deal not found.");
+        return showToast("Error: " + error.message);
       }
+      if (data && data.status === 'cancelled') {
+        const lost = (data.penalty_applied != null) ? data.penalty_applied : estPenalty;
+        showToast(`Deal cancelled. Stakes released. You lost ${lost} XP penalty.`);
+      } else if (data && data.replay === true) {
+        showToast("This deal is no longer active.");
+      } else {
+        showToast("Couldn't cancel this deal.");
+      }
+    } else {
+      return showToast("This deal can't be cancelled in its current state.");
     }
-
-    await sb.from('forged_deals').update({
-      status: 'cancelled', outcome: 'cancelled',
-      xp_locked: false,
-      completed_at: new Date().toISOString()
-    }).eq('id', dealId);
-
-    await sb.from('notifications').insert({
-      handle: otherHandle,
-      text: `🚫 ${currentUser.handle} cancelled the active deal "${deal.title}". Your ${otherStake} XP stake has been released. They lost ${penalty} XP as penalty.`,
-      created_at: new Date().toISOString(), read: false
-    });
-    await sb.from('notifications').insert({
-      handle: currentUser.handle,
-      text: `🚫 You cancelled "${deal.title}". Your stake was released and you lost ${penalty} XP (25% penalty).`,
-      created_at: new Date().toISOString(), read: false
-    });
-    showToast(`Deal cancelled. Stakes released. You lost ${penalty} XP penalty.`);
-  } else {
-    return showToast("This deal can't be cancelled in its current state.");
+    showMyForgedDeals();
+  } catch (e) {
+    console.warn('cancelForge crashed:', e);
+    showToast("Couldn't cancel this deal. Please try again.");
   }
-  showMyForgedDeals();
 }
 
 // -- AUTO-REFRESH FOR FORGED DEALS (every 15s, only when visible) --
