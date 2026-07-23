@@ -16877,7 +16877,7 @@ async function acceptForge(dealId) {
   if (profErr || !liveProfile) return showToast("Couldn't load your profile. Try again.");
   const liveXp     = liveProfile.xp || 0;
   const liveLocked = liveProfile.locked_xp || 0;
-  const liveAvail  = Math.max(0, liveXp - liveLocked);
+  const liveAvail  = Math.max(0, liveXp);
 
   // Sync localStorage with what we just read so the rest of the UI is fresh
   localStorage.setItem('pf_xp_' + currentUser.handle, liveXp);
@@ -16962,7 +16962,7 @@ async function _doAcceptForge(dealId) {
   const { data: liveProfile } = await sb.from('profiles').select('xp, locked_xp').eq('handle', currentUser.handle).single();
   const liveXp     = liveProfile?.xp || 0;
   const liveLocked = liveProfile?.locked_xp || 0;
-  const liveAvail  = Math.max(0, liveXp - liveLocked);
+  const liveAvail  = Math.max(0, liveXp);
   if (myStake > liveAvail) return showToast(`Not enough available XP (have ${liveAvail}, need ${myStake})`);
 
   // Disable button to prevent double-click
