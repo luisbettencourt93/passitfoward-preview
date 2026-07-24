@@ -17715,8 +17715,8 @@ function openFounderDisputesModal() {
       <div style="font-size:12px;color:#5a7a9a;margin-bottom:4px;">${sanitize(d.initiator_handle)} (${d.initiator_outcome||'—'}) vs ${sanitize(d.receiver_handle)} (${d.receiver_outcome||'—'})</div>
       <div style="font-size:11px;color:#5a7a9a;margin-bottom:10px;">Stakes: ${d.initiator_xp_stake||0} XP / ${d.receiver_xp_stake||0} XP · ${timeAgo(d.created_at)}</div>
       <div style="display:flex;gap:8px;">
-        <button onclick="resolveDispute(${d.id},'delivered');closeModal('founder-disputes-modal');" style="flex:1;background:rgba(45,212,160,0.12);color:#2dd4a0;border:1.5px solid rgba(45,212,160,0.3);padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">✅ Rule Delivered</button>
-        <button onclick="resolveDispute(${d.id},'failed');closeModal('founder-disputes-modal');" style="flex:1;background:rgba(239,68,68,0.1);color:#ef4444;border:1.5px solid rgba(239,68,68,0.25);padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">❌ Rule Failed (strike)</button>
+        <button onclick="resolveDispute(${d.id},'delivered');" style="flex:1;background:rgba(45,212,160,0.12);color:#2dd4a0;border:1.5px solid rgba(45,212,160,0.3);padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">✅ Rule Delivered</button>
+        <button onclick="resolveDispute(${d.id},'failed');" style="flex:1;background:rgba(239,68,68,0.1);color:#ef4444;border:1.5px solid rgba(239,68,68,0.25);padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">❌ Rule Failed (strike)</button>
       </div>
     </div>
   `).join('');
@@ -17750,164 +17750,78 @@ function openFounderDisputesModal() {
 // -- FOUNDER DISPUTE RESOLUTION --
 async function resolveDispute(dealId, resolution) {
   if(!isFounder() || !sb) return showToast("Only the founder can resolve disputes");
-  const { data: deal } = await sb.from('forged_deals').select('*').eq('id', dealId).single();
-  if(!deal || deal.status !== 'disputed') return showToast("Deal not found or not disputed");
 
-  const initStake = deal.initiator_xp_stake || 0;
-  const recvStake = deal.receiver_xp_stake  || 0;
-
-  if(resolution === 'delivered') {
-    // -- FOUNDER SAYS DELIVERED — release both stakes + reward bonus --
-    const priorDeals = await getCompletedDealsBetween(deal.initiator_handle, deal.receiver_handle);
-    const xpReward = priorDeals >= 2 ? 0 : 25;
-
-    if (deal.xp_locked) {
-      await applyXpDelta(deal.initiator_handle, +initStake, -initStake, 'forged_release', `Stake returned (founder ruled delivered): "${deal.title}"`);
-      if (recvStake > 0) {
-        await applyXpDelta(deal.receiver_handle, +recvStake, -recvStake, 'forged_release', `Stake returned (founder ruled delivered): "${deal.title}"`);
-      }
-    }
-    if (xpReward > 0 && !deal.xp_settled) {
-      await applyXpDelta(deal.initiator_handle, +xpReward, 0, 'forged_delivered', `Forged deal delivered: "${deal.title}"`);
-      await applyXpDelta(deal.receiver_handle,  +xpReward, 0, 'forged_delivered', `Forged deal delivered: "${deal.title}"`);
-    }
-
-    await sb.from('forged_deals').update({
-      outcome: 'delivered', status: 'settled', xp_settled: true, xp_locked: false,
-      settled_at: new Date().toISOString()
-    }).eq('id', dealId);
-
-    for(const h of [deal.initiator_handle, deal.receiver_handle]) {
-      await sb.from('notifications').insert({
-        handle: h,
-        text: `✅ Founder resolved dispute on "${deal.title}" as DELIVERED. Stake returned. ${xpReward > 0 ? '+'+xpReward+' XP bonus.' : 'No bonus (repeat partners).'} 🎉`,
-        created_at: new Date().toISOString(), read: false
-      });
-    }
-    showToast("✅ Dispute resolved as DELIVERED. Both parties notified.");
-    // Refresh opportunities feed so the fulfilled opp disappears (hard lock)
-    try { await loadOpportunitiesAndRender(); } catch(_) {}
-
-  } else {
-    // -- FOUNDER SAYS FAILED — blamed party forfeits stake; innocent gets stake back --
-    // The party who claimed "delivered" is at fault (they lied)
-    const blamedHandle    = deal.initiator_outcome === 'delivered' ? deal.initiator_handle : deal.receiver_handle;
-    const innocentHandle  = blamedHandle === deal.initiator_handle ? deal.receiver_handle : deal.initiator_handle;
-    const blamedStake     = blamedHandle === deal.initiator_handle ? initStake : recvStake;
-    const innocentStake   = blamedHandle === deal.initiator_handle ? recvStake : initStake;
-
-    // Refund innocent: release their stake from locked back to available
-    if (deal.xp_locked && innocentStake > 0) {
-      await applyXpDelta(innocentHandle, +innocentStake, -innocentStake, 'forged_release', `Stake returned (you were vindicated): "${deal.title}"`);
-    }
-
-    // Blamed party: forfeit locked stake (locked → 0, NOT returned to available)
-    if (deal.xp_locked && blamedStake > 0) {
-      await applyXpDelta(blamedHandle, 0, -blamedStake, 'forged_forfeit', `Stake forfeited (founder ruled failed): "${deal.title}"`);
-    }
-
-    // Apply multi-strike multiplier penalty (extra XP loss beyond forfeited stake)
-    const { data: fp } = await sb.from('profiles').select('xp, forged_strikes').eq('handle', blamedHandle).single();
-    if (fp) {
-      const newStrikes = (fp.forged_strikes || 0) + 1;
-      const multiplier = newStrikes === 1 ? 1 : newStrikes === 2 ? 1.5 : 2;
-      // Forfeited stake = base penalty. Multiplier adds extra on top.
-      const extraPenalty = Math.round(blamedStake * (multiplier - 1));
-      if (extraPenalty > 0) {
-        await applyXpDelta(blamedHandle, -extraPenalty, 0, 'forged_penalty', `Strike ${newStrikes}/3 multiplier penalty: "${deal.title}"`);
-      }
-
-      // Update strike count + ban check (these go through direct update; trigger allows since they're not xp/locked_xp)
-      // NOTE: founder is the only one who can do this; protect_profile_sensitive locks these for non-founders.
-      if (newStrikes >= 3) {
-        await sb.from('profiles').update({
-          forged_strikes: newStrikes, banned: true, ban_reason: 'Banned after 3 failed Forged deals'
-        }).eq('handle', blamedHandle);
-        await sb.from('notifications').insert({
-          handle: blamedHandle,
-          text: `🚫 PERMANENT BAN: Founder resolved "${deal.title}" against you. 3 strikes reached. Stake forfeited (${blamedStake} XP). You have been permanently banned.`,
-          created_at: new Date().toISOString(), read: false
-        });
-        showToast(`🚫 ${blamedHandle} banned — 3 strikes reached.`);
-      } else {
-        await sb.from('profiles').update({ forged_strikes: newStrikes }).eq('handle', blamedHandle);
-        await sb.from('notifications').insert({
-          handle: blamedHandle,
-          text: `❌ Founder resolved "${deal.title}" against you. Strike ${newStrikes}/3. Forfeited ${blamedStake} XP stake${extraPenalty > 0 ? ' + '+extraPenalty+' XP multiplier penalty' : ''}.`,
-          created_at: new Date().toISOString(), read: false
-        });
-      }
-    }
-  async function loadFounderDisputes() {
-  if (!isFounder() || !sb) return;
-  const { data, error } = await sb.from('forged_deals')
-    .select('*')
-    .eq('status', 'disputed')
-    .order('created_at', { ascending: false });
-  if (error) { console.error('disputes load failed:', error); return; }
-  window._founderDisputes = data || [];
-  renderFounderDisputesBadge();
-}
-
-function renderFounderDisputesBadge() {
-  const count = (window._founderDisputes || []).length;
-  let el = document.getElementById('founder-disputes-banner');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'founder-disputes-banner';
-    el.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;display:none;';
-    document.body.appendChild(el);
-    el.onclick = () => openFounderDisputesModal();
-  }
-  if (count === 0) { el.style.display = 'none'; return; }
-  el.style.display = 'block';
-  el.innerHTML = `<div style="background:rgba(245,158,11,0.15);border:2px solid #f59e0b;color:#f59e0b;padding:12px 18px;border-radius:999px;font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 4px 16px rgba(245,158,11,0.3);">⚖️ ${count} dispute${count>1?'s':''} pending — tap to review</div>`;
-}
-
-function openFounderDisputesModal() {
-  const disputes = window._founderDisputes || [];
-  if (!disputes.length) return showToast('No disputes pending');
-  const html = disputes.map(d => `
-    <div style="background:rgba(245,158,11,0.05);border:1.5px solid rgba(245,158,11,0.2);border-radius:12px;padding:14px;margin-bottom:12px;">
-      <div style="font-weight:700;color:#e8f0f8;font-size:14px;margin-bottom:6px;">${sanitize(d.title||'Untitled')}</div>
-      <div style="font-size:12px;color:#5a7a9a;margin-bottom:4px;">${sanitize(d.initiator_handle)} (${d.initiator_outcome||'—'}) vs ${sanitize(d.receiver_handle)} (${d.receiver_outcome||'—'})</div>
-      <div style="font-size:11px;color:#5a7a9a;margin-bottom:10px;">Stakes: ${d.initiator_xp_stake||0} XP / ${d.receiver_xp_stake||0} XP · ${timeAgo(d.created_at)}</div>
-      <div style="display:flex;gap:8px;">
-        <button onclick="resolveDispute(${d.id},'delivered');closeModal('founder-disputes-modal');" style="flex:1;background:rgba(45,212,160,0.12);color:#2dd4a0;border:1.5px solid rgba(45,212,160,0.3);padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">✅ Rule Delivered</button>
-        <button onclick="resolveDispute(${d.id},'failed');closeModal('founder-disputes-modal');" style="flex:1;background:rgba(239,68,68,0.1);color:#ef4444;border:1.5px solid rgba(239,68,68,0.25);padding:8px;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer;">❌ Rule Failed (strike)</button>
-      </div>
-    </div>
-  `).join('');
-  // Reuse existing modal pattern — adapt if your showModal signature differs
-  const modal = document.getElementById('founder-disputes-modal') || (() => {
-    const m = document.createElement('div');
-    m.id = 'founder-disputes-modal';
-    m.className = 'modal';
-   m.innerHTML = `<div class="modal-content" style="max-width:520px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><h3 style="margin:0;color:#f59e0b;">⚖️ Disputes Pending Review</h3><button onclick="closeModal('founder-disputes-modal')" style="background:none;border:none;color:#5a7a9a;font-size:20px;cursor:pointer;">✕</button></div><div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;line-height:1.5;color:#5a7a9a;">⚖️ <strong style="color:#f59e0b;">Note:</strong> Pass It Forward does not act as an escrow or legal authority. Dispute outcomes are platform decisions based on available information and do not constitute legal rulings.</div><div id="founder-disputes-list"></div></div>`;
-    document.body.appendChild(m);
-    return m;
-  })();
-  document.getElementById('founder-disputes-list').innerHTML = html;
-  modal.style.display = 'flex';
-}
-    // Notify innocent
-    await sb.from('notifications').insert({
-      handle: innocentHandle,
-      text: `✅ Founder resolved dispute on "${deal.title}" in your favour. Your ${innocentStake} XP stake has been returned.`,
-      created_at: new Date().toISOString(), read: false
+  // Group C (S4a): server-authoritative founder dispute ruling via forge_founder_rule RPC.
+  // All XP release/forfeit, reward, strike, ban, deal-status and notification writes happen
+  // inside the SECURITY DEFINER function. The client performs no direct forged_deals,
+  // profiles or notifications writes on this path. Founder authority is enforced server-side
+  // (founder_only); the isFounder() check above is UX only, not a security boundary.
+  try {
+    const { data, error } = await sb.rpc('forge_founder_rule', {
+      p_deal_id: Number(dealId),
+      p_ruling: resolution
     });
 
-    await sb.from('forged_deals').update({
-      outcome: 'failed', status: 'settled', xp_settled: true, xp_locked: false,
-      settled_at: new Date().toISOString()
-    }).eq('id', dealId);
-    showToast(`❌ Dispute resolved as FAILED. ${blamedHandle} penalized.`);
-    // Refresh opportunities feed so in-progress badge is removed
-    try { await loadOpportunitiesAndRender(); } catch(_) {}
-  }
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.includes('founder_only'))   return showToast("Only the founder can resolve disputes.");
+      if (msg.includes('invalid_ruling')) return showToast("Invalid ruling.");
+      if (msg.includes('deal_not_found')) return showToast("Deal not found.");
+      if (msg.includes('auth_required'))  return showToast("Please log in again.");
+      console.warn('forge_founder_rule failed:', error);
+      return showToast("Couldn't resolve dispute: " + msg);
+    }
 
-  showMyForgedDeals();
-await loadFounderDisputes();
+    if (!data || data.deal_id == null) {
+      console.warn('forge_founder_rule: unexpected result shape', data);
+      return showToast("Couldn't resolve dispute. Please try again.");
+    }
+
+    // Recognised results only. Anything else leaves the disputes modal open.
+    if (data.replay === true) {
+      closeModal('founder-disputes-modal');
+      showToast("This dispute is no longer pending.");
+      showMyForgedDeals();
+      await loadFounderDisputes();
+      return;
+    }
+
+    if (data.status === 'settled' && data.outcome === 'delivered') {
+      const reward = Number(data.reward);
+      if (!Number.isFinite(reward) || reward < 0) {
+        console.warn('forge_founder_rule: malformed reward on delivered ruling', data);
+        return showToast("Couldn't resolve dispute. Please try again.");
+      }
+      closeModal('founder-disputes-modal');
+      showToast(reward > 0
+        ? `✅ Dispute resolved as DELIVERED. Stakes returned + ${reward} XP bonus each.`
+        : `✅ Dispute resolved as DELIVERED. Stakes returned, no bonus.`);
+      showMyForgedDeals();
+      await loadFounderDisputes();
+      try { await loadOpportunitiesAndRender(); } catch(_) {}
+      return;
+    }
+
+    if (data.status === 'settled' && data.outcome === 'failed') {
+      const strikes = Number(data.blamed_strikes);
+      if (!Number.isInteger(strikes) || strikes < 1) {
+        console.warn('forge_founder_rule: malformed blamed_strikes on failed ruling', data);
+        return showToast("Couldn't resolve dispute. Please try again.");
+      }
+      closeModal('founder-disputes-modal');
+      showToast(`❌ Dispute resolved as FAILED. Blamed party penalized (strike ${strikes}/3).`);
+      showMyForgedDeals();
+      await loadFounderDisputes();
+      try { await loadOpportunitiesAndRender(); } catch(_) {}
+      return;
+    }
+
+    console.warn('forge_founder_rule: unrecognized result', data);
+    showToast("Couldn't resolve dispute. Please try again.");
+  } catch (e) {
+    console.warn('forge_founder_rule crashed:', e);
+    showToast("Couldn't resolve dispute. Please try again.");
+  }
 }
   // -- APPLICATIONS VIEWER -------------------------------------------
 async function showApplicationsModal() {
