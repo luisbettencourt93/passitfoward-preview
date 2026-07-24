@@ -16838,28 +16838,49 @@ if (forgeContext.oppId) {
     showToast("⚠️ 2+ completed deals with this partner — XP reward disabled for anti-farming");
   }
   const amount = isNaN(amountNum) ? amountRaw : '$' + amountNum.toLocaleString();
-  const freshUid = await getFreshUid(); if(!freshUid) return;
-  // NOTE: receiver_xp_stake is NULL until receiver accepts and picks their own stake.
-  // NOTE: xp_locked is false until accept — no XP is deducted on creation.
-  const { data, error } = await sb.from('forged_deals').insert({
-    title, amount,
-    initiator_handle: currentUser.handle,
-    initiator_id: freshUid,
-    receiver_handle: receiver,
-    initiator_xp_stake: xpStake,
-    receiver_xp_stake: null,
-    xp_locked: false,
-    status: 'pending',
-    opportunity_id: forgeContext.oppId || null
-  }).select().single();
-  if(error) return showToast("Error: " + error.message);
- addNotif(
-  `🔨 ${currentUser.handle} wants to Forge a deal with you: "${title}" — ${amount}. They staked ${xpStake} XP. Open My Forged Deals to set your own stake and Accept.`,
-  receiver,
-  { type: 'deal_received', target_type: 'deal', target_id: data ? data.id : null, actor_handle: currentUser.handle }
-);
-  closeModal('forge-modal');
-  showToast(`🔨 Forge proposal sent! ${receiver} will set their own stake when they accept.`);
+  // Group C (S4a): server-authoritative proposal via forge_propose RPC. It re-validates
+  // (auth initiator, normalized receiver, banned/self, min-10, tier-cap & 30% via trigger),
+  // enforces race-safe duplicate/opportunity uniqueness (unique indexes), inserts the pending
+  // deal, and enqueues the deal_received notification server-side. The client insert,
+  // getFreshUid, and addNotif are removed (increment/insert revoked post-07; RPC notifies).
+  try {
+    const { data, error } = await sb.rpc('forge_propose', {
+      p_receiver_handle: receiver,
+      p_title: title,
+      p_amount: amount,
+      p_xp_stake: xpStake,
+      p_opportunity_id: forgeContext.oppId || null
+    });
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.includes('duplicate_active_deal')) {
+        showToast(`🔒 Deal already in progress with ${receiver}. Resolve it first.`);
+        setTimeout(() => showMyForgedDeals(), 600);
+        return;
+      }
+      if (msg.includes('opportunity_taken'))    return showToast('This opportunity already has an active or completed deal.');
+      if (msg.includes('self_deal_not_allowed')) return showToast("You can't forge a deal with yourself");
+      if (msg.includes('receiver_not_found'))    return showToast("Couldn't find that user — check the X handle.");
+      if (msg.includes('receiver_ambiguous'))    return showToast('That handle matches more than one user — please be more specific.');
+      if (msg.includes('receiver_banned'))       return showToast("That user can't receive deals right now.");
+      if (msg.includes('stake_min_10'))          return showToast('Minimum XP stake is 10');
+      if (msg.includes('invalid_opportunity'))   return showToast('That opportunity no longer exists.');
+      if (msg.includes('auth_required'))         return showToast('Please log in again to send a proposal.');
+      if (msg.includes('caller_profile_missing'))return showToast("Your profile couldn't be loaded — please refresh.");
+      console.warn('forge_propose failed:', error);
+      return showToast('Couldn\'t send proposal: ' + msg);
+    }
+    // Adjustment 2: require a real deal_id before treating the proposal as successful.
+    if (!data || data.deal_id == null) {
+      console.warn('forge_propose returned no deal_id:', data);
+      return showToast("Couldn't send proposal. Please try again.");
+    }
+    closeModal('forge-modal');
+    showToast(`🔨 Forge proposal sent! ${receiver} will set their own stake when they accept.`);
+  } catch (e) {
+    console.warn('forge_propose crashed:', e);
+    showToast("Couldn't send proposal. Please try again.");
+  }
 }
 
 // Step 1: Open the receiver-stake picker modal.
