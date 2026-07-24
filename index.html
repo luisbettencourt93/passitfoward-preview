@@ -17603,112 +17603,76 @@ async function settleForge(outcome) {
   if(!deal) return showToast("Deal not found");
   if(deal.status !== 'active') return showToast("This deal is not active");
 
-  const isInitiator   = deal.initiator_handle === currentUser.handle;
-  const myField       = isInitiator ? 'initiator_outcome' : 'receiver_outcome';
-  const otherField    = isInitiator ? 'receiver_outcome'  : 'initiator_outcome';
-  const otherHandle   = isInitiator ? deal.receiver_handle : deal.initiator_handle;
-  const otherOutcome  = deal[otherField];
-  const initStake     = deal.initiator_xp_stake || 0;
-  const recvStake     = deal.receiver_xp_stake  || 0;
-
-  // Save my outcome
-  await sb.from('forged_deals').update({ [myField]: outcome }).eq('id', dealId);
-
-  if(!otherOutcome) {
-    // -- OTHER HASN'T VOTED YET — just save and wait. Stakes stay locked. --
-    await sb.from('notifications').insert({
-      handle: otherHandle,
-      text: `🔨 ${currentUser.handle} submitted their outcome on "${deal.title}". Open My Forged Deals to submit yours.`,
-      created_at: new Date().toISOString(), read: false
+  // Group C (S4a): server-authoritative outcome/settle/dispute via forge_submit_outcome RPC.
+  // It records the vote, settles (release + anti-farm reward) or opens a dispute atomically,
+  // and enqueues all notifications server-side. Client forged_deals.update, applyXpDelta and
+  // notification inserts are removed (increment/update revoked post-07; RPC notifies).
+  try {
+    const { data, error } = await sb.rpc('forge_submit_outcome', {
+      p_deal_id: Number(dealId),
+      p_outcome: outcome
     });
-    closeModal('forge-outcome-modal');
-    showToast(`Outcome submitted. Waiting for ${otherHandle} to submit theirs.`);
-    showMyForgedDeals();
-    return;
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.includes('not_participant')) return showToast("Only this deal's participants can submit an outcome.");
+      if (msg.includes('deal_not_found'))  return showToast("Deal not found.");
+      if (msg.includes('invalid_outcome')) return showToast("Invalid outcome.");
+      if (msg.includes('auth_required'))   return showToast("Please log in again.");
+      console.warn('forge_submit_outcome failed:', error);
+      return showToast("Couldn't submit outcome: " + msg);
+    }
+    // Require a real deal_id before treating the RPC as successful; do not close the modal yet.
+    if (!data || data.deal_id == null) {
+      console.warn('forge_submit_outcome: unexpected result shape', data);
+      return showToast("Couldn't submit outcome. Please try again.");
+    }
+    // Ordered: state guards first, then generic replay, then fresh settle/dispute results.
+    if (data.state === 'already_submitted') {
+      closeModal('forge-outcome-modal');
+      showToast("You've already submitted your outcome for this deal.");
+      showMyForgedDeals();
+      return;
+    }
+    if (data.state === 'waiting') {
+      closeModal('forge-outcome-modal');
+      showToast("Outcome submitted. Waiting for the other party to submit theirs.");
+      showMyForgedDeals();
+      return;
+    }
+    if (data.replay === true) {
+      closeModal('forge-outcome-modal');
+      showToast("This deal is no longer active.");
+      showMyForgedDeals();
+      return;
+    }
+    if (data.status === 'settled' && data.outcome === 'delivered') {
+      closeModal('forge-outcome-modal');
+      showToast(data.reward > 0 ? `✅ Deal delivered! Stakes returned + ${data.reward} XP bonus!`
+                                : `✅ Deal delivered! Stakes returned, no bonus (repeat partner).`);
+      showMyForgedDeals();
+      try { await loadOpportunitiesAndRender(); } catch(_) {}
+      return;
+    }
+    if (data.status === 'settled' && data.outcome === 'failed') {
+      closeModal('forge-outcome-modal');
+      showToast("❌ Deal failed (mutual). Stakes returned, no strikes.");
+      showMyForgedDeals();
+      try { await loadOpportunitiesAndRender(); } catch(_) {}
+      return;
+    }
+    if (data.status === 'disputed') {
+      closeModal('forge-outcome-modal');
+      showToast("⚖️ Outcome mismatch — deal is now DISPUTED. Stakes stay locked until the founder resolves.");
+      showMyForgedDeals();
+      return;
+    }
+    // Unknown/unrecognized shape: leave the modal open so the user can retry.
+    console.warn('forge_submit_outcome: unrecognized result', data);
+    showToast("Couldn't submit outcome. Please try again.");
+  } catch (e) {
+    console.warn('forge_submit_outcome crashed:', e);
+    showToast("Couldn't submit outcome. Please try again.");
   }
-
-  // -- BOTH HAVE VOTED — determine result --
-  const bothDelivered = outcome === 'delivered' && otherOutcome === 'delivered';
-  const bothFailed    = outcome === 'failed'    && otherOutcome === 'failed';
-
-  if(bothDelivered) {
-    // -- BOTH DELIVERED — release stakes + reward bonus --
-    const priorDeals = await getCompletedDealsBetween(deal.initiator_handle, deal.receiver_handle);
-    const xpReward = priorDeals >= 2 ? 0 : 25;
-
-    // Release both locked stakes (locked → available)
-    if (deal.xp_locked) {
-      await applyXpDelta(deal.initiator_handle, +initStake, -initStake, 'forged_release', `Stake returned: "${deal.title}"`);
-      if (recvStake > 0) {
-        await applyXpDelta(deal.receiver_handle, +recvStake, -recvStake, 'forged_release', `Stake returned: "${deal.title}"`);
-      }
-    }
-    // Reward bonus to both
-    if (xpReward > 0) {
-      await applyXpDelta(deal.initiator_handle, +xpReward, 0, 'forged_delivered', `Forged deal delivered: "${deal.title}"`);
-      await applyXpDelta(deal.receiver_handle,  +xpReward, 0, 'forged_delivered', `Forged deal delivered: "${deal.title}"`);
-    }
-
-    await sb.from('forged_deals').update({
-      outcome: 'delivered', status: 'settled', xp_settled: true, xp_locked: false,
-      completed_at: new Date().toISOString()
-    }).eq('id', dealId);
-
-    const rewardMsg = xpReward > 0 ? `Both parties received their stake back + ${xpReward} XP bonus.` : 'Both stakes returned. No bonus (repeat partners).';
-    await sb.from('notifications').insert({
-      handle: otherHandle,
-      text: `✅ Deal "${deal.title}" completed! Both confirmed delivery. ${rewardMsg} 🎉`,
-      created_at: new Date().toISOString(), read: false
-    });
-    showToast(xpReward > 0 ? `✅ Deal delivered! Stakes returned + ${xpReward} XP bonus!` : `✅ Deal delivered! Stakes returned, no bonus (repeat partner).`);
-    // Refresh opportunities feed so the fulfilled opp disappears immediately (hard lock)
-    try { await loadOpportunitiesAndRender(); } catch(_) {}
-
-  } else if(bothFailed) {
-    // -- MUTUAL FAILURE — release stakes, no strikes, no reward --
-    if (deal.xp_locked) {
-      await applyXpDelta(deal.initiator_handle, +initStake, -initStake, 'forged_release', `Stake returned (mutual fail): "${deal.title}"`);
-      if (recvStake > 0) {
-        await applyXpDelta(deal.receiver_handle, +recvStake, -recvStake, 'forged_release', `Stake returned (mutual fail): "${deal.title}"`);
-      }
-    }
-    await sb.from('forged_deals').update({
-      outcome: 'failed', status: 'settled', xp_settled: true, xp_locked: false,
-      completed_at: new Date().toISOString()
-    }).eq('id', dealId);
-    await sb.from('notifications').insert({
-      handle: otherHandle,
-      text: `❌ Deal "${deal.title}" marked as mutual failure. Both agreed it didn't work out. Stakes returned, no strikes.`,
-      created_at: new Date().toISOString(), read: false
-    });
-    showToast("❌ Deal failed (mutual). Stakes returned, no strikes.");
-    // Refresh opportunities feed so in-progress badge is removed
-    try { await loadOpportunitiesAndRender(); } catch(_) {}
-
-  } else {
-    // -- MIXED OUTCOMES — DISPUTED. Stakes STAY LOCKED until founder resolves. --
-    await sb.from('forged_deals').update({
-      status: 'disputed',
-      completed_at: new Date().toISOString()
-    }).eq('id', dealId);
-    await sb.from('notifications').insert({
-      handle: otherHandle,
-      text: `⚖️ Deal "${deal.title}" is now DISPUTED. One party marked delivered, the other marked failed. Stakes remain locked until the founder reviews.`,
-      created_at: new Date().toISOString(), read: false
-    });
-    const founderHandle = '@miguelbettencourt74';
-    if(currentUser.handle !== founderHandle && otherHandle !== founderHandle) {
-      await sb.from('notifications').insert({
-        handle: founderHandle,
-        text: `⚖️ DISPUTE: "${deal.title}" between ${deal.initiator_handle} (staked ${initStake}) & ${deal.receiver_handle} (staked ${recvStake}). One said delivered, other said failed. Review needed.`,
-        created_at: new Date().toISOString(), read: false
-      });
-    }
-    showToast("⚖️ Outcome mismatch — deal is now DISPUTED. Stakes stay locked until the founder resolves.");
-  }
-
-  closeModal('forge-outcome-modal');
-  showMyForgedDeals();
 }
 async function loadFounderDisputes() {
   if (!isFounder() || !sb) {
