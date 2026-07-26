@@ -3806,6 +3806,22 @@ body.light .nr-state-unread { color:#059669; }
             </div>
             <div id="my-opps-panel" style="display:none;border-top:1px solid #2d4f6f;margin-top:10px;"></div>
           </div>
+            <!-- E1c — COMMAND CENTRE 30-DAY GOAL CARD (member-facing; server-authoritative) -->
+            <!-- Starts hidden with no placeholder text: logged-out and demo sessions
+                 never briefly see this card. ccRenderGoalCard() reveals it only for a
+                 signed-in real account, and fills every field on the same render. -->
+            <div id="cc-goal-card" class="cc-status-card" style="display:none;background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:8px;padding:12px 14px;text-align:left;font-family:inherit;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+             <i class="fas fa-flag-checkered" style="font-size:12px;color:#5a7a9a;width:13px;"></i>
+            <span style="font-size:11px;color:#5a7a9a;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;">30-Day Goal</span>
+             <span id="cc-goal-days" style="margin-left:auto;font-size:11px;color:#f59e0b;white-space:nowrap;"></span>
+            </div>
+               <div id="cc-goal-content">
+              <div id="cc-goal-text" style="font-size:13px;color:#94a3b8;line-height:1.45;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;"></div>
+              <div id="cc-goal-status" style="font-size:11px;color:#5a7a9a;margin-top:6px;line-height:1.4;overflow-wrap:anywhere;"></div>
+              <button id="cc-goal-action" type="button" style="display:none;margin-top:10px;width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;"></button>
+            </div>
+          </div>
           </div>
         <!-- RIGHT — NEXAR GUIDANCE PANEL -->
         <div style="background:rgba(255,255,255,0.02);border:1px solid #2d4f6f;border-radius:10px;padding:16px 18px;">
@@ -5212,7 +5228,7 @@ body.light .nr-state-unread { color:#059669; }
     <h2>Set Your 30-Day Goal</h2>
     <p>Make it specific and ambitious.</p>
     <textarea id="goal-text" aria-label="Your 30-day goal" placeholder="e.g. Close my first $10k deal inside Pass It Forward" class="form-input" style="height:120px; resize:vertical;"></textarea>
-    <button onclick="saveGoal()" class="btn" style="width:100%;margin-top:1rem;">Save Goal</button>
+    <button id="goal-save-btn" type="button" onclick="saveGoal(event)" class="btn" style="width:100%;margin-top:1rem;">Save Goal</button>
     <button onclick="closeModal('goal-modal')" class="modal-cancel">Cancel</button>
   </div>
 </div>
@@ -5958,6 +5974,9 @@ function showToast(msg) {
 function closeModal(id) {
   const m = document.getElementById(id);
   if (m) m.style.display = 'none';
+  // G1a Rev 3: Cancel and every programmatic closeModal('goal-modal') release the
+  // submission latch, so a later reopen always starts from a clean latch.
+  if (id === 'goal-modal') pifGoalLatchClear();
 }
 function setLoading(id, msg) {
   const el = document.getElementById(id);
@@ -6269,14 +6288,7 @@ showToast("✅ Account created! You can log in now.");
       localStorage.setItem('pf_locked_xp_' + data.handle, data.locked_xp ?? 0);
       localStorage.setItem('pf_current_handle', data.handle);
       localStorage.setItem('pf_profile_' + data.handle, JSON.stringify(data));
-const { data: gd } = await sb.from('member_goals')
-  .select('goal, goal_set_at')
-  .eq('handle', data.handle)
-  .maybeSingle();
-if (gd) {
-  if (gd.goal) localStorage.setItem('pf_goal_' + data.handle, gd.goal);
-  if (gd.goal_set_at) localStorage.setItem('pf_goal_set_at_' + data.handle, gd.goal_set_at);
-}
+await pifLoadGoalState();
 return;
     }
   }
@@ -9047,100 +9059,454 @@ async function loadRoadmapTicks(){
 // -- GOAL ----------------------------------------------------------
 function showGoalModal(){
   if(!currentUser)return showToast("Login first");
-  // Check if goal is locked (founder bypasses the lock)
-  const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
-  if(setAt && !isFounder()) {
-    const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
-    if(daysPassed < 30) {
-      const daysLeft = Math.ceil(30 - daysPassed);
-      return showToast('🔒 Goal is locked for '+daysLeft+' more day'+(daysLeft>1?'s':'')+'. Stay focused!');
+  // Demo accounts keep their existing local timing and founder bypass.
+  if(String(currentUser.id||'').startsWith('demo-')){
+    const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
+    if(setAt && !isFounder()) {
+      const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
+      if(daysPassed < 30) {
+        const daysLeft = Math.ceil(30 - daysPassed);
+        return showToast('🔒 Goal is locked for '+daysLeft+' more day'+(daysLeft>1?'s':'')+'. Stay focused!');
+      }
     }
+    const e=localStorage.getItem('pf_goal_'+currentUser.handle);
+    if(e) document.getElementById('goal-text').value=e;
+    document.getElementById('goal-modal').style.display='flex';
+    return;
   }
-  const e=localStorage.getItem('pf_goal_'+currentUser.handle);
-  if(e) document.getElementById('goal-text').value=e;
-  document.getElementById('goal-modal').style.display='flex';
+  // Real accounts: no localStorage, no Date.now(), no isFounder() in this gate.
+  // Server state is the only input, and set_goal_with_xp re-enforces it anyway.
+  const st = pifGoalStateFor(currentUser.id);
+  if(st && st.has_goal===true && st.trusted===true && st.reached!==true && st.locked===true){
+    const d = pifGoalDays(st);
+    return showToast(d!==null
+      ? '🔒 Goal is locked for '+d+' more day'+(d>1?'s':'')+'. Stay focused!'
+      : '🔒 Goal is still locked. Stay focused!');
+  }
+  const ta = document.getElementById('goal-text');
+  if(ta) ta.value = (st && st.has_goal===true && st.goal) ? st.goal : '';
+  // G1a Rev 3.1: release the latch only on a genuine closed -> open transition.
+  // showGoalModal() is reachable from several call sites, so re-invoking it while
+  // the modal is already open must NOT release a latch that is holding back a
+  // duplicate submission. getComputedStyle is required here: the modal is hidden
+  // by the '.modal { display:none }' class rule, so inline style.display is '' on
+  // a never-yet-opened modal and cannot distinguish closed from open on its own.
+  // Present, identically, in BOTH showGoalModal() declarations.
+  const goalModal = document.getElementById('goal-modal');
+  const alreadyOpen = !!goalModal && window.getComputedStyle(goalModal).display !== 'none';
+  if(!alreadyOpen) pifGoalLatchClear();
+  pifGoalLatchBindResets();
+  goalModal.style.display='flex';
 }
-async function saveGoal(){
+// F1/F3: trusted goal state. get_my_goal_state() is the only authority for goal
+// eligibility. localStorage is an optimistic paint cache, always corrected by the
+// read RPC, and is never used to decide whether an action is allowed.
+// var (not let) so the bindings are hoist-safe regardless of script evaluation order.
+var pifGoalState = null;
+var pifGoalStateUid = null;
+var pifGoalSaveBusy = false;
+var pifGoalReachBusy = false;
+// G1a Rev 3 -- DETERMINISTIC SUBMISSION LATCH --------------------------------
+// Replaces the native multi-click heuristic. The latch is engaged synchronously
+// before set_goal_with_xp is called and is never released by the RPC returning,
+// so a rejected (e.g. not_active) or transport-failed submission cannot re-fire
+// with identical input. Shape: { uid, goal } or null. Account-bound by uid, so a
+// latch engaged by one account can never suppress another account's submission.
+// var (not let), consistent with the bindings above: hoist-safe regardless of
+// script evaluation order. No timers. No event.detail. No client date logic.
+var pifGoalSubmitLatch = null;
+function pifGoalLatchMatches(uid, goal){
+  return !!pifGoalSubmitLatch && pifGoalSubmitLatch.uid === uid && pifGoalSubmitLatch.goal === goal;
+}
+function pifGoalLatchEngage(uid, goal){
+  pifGoalSubmitLatch = { uid: uid, goal: goal };
+}
+function pifGoalLatchClear(){
+  pifGoalSubmitLatch = null;
+}
+// Reset bindings for the two paths that never run through closeModal(): a genuine
+// edit of the goal text, and the shared '.modal' backdrop handler, which hides the
+// element directly. Both are bound once per element and are idempotent.
+function pifGoalLatchBindResets(){
+  const ta = document.getElementById('goal-text');
+  if(ta && !ta._pifLatchBound){
+    ta._pifLatchBound = true;
+    ta.addEventListener('input', function(){
+      // Genuine change only: an edit leaving the trimmed text identical to what
+      // was submitted keeps the latch engaged.
+      if(pifGoalSubmitLatch && ta.value.trim() !== pifGoalSubmitLatch.goal) pifGoalLatchClear();
+    });
+  }
+  const md = document.getElementById('goal-modal');
+  if(md && !md._pifLatchBound){
+    md._pifLatchBound = true;
+    md.addEventListener('click', function(e){ if(e.target === md) pifGoalLatchClear(); });
+  }
+}
+// E1c: uid of the account whose last get_my_goal_state() attempt returned an
+// error. Purely additive — no existing branch reads it. It exists so the Command
+// Centre card can tell a genuine hydration failure apart from a not-yet-hydrated
+// first paint, which pifGoalStateFor() alone cannot distinguish (both give null).
+var pifGoalStateErrorUid = null;
+// Goal state is account-bound: state loaded for one account is never readable
+// as another account's state.
+function pifGoalStateFor(uid){
+  if(!uid || pifGoalStateUid !== uid) return null;
+  return pifGoalState;
+}
+function pifClearGoalState(){
+  pifGoalState = null;
+  pifGoalStateUid = null;
+}
+async function pifLoadGoalState(){
+  if(!currentUser) return null;
+  // Capture identity BEFORE awaiting, so a mid-request account change cannot
+  // write one account's state into another account's cache.
+  const uid = currentUser.id, h = currentUser.handle;
+  if(!sb || String(uid||'').startsWith('demo-')) return null;
+  let data = null, error = null;
+  try { const res = await sb.rpc('get_my_goal_state'); data = res.data; error = res.error; }
+  catch(e){ error = e; }
+  if(!currentUser || currentUser.id !== uid){
+    console.warn('get_my_goal_state discarded — account changed mid-request');
+    return null;
+  }
+  if(error){
+    console.warn('get_my_goal_state failed', error);
+    pifClearGoalState();
+    pifGoalStateErrorUid = uid;   // E1c: genuine failure, account-scoped.
+    localStorage.removeItem('pf_goal_'+h);
+    localStorage.removeItem('pf_goal_set_at_'+h);
+    return null;
+  }
+  const st = Array.isArray(data) ? data[0] : data;
+  pifGoalState = st || null;
+  pifGoalStateUid = uid;
+  pifGoalStateErrorUid = null;   // E1c: a successful read clears any prior failure.
+  if(!st || st.has_goal !== true){
+    localStorage.removeItem('pf_goal_'+h);
+    localStorage.removeItem('pf_goal_set_at_'+h);
+    return pifGoalState;
+  }
+  if(st.goal) localStorage.setItem('pf_goal_'+h, st.goal);
+  else localStorage.removeItem('pf_goal_'+h);
+  // pf_goal_set_at_ is read only by the demo showGoalModal branch now. Write it
+  // only for a trusted, unreached cycle; otherwise clear it.
+  if(st.trusted === true && st.reached !== true && st.goal_set_at) localStorage.setItem('pf_goal_set_at_'+h, st.goal_set_at);
+  else localStorage.removeItem('pf_goal_set_at_'+h);
+  return pifGoalState;
+}
+// One short retry after a failed hydration, then an unconditional repaint.
+// Nothing else re-fetches: renderGoal() is a pure render and never calls the RPC.
+function pifRetryGoalState(delayMs){
+  const uid = currentUser && currentUser.id;
+  if(!uid) return;
+  setTimeout(async function(){
+    if(!currentUser || currentUser.id !== uid) return;
+    await pifLoadGoalState();
+    if(!currentUser || currentUser.id !== uid) return;
+    renderGoal();
+  }, delayMs || 1500);
+}
+// Real-account XP display is driven by the server response only. The live UI
+// reads currentUser.xp directly (Command Centre header), so the in-memory object
+// is updated as well as the localStorage cache.
+function pifApplyServerXp(r, uid, type, label){
+  if(!currentUser || currentUser.id !== uid || !r) return;
+  const h = currentUser.handle;
+  const nx = Number(r.new_xp), nl = Number(r.new_locked_xp);
+  if(Number.isFinite(nx)){ currentUser.xp = nx; localStorage.setItem('pf_xp_'+h, nx); }
+  if(Number.isFinite(nl)){ currentUser.locked_xp = nl; localStorage.setItem('pf_locked_xp_'+h, nl); }
+  const pts = Number(r.xp_awarded) || 0;
+  if(pts !== 0) logXpEvent(type, label, pts);
+  window.dispatchEvent(new CustomEvent('xp:changed', { detail:{ handle:h, newXp:nx, newLocked:nl, xpDelta:pts, lockedDelta:0 } }));
+  if(typeof renderXpProgress === 'function') renderXpProgress();
+}
+function pifGoalDays(r){
+  const d = Number(r && r.days_remaining);
+  return Number.isFinite(d) && d > 0 ? d : null;
+}
+function pifGoalSetMessage(r){
+  const reason = r && r.reason;
+  if(reason === 'goal_locked'){
+    const d = pifGoalDays(r);
+    return d !== null ? '🔒 Goal is locked for '+d+' more day'+(d>1?'s':'')+'. Stay focused!' : '🔒 Goal is still locked. Stay focused!';
+  }
+  if(reason === 'goal_too_long') return 'That goal is too long — please keep it under 500 characters.';
+  if(reason === 'invalid_goal') return 'Please enter a goal.';
+  if(reason === 'banned') return 'Your account cannot set a goal.';
+  if(reason === 'not_active') return 'Goal tracking is not switched on yet. Please try again shortly.';
+  if(reason === 'not_authenticated' || reason === 'no_profile' || reason === 'no_handle') return 'Please log in again to save your goal.';
+  if(reason === 'handle_conflict') return 'Another account already holds this handle on the goals list. Please contact support.';
+  return 'Could not save your goal. Please try again.';
+}
+function pifGoalReachedMessage(r){
+  const reason = r && r.reason;
+  if(reason === 'too_early'){
+    const d = pifGoalDays(r);
+    return d !== null ? '⏳ You can mark this reached in '+d+' more day'+(d>1?'s':'')+'. Keep going!' : '⏳ Not yet — keep going!';
+  }
+  if(reason === 'no_active_goal') return 'Set a goal first';
+  if(reason === 'already_reached' || reason === 'already_awarded') return 'This goal is already marked as reached.';
+  if(reason === 'untrusted_cycle' || reason === 'before_activation') return 'Re-set your goal to begin a tracked 30-day cycle.';
+  if(reason === 'not_active') return 'Goal tracking is not switched on yet. Please try again shortly.';
+  if(reason === 'banned') return 'Your account cannot complete a goal.';
+  if(reason === 'not_authenticated' || reason === 'no_profile') return 'Please log in again.';
+  return 'Could not mark this goal as reached. Please try again.';
+}
+async function saveGoal(ev){
   const g=document.getElementById('goal-text').value.trim();
   if(!g)return;
-  const now = new Date().toISOString();
-  localStorage.setItem('pf_goal_'+currentUser.handle,g);
-  localStorage.setItem('pf_goal_set_at_'+currentUser.handle,now);
-  if(sb&&!currentUser.id.startsWith('demo-')){
-  await sb.from('member_goals').upsert({
-  handle: currentUser.handle,
-  user_id: currentUser.id,
-  goal: g,
-  goal_set_at: now,
-  reached: false
-},{onConflict:'handle'}); 
+  if(!currentUser)return;
+  // Demo accounts remain local-only. Behaviour unchanged.
+  if(String(currentUser.id||'').startsWith('demo-')){
+    const now = new Date().toISOString();
+    localStorage.setItem('pf_goal_'+currentUser.handle,g);
+    localStorage.setItem('pf_goal_set_at_'+currentUser.handle,now);
+    closeModal('goal-modal');
+    markTaskDone(2);
+    addXp(5,'goal','Set a 30-day goal');
+    bumpWeekly('goal');
+    showToast("🔒 Goal locked for 30 days! Stay focused. 🎯");
+    renderGoal();
+    return;
   }
-  closeModal('goal-modal');
-  markTaskDone(2);
-  // XP1 containment: real accounts must not receive browser-controlled Goal XP.
-  // Trusted set_goal_with_xp RPC will award this once enforcement is live.
-  if(String(currentUser.id||'').startsWith('demo-')) addXp(5,'goal','Set a 30-day goal');
-  bumpWeekly('goal');
-  showToast("🔒 Goal locked for 30 days! Stay focused. 🎯");
-  renderGoal();
+  if(!sb){showToast('Not connected — please refresh and try again.');return;}
+  if(pifGoalSaveBusy) return;
+  // G1a Rev 3: the latch check and engage are synchronous and complete before any
+  // await, so N clicks dispatched against this handler yield at most one RPC.
+  if(pifGoalLatchMatches(currentUser.id, g)) return;
+  pifGoalLatchEngage(currentUser.id, g);
+  pifGoalSaveBusy = true;
+  const saveBtn = ev && ev.currentTarget ? ev.currentTarget : document.getElementById('goal-save-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; saveBtn.style.opacity = '0.6'; saveBtn.style.cursor = 'not-allowed'; }
+  const uid = currentUser.id;
+  try {
+    // Real accounts: the server is the only writer of member_goals and of XP.
+    const {data,error}=await sb.rpc('set_goal_with_xp',{p_goal:g});
+    if(!currentUser || currentUser.id !== uid) return;
+    if(error){showToast('Could not save your goal: '+error.message);return;}
+    const r=Array.isArray(data)?data[0]:data;
+    if(!r||r.ok!==true){showToast(pifGoalSetMessage(r));return;}
+    pifApplyServerXp(r,uid,'goal','Set a 30-day goal');
+    // Cache is hydrated from the read RPC only. No client timestamp is invented.
+    await pifLoadGoalState();
+    if(!currentUser || currentUser.id !== uid) return;
+    const hydrated = (pifGoalStateUid === uid);
+    // The confirmed server success is retained even when hydration failed.
+    closeModal('goal-modal');
+    markTaskDone(2);
+    bumpWeekly('goal');
+    showToast("🔒 Goal locked for 30 days! Stay focused. 🎯");
+    renderGoal();
+    if(!hydrated) pifRetryGoalState(1500);
+  } finally {
+    pifGoalSaveBusy = false;
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Goal'; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
+  }
 }
 async function markGoalReached(){
   if(!currentUser)return;
-  const g=localStorage.getItem('pf_goal_'+currentUser.handle);
-  if(!g)return showToast("Set a goal first");
-  // Must wait at least 25 days before marking reached (founder bypasses)
-  const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
-  if(setAt && !isFounder()) {
-    const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
-    if(daysPassed < 25) {
-      const daysLeft = Math.ceil(25 - daysPassed);
-      return showToast('⏳ You can mark this reached in '+daysLeft+' more day'+(daysLeft>1?'s':'')+'. Keep going!');
+  // Demo accounts remain local-only. Behaviour unchanged apart from the
+  // goal-cycle literal alignment from 25 to 30 days.
+  if(String(currentUser.id||'').startsWith('demo-')){
+    const g=localStorage.getItem('pf_goal_'+currentUser.handle);
+    if(!g)return showToast("Set a goal first");
+    const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
+    if(setAt && !isFounder()) {
+      const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
+      if(daysPassed < 30) {
+        const daysLeft = Math.ceil(30 - daysPassed);
+        return showToast('⏳ You can mark this reached in '+daysLeft+' more day'+(daysLeft>1?'s':'')+'. Keep going!');
+      }
     }
+    localStorage.removeItem('pf_goal_set_at_'+currentUser.handle);
+    addXp(40,'goal','Reached 30-day goal! 🎯');
+    showToast("🎉 Congrats! Goal marked as reached — the community can see this!");
+    renderGoalsReached();
+    return;
   }
-  if(sb&&!currentUser.id.startsWith('demo-')){
-    await sb.from('member_goals').upsert({
-      handle:currentUser.handle,
-      user_id:currentUser.id,
-      goal:g,
-      reached:true,
-      reached_at:new Date().toISOString()
-    },{onConflict:'handle'});
+  if(!sb){showToast('Not connected — please refresh and try again.');return;}
+  if(pifGoalReachBusy) return;
+  pifGoalReachBusy = true;
+  const uid = currentUser.id;
+  try {
+    // Real accounts: no client timing, no founder bypass. The server decides.
+    const {data,error}=await sb.rpc('mark_goal_reached_with_xp',{});
+    if(!currentUser || currentUser.id !== uid) return;
+    if(error){showToast('Could not mark this goal as reached: '+error.message);return;}
+    const r=Array.isArray(data)?data[0]:data;
+    if(!r||r.ok!==true){showToast(pifGoalReachedMessage(r));return;}
+    pifApplyServerXp(r,uid,'goal','Reached 30-day goal! 🎯');
+    await pifLoadGoalState();
+    if(!currentUser || currentUser.id !== uid) return;
+    const hydrated = (pifGoalStateUid === uid);
+    showToast("🎉 Congrats! Goal marked as reached — the community can see this!");
+    renderGoal();
+    renderGoalsReached();
+    if(!hydrated) pifRetryGoalState(1500);
+  } finally {
+    pifGoalReachBusy = false;
   }
-  localStorage.removeItem('pf_goal_set_at_'+currentUser.handle);
-  // XP1 containment: real accounts must not receive browser-controlled Goal XP.
-  // Trusted mark_goal_reached_with_xp RPC will award this once enforcement is live.
-  if(String(currentUser.id||'').startsWith('demo-')) addXp(40,'goal','Reached 30-day goal! 🎯');
-  showToast("🎉 Congrats! Goal marked as reached — the community can see this!");
-  renderGoalsReached();
 }
 function showGoalModal(){
   if(!currentUser)return showToast("Login first");
-  // Check if goal is locked (founder bypasses the lock)
-  const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
-  if(setAt && !isFounder()) {
-    const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
-    if(daysPassed < 30) {
-      const daysLeft = Math.ceil(30 - daysPassed);
-      return showToast('🔒 Goal is locked for '+daysLeft+' more day'+(daysLeft>1?'s':'')+'. Stay focused!');
+  // Demo accounts keep their existing local timing and founder bypass.
+  if(String(currentUser.id||'').startsWith('demo-')){
+    const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
+    if(setAt && !isFounder()) {
+      const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
+      if(daysPassed < 30) {
+        const daysLeft = Math.ceil(30 - daysPassed);
+        return showToast('🔒 Goal is locked for '+daysLeft+' more day'+(daysLeft>1?'s':'')+'. Stay focused!');
+      }
     }
+    const e=localStorage.getItem('pf_goal_'+currentUser.handle);
+    if(e) document.getElementById('goal-text').value=e;
+    document.getElementById('goal-modal').style.display='flex';
+    return;
   }
-  const e=localStorage.getItem('pf_goal_'+currentUser.handle);
-  if(e) document.getElementById('goal-text').value=e;
-  document.getElementById('goal-modal').style.display='flex';
+  // Real accounts: no localStorage, no Date.now(), no isFounder() in this gate.
+  // Server state is the only input, and set_goal_with_xp re-enforces it anyway.
+  const st = pifGoalStateFor(currentUser.id);
+  if(st && st.has_goal===true && st.trusted===true && st.reached!==true && st.locked===true){
+    const d = pifGoalDays(st);
+    return showToast(d!==null
+      ? '🔒 Goal is locked for '+d+' more day'+(d>1?'s':'')+'. Stay focused!'
+      : '🔒 Goal is still locked. Stay focused!');
+  }
+  const ta = document.getElementById('goal-text');
+  if(ta) ta.value = (st && st.has_goal===true && st.goal) ? st.goal : '';
+  // G1a Rev 3.1: release the latch only on a genuine closed -> open transition.
+  // showGoalModal() is reachable from several call sites, so re-invoking it while
+  // the modal is already open must NOT release a latch that is holding back a
+  // duplicate submission. getComputedStyle is required here: the modal is hidden
+  // by the '.modal { display:none }' class rule, so inline style.display is '' on
+  // a never-yet-opened modal and cannot distinguish closed from open on its own.
+  // Present, identically, in BOTH showGoalModal() declarations.
+  const goalModal = document.getElementById('goal-modal');
+  const alreadyOpen = !!goalModal && window.getComputedStyle(goalModal).display !== 'none';
+  if(!alreadyOpen) pifGoalLatchClear();
+  pifGoalLatchBindResets();
+  goalModal.style.display='flex';
+}
+// === E1c — COMMAND CENTRE 30-DAY GOAL CARD ==============================
+// A new member-facing interface for the existing goal lifecycle. It renders the
+// same W1 server-authoritative state (get_my_goal_state -> pifGoalStateFor) into
+// the visible Command Centre. It owns no state, writes nothing, and calls only
+// the existing showGoalModal() / markGoalReached() / pifLoadGoalState() flows.
+// Real accounts: pifGoalStateFor(currentUser.id) is the only eligibility input —
+// no localStorage, no Date.now(), no goal_set_at maths, no isFounder() bypass.
+// localStorage is read for optimistic first paint only; it never enables an action.
+async function ccGoalRetry(){
+  const btn=document.getElementById('cc-goal-action');
+  if(btn){
+    btn.style.display='block';
+    btn.disabled=true;
+    btn.textContent='Retrying…';
+    btn.onclick=null;
+    btn.style.opacity='0.45';
+    btn.style.cursor='not-allowed';
+  }
+  // renderGoal() runs in finally, so the transient label can never get stuck.
+  try{ await pifLoadGoalState(); }
+  finally{ renderGoal(); }
+}
+function ccRenderGoalCard(){
+  const card=document.getElementById('cc-goal-card'); if(!card) return;
+  const txtEl=document.getElementById('cc-goal-text');
+  const statusEl=document.getElementById('cc-goal-status');
+  const daysEl=document.getElementById('cc-goal-days');
+  const btn=document.getElementById('cc-goal-action');
+  // Every render resets all six cc-goal-action properties before any branch runs,
+  // so no state can inherit a label, handler, disabled flag or cursor from the last.
+  if(btn){
+    btn.style.display='none';
+    btn.disabled=false;
+    btn.textContent='';
+    btn.onclick=null;
+    btn.style.opacity='';
+    btn.style.cursor='pointer';
+  }
+  if(txtEl) txtEl.textContent='';
+  if(statusEl) statusEl.innerHTML='';
+  if(daysEl) daysEl.textContent='';
+  // setAction() also writes all six explicitly, on both the shown and hidden paths.
+  const setAction=(label,handler,enabled)=>{
+    if(!btn) return;
+    if(!label){
+      btn.style.display='none';
+      btn.disabled=false;
+      btn.textContent='';
+      btn.onclick=null;
+      btn.style.opacity='';
+      btn.style.cursor='pointer';
+      return;
+    }
+    btn.style.display='block';
+    btn.disabled=!enabled;
+    btn.textContent=label;
+    btn.onclick=enabled?(handler||null):null;
+    btn.style.opacity=enabled?'':'0.45';
+    btn.style.cursor=enabled?'pointer':'not-allowed';
+  };
+  const paint=(goalText,statusHtml,daysText,label,handler,enabled)=>{
+    if(txtEl) txtEl.textContent=goalText;
+    if(statusEl) statusEl.innerHTML=statusHtml;
+    if(daysEl) daysEl.textContent=daysText;
+    setAction(label,handler,enabled);
+  };
+  // Demo accounts keep their existing legacy-only goal behaviour untouched; this
+  // Command Centre card is a real-account, server-state surface and stays hidden.
+  if(!currentUser || String(currentUser.id||'').startsWith('demo-')){ card.style.display='none'; return; }
+  card.style.display='block';
+  const st=pifGoalStateFor(currentUser.id);
+  if(!st){
+    if(pifGoalStateErrorUid===currentUser.id){
+      // Genuine failure: get_my_goal_state() returned an error for this account.
+      return paint('Unable to load your goal','<span style="color:#f87171;">The goal service could not be reached.</span>','','Retry',ccGoalRetry,true);
+    }
+    // Not hydrated yet: optimistic paint only, no action offered.
+    const cached=localStorage.getItem('pf_goal_'+currentUser.handle);
+    return paint(cached||'','<span style="color:#5a7a9a;">Loading your goal…</span>','',null,null,false);
+  }
+  if(st.has_goal!==true){
+    return paint('No goal set yet.','<span style="color:#5a7a9a;">Pick one focus for the next 30 days.</span>','','Set your first goal',showGoalModal,true);
+  }
+  const goal=st.goal||'';
+  if(st.reached===true){
+    let when=''; if(st.reached_at){ const dt=new Date(st.reached_at); if(!isNaN(dt.getTime())) when=dt.toLocaleDateString(); }
+    return paint(goal,'<span style="color:#10b981;">✅ Goal reached'+(when?' · '+when:'')+'</span>','','Start your next goal',showGoalModal,true);
+  }
+  if(st.trusted!==true){
+    return paint(goal,'<span style="color:#f59e0b;">Re-set your goal to begin a tracked 30-day cycle.</span>','','Re-set goal',showGoalModal,true);
+  }
+  if(st.locked===true){
+    const d=pifGoalDays(st);
+    return paint(goal,'<span style="color:#f59e0b;">🔒 Locked — 30-day cycle in progress</span>',d!==null?(d+'d left'):'','Mark reached',null,false);
+  }
+  paint(goal,'<span style="color:#2dd4a0;">✅ Ready to mark as reached!</span>','','Mark reached',markGoalReached,true);
 }
 function renderGoal(){
-  const g=localStorage.getItem('pf_goal_'+currentUser.handle);
+  try{ ccRenderGoalCard(); }catch(e){ console.warn('ccRenderGoalCard failed', e); }
   const b=document.getElementById('current-goal-box');if(!b)return;
-  if(g){
-    const dg=document.getElementById('display-goal');if(dg)dg.textContent=g;
+  const dg=document.getElementById('display-goal');
+  const lockEl=document.getElementById('goal-lock-status');
+  const reachBtn=document.getElementById('goal-reach-btn');
+  const hide=()=>{b.classList.remove('show');if(lockEl)lockEl.innerHTML='';if(reachBtn){reachBtn.style.display='none';reachBtn.disabled=false;}};
+  if(!currentUser)return hide();
+  // Demo accounts render from local state. Behaviour unchanged apart from the
+  // goal-cycle literal alignment from 25 to 30 days.
+  if(String(currentUser.id||'').startsWith('demo-')){
+    const g=localStorage.getItem('pf_goal_'+currentUser.handle);
+    if(!g)return hide();
+    if(dg)dg.textContent=g;
     b.classList.add('show');
     const setAt = localStorage.getItem('pf_goal_set_at_'+currentUser.handle);
-    const lockEl = document.getElementById('goal-lock-status');
-    const reachBtn = document.getElementById('goal-reach-btn');
     if(setAt) {
       const daysPassed = (Date.now() - new Date(setAt).getTime()) / 86400000;
-      if(daysPassed < 25) {
-        const daysLeft = Math.ceil(25 - daysPassed);
+      if(daysPassed < 30) {
+        const daysLeft = Math.ceil(30 - daysPassed);
         if(lockEl) lockEl.innerHTML = '<span style="font-size:10px;color:#f59e0b;">🔒 Locked — '+daysLeft+'d remaining</span>';
         if(reachBtn) reachBtn.style.display = isFounder() ? 'inline' : 'none';
       } else {
@@ -9148,13 +9514,47 @@ function renderGoal(){
         if(reachBtn) reachBtn.style.display = 'inline';
       }
     }
-  }else{b.classList.remove('show');}
+    return;
+  }
+  // Real accounts: account-bound server state only. This function never fetches.
+  const st=pifGoalStateFor(currentUser.id);
+  if(!st){
+    // Optimistic first paint only: show the cached text, offer no action.
+    const cached=localStorage.getItem('pf_goal_'+currentUser.handle);
+    if(!cached)return hide();
+    if(dg)dg.textContent=cached;
+    b.classList.add('show');
+    if(lockEl)lockEl.innerHTML='';
+    if(reachBtn){reachBtn.style.display='none';reachBtn.disabled=false;}
+    return;
+  }
+  if(st.has_goal!==true)return hide();
+  if(dg)dg.textContent=st.goal||'';
+  b.classList.add('show');
+  if(st.reached===true){
+    if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#10b981;">✅ Goal reached</span>';
+    if(reachBtn){reachBtn.style.display='none';reachBtn.disabled=false;}
+    return;
+  }
+  if(st.trusted!==true){
+    if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#f59e0b;">Re-set your goal to begin a tracked 30-day cycle.</span>';
+    if(reachBtn){reachBtn.style.display='none';reachBtn.disabled=false;}
+    return;
+  }
+  if(st.locked===true){
+    const d=pifGoalDays(st);
+    if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#f59e0b;">🔒 Locked — '+(d!==null?d+'d remaining':'30-day cycle in progress')+'</span>';
+    if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=true;reachBtn.style.opacity='0.45';reachBtn.style.cursor='not-allowed';}
+    return;
+  }
+  if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#2dd4a0;">✅ Ready to mark as reached!</span>';
+  if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=false;reachBtn.style.opacity='';reachBtn.style.cursor='pointer';}
 }
 async function renderGoalsReached(){
   const el=document.getElementById('goals-reached-list');if(!el)return;
   let goals=[];
   if(sb){
-    const{data}=await sb.from('member_goals').select('*').eq('reached',true).order('reached_at',{ascending:false,nullsFirst:false}).limit(10);
+    const{data}=await sb.from('member_goals').select('handle,goal,reached,reached_at').eq('reached',true).order('reached_at',{ascending:false,nullsFirst:false}).limit(10);
     if(data)goals=data;
   }
   if(!goals.length){
@@ -9175,9 +9575,18 @@ async function renderGoalsReached(){
 async function founderDeleteGoal(handle){
   if(!isFounder())return;
   if(!confirm('Remove this goal from the list?'))return;
-  if(sb){
-    const{error}=await sb.from('member_goals').delete().eq('handle',handle);
-    if(error){showToast('Error: '+error.message);return;}
+  if(!sb){showToast('Not connected — please refresh and try again.');return;}
+  const{data,error}=await sb.rpc('founder_soft_delete_goal',{p_handle:handle});
+  if(error){showToast('Error: '+error.message);return;}
+  const r=Array.isArray(data)?data[0]:data;
+  if(!r||r.ok!==true){
+    const reason=r&&r.reason;
+    showToast(reason==='not_found'?'Goal not found — it may already have been removed.'
+      :reason==='goal_not_reached'?'Only reached goals can be removed from this list.'
+      :reason==='not_founder'?'Founder access required.'
+      :'Could not remove this goal.');
+    renderGoalsReached();
+    return;
   }
   showToast('Goal removed');
   setTimeout(()=>renderGoalsReached(), 500);
@@ -15849,6 +16258,10 @@ async function init() {
 
   if (loggedIn && currentUser) {
     showMemberTabs();
+    // F3 reload path: initAuth() is the returning-session path and never calls
+    // loadCurrentUser(), so goal state is unhydrated here. Hydrate, then repaint.
+    await pifLoadGoalState();
+    renderGoal();
     // -- ALWAYS hydrate xp + locked_xp from the live DB on every page load --
     // This is the canonical path. Don't trust whatever initAuth cached.
     await hydrateXpFromDb('init');
