@@ -3819,7 +3819,7 @@ body.light .nr-state-unread { color:#059669; }
                <div id="cc-goal-content">
               <div id="cc-goal-text" style="font-size:13px;color:#94a3b8;line-height:1.45;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap;"></div>
               <div id="cc-goal-status" style="font-size:11px;color:#5a7a9a;margin-top:6px;line-height:1.4;overflow-wrap:anywhere;"></div>
-              <button id="cc-goal-action" type="button" style="display:none;margin-top:10px;width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;"></button>
+              <button id="cc-goal-action" type="button" onkeydown="if(event.repeat)event.preventDefault();" style="display:none;margin-top:10px;width:100%;background:transparent;border:1px solid #2d4f6f;color:#94a3b8;padding:7px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;"></button>
             </div>
           </div>
           </div>
@@ -4094,7 +4094,7 @@ body.light .nr-state-unread { color:#059669; }
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <strong style="color:#2dd4a0;font-size:13px;">🎯 Your 30-day goal:</strong>
             <div style="display:flex;gap:6px;">
-              <button id="goal-reach-btn" onclick="markGoalReached()" style="display:none;background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.25);color:#2dd4a0;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">✓ Mark Reached</button>
+              <button id="goal-reach-btn" onclick="markGoalReached(event)" onkeydown="if(event.repeat)event.preventDefault();" style="display:none;background:rgba(45,212,160,0.1);border:1px solid rgba(45,212,160,0.25);color:#2dd4a0;padding:4px 12px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">✓ Mark Reached</button>
               <button onclick="deleteGoal()" style="background:none;border:none;color:#ef4444;font-size:14px;cursor:pointer;">🗑</button>
             </div>
           </div>
@@ -9105,7 +9105,50 @@ function showGoalModal(){
 var pifGoalState = null;
 var pifGoalStateUid = null;
 var pifGoalSaveBusy = false;
-var pifGoalReachBusy = false;
+// G1b -- MARK REACHED SINGLE-REQUEST PROTECTION ------------------------------
+// A KEYED REGISTRY, not a single slot. One replaceable slot cannot both let
+// Account B operate independently and still remember that Account A has an
+// unresolved request: after A -> B -> A the slot holds B, so A would be free to
+// issue a duplicate. Keying by (uid, cycleKey) lets any number of accounts and
+// cycles hold concurrent, independently tracked requests.
+//
+// There is no durable latch: an entry exists only while its RPC is in flight, so
+// a rejection or a transport failure leaves the control deliberately clickable
+// again. Mark Reached carries no editable payload, so re-attempting is valid.
+//
+// cycleKey is an OPAQUE, SERVER-HYDRATED UI CORRELATION KEY -- not a security
+// authority. No date arithmetic is performed on it and no eligibility decision is
+// derived from it; the server remains the sole authority. get_my_goal_state()
+// does not currently return goal_cycle_id; returning it is the robust future
+// improvement and is deliberately NOT part of G1b.
+var pifGoalReachRequests = new Map();   // requestKey -> { uid, cycleKey }
+function pifGoalCycleKey(uid){
+  const st = pifGoalStateFor(uid);
+  if(!st || st.has_goal !== true) return '~unhydrated';
+  return String(st.goal_set_at || '') + '|' + String(st.goal || '');
+}
+// NUL separator: it cannot occur in a uuid or in a server timestamp/goal text, so
+// no (uid, cycleKey) pair can collide with a different pair.
+function pifGoalReachRequestKey(uid, cycleKey){
+  return String(uid) + '\u0000' + String(cycleKey);
+}
+// True only for the account and hydrated cycle currently on screen. Both render
+// paths derive their in-flight state from this, so a rerender cannot re-arm a
+// control whose own request is still pending, and cannot show another account's.
+// A request is never registered under '~unhydrated', so this can never miss one.
+function pifGoalReachInFlightFor(uid){
+  if(!uid) return false;
+  return pifGoalReachRequests.has(pifGoalReachRequestKey(uid, pifGoalCycleKey(uid)));
+}
+// Context guard for post-await, request-specific effects (toasts, cycle-specific
+// repaint). FAIL CLOSED: the account must match exactly AND the current cycle must
+// be known and equal. An unknown cycle is not evidence of a match -- suppressing a
+// message while context is unknown is safer than presenting an old cycle's result
+// as the current one. Server settlement remains authoritative regardless.
+function pifGoalReachContextIs(uid, cycleKey){
+  if(!currentUser || currentUser.id !== uid) return false;
+  return pifGoalCycleKey(uid) === cycleKey;
+}
 // G1a Rev 3 -- DETERMINISTIC SUBMISSION LATCH --------------------------------
 // Replaces the native multi-click heuristic. The latch is engaged synchronously
 // before set_goal_with_xp is called and is never released by the RPC returning,
@@ -9305,7 +9348,7 @@ async function saveGoal(ev){
     if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Goal'; saveBtn.style.opacity = ''; saveBtn.style.cursor = ''; }
   }
 }
-async function markGoalReached(){
+async function markGoalReached(ev){
   if(!currentUser)return;
   // Demo accounts remain local-only. Behaviour unchanged apart from the
   // goal-cycle literal alignment from 25 to 30 days.
@@ -9327,26 +9370,62 @@ async function markGoalReached(){
     return;
   }
   if(!sb){showToast('Not connected — please refresh and try again.');return;}
-  if(pifGoalReachBusy) return;
-  pifGoalReachBusy = true;
+  // G1b: native multi-click. A fast double or triple click delivers detail 2 and 3
+  // on the later events even when the first RPC has already resolved, which the
+  // registry alone cannot see. Checked in addition to it, never instead.
+  if(ev && Number(ev.detail) > 1) return;
   const uid = currentUser.id;
+  // G1b Rev 4: NEVER issue Mark Reached under a placeholder key. A request keyed
+  // '~unhydrated' becomes invisible to pifGoalReachInFlightFor() the moment real
+  // hydration lands, which would re-arm the control and permit a second RPC for
+  // the same server goal. A genuinely hydrated cycle for this account is required.
+  const st = pifGoalStateFor(uid);
+  if(!st || st.has_goal !== true){
+    // Repaint so a control left armed by an earlier render returns to its loading
+    // or retry state; the ordinary hydration paths restore authoritative UI. No
+    // RPC, no timer, and no hydration call stacked from here.
+    try { renderGoal(); } catch(e){ console.warn('renderGoal failed', e); }
+    if(currentUser && currentUser.id === uid) showToast('Loading your goal — please try again in a moment.');
+    return;
+  }
+  // Single derivation, shared with both render paths. st is hydrated and there is
+  // no await between the check above and this line, so it cannot be '~unhydrated'.
+  const cycleKey = pifGoalCycleKey(uid);
+  const reqKey = pifGoalReachRequestKey(uid, cycleKey);
+  // G1b: only this exact (account, cycle) is blocked. Another account or another
+  // cycle may start and hold its own request concurrently.
+  if(pifGoalReachRequests.has(reqKey)) return;
+  const req = { uid: uid, cycleKey: cycleKey };
+  pifGoalReachRequests.set(reqKey, req);
   try {
+    // Paint the in-flight state on both controls before awaiting.
+    try { renderGoal(); } catch(e){ console.warn('renderGoal failed', e); }
     // Real accounts: no client timing, no founder bypass. The server decides.
     const {data,error}=await sb.rpc('mark_goal_reached_with_xp',{});
-    if(!currentUser || currentUser.id !== uid) return;
+    // G1b: an older cycle's response must not be presented as the newer cycle's.
+    if(!pifGoalReachContextIs(uid, cycleKey)) return;
     if(error){showToast('Could not mark this goal as reached: '+error.message);return;}
     const r=Array.isArray(data)?data[0]:data;
     if(!r||r.ok!==true){showToast(pifGoalReachedMessage(r));return;}
     pifApplyServerXp(r,uid,'goal','Reached 30-day goal! 🎯');
     await pifLoadGoalState();
-    if(!currentUser || currentUser.id !== uid) return;
     const hydrated = (pifGoalStateUid === uid);
+    // Recovery is not presentation. A failed hydration still schedules the normal
+    // authoritative re-read (pre-existing product behaviour) even when the guard
+    // below suppresses this response's cycle-specific UI.
+    if(!hydrated && currentUser && currentUser.id === uid) pifRetryGoalState(1500);
+    // Fail closed: an unknown current cycle is NOT evidence that it matches the
+    // captured cycle, so no success or rejection message is shown for it.
+    if(!pifGoalReachContextIs(uid, cycleKey)) return;
     showToast("🎉 Congrats! Goal marked as reached — the community can see this!");
     renderGoal();
     renderGoalsReached();
-    if(!hydrated) pifRetryGoalState(1500);
   } finally {
-    pifGoalReachBusy = false;
+    // Exact-entry cleanup by object identity: an older invocation can never delete
+    // a newer entry, and no invocation can delete another account's or cycle's.
+    if(pifGoalReachRequests.get(reqKey) === req) pifGoalReachRequests.delete(reqKey);
+    // Repaint from whatever server state is current now, using no response data.
+    try { renderGoal(); } catch(e){ console.warn('renderGoal failed', e); }
   }
 }
 function showGoalModal(){
@@ -9481,6 +9560,11 @@ function ccRenderGoalCard(){
   if(st.trusted!==true){
     return paint(goal,'<span style="color:#f59e0b;">Re-set your goal to begin a tracked 30-day cycle.</span>','','Re-set goal',showGoalModal,true);
   }
+  // G1b: in-flight sits AFTER reached/untrusted so a completed-and-hydrated cycle
+  // always wins, and BEFORE locked/ready so a rerender cannot re-arm the control.
+  if(pifGoalReachInFlightFor(currentUser.id)){
+    return paint(goal,'<span style="color:#5a7a9a;">Marking goal as reached…</span>','','Marking…',null,false);
+  }
   if(st.locked===true){
     const d=pifGoalDays(st);
     return paint(goal,'<span style="color:#f59e0b;">🔒 Locked — 30-day cycle in progress</span>',d!==null?(d+'d left'):'','Mark reached',null,false);
@@ -9541,14 +9625,20 @@ function renderGoal(){
     if(reachBtn){reachBtn.style.display='none';reachBtn.disabled=false;}
     return;
   }
+  // G1b: same branch position as the Command Centre card.
+  if(pifGoalReachInFlightFor(currentUser.id)){
+    if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#5a7a9a;">Marking goal as reached…</span>';
+    if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=true;reachBtn.textContent='Marking…';reachBtn.style.opacity='0.45';reachBtn.style.cursor='not-allowed';}
+    return;
+  }
   if(st.locked===true){
     const d=pifGoalDays(st);
     if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#f59e0b;">🔒 Locked — '+(d!==null?d+'d remaining':'30-day cycle in progress')+'</span>';
-    if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=true;reachBtn.style.opacity='0.45';reachBtn.style.cursor='not-allowed';}
+    if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=true;reachBtn.textContent='✓ Mark Reached';reachBtn.style.opacity='0.45';reachBtn.style.cursor='not-allowed';}
     return;
   }
   if(lockEl)lockEl.innerHTML='<span style="font-size:10px;color:#2dd4a0;">✅ Ready to mark as reached!</span>';
-  if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=false;reachBtn.style.opacity='';reachBtn.style.cursor='pointer';}
+  if(reachBtn){reachBtn.style.display='inline';reachBtn.disabled=false;reachBtn.textContent='✓ Mark Reached';reachBtn.style.opacity='';reachBtn.style.cursor='pointer';}
 }
 async function renderGoalsReached(){
   const el=document.getElementById('goals-reached-list');if(!el)return;
