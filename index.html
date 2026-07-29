@@ -5693,7 +5693,7 @@ const PIF_ENVS = {
     anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtqa2h2aHd5a2JlYmx5b21pdXhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNzUwMDcsImV4cCI6MjA5OTk1MTAwN30.px1jO1L0wMxmSIEqDsw6ZVKETO1ZjXUsEOf7vLeQios'
   }
 };
-let PIF_ENV = 'production';
+let PIF_ENV = 'staging';
 try {
   if (new URLSearchParams(location.search).get('env') === 'staging') PIF_ENV = 'staging';
 } catch (e) {}
