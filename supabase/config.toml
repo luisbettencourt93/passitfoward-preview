@@ -1,0 +1,4 @@
+[functions.nexar-confirm-action]
+# The function validates the bearer token with auth.getUser() before creating
+# a service-role client. Keep this setting and that code review-bound together.
+verify_jwt = false
