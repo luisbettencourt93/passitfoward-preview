@@ -5680,9 +5680,9 @@ create policy "raises_delete" on member_raises for delete using (auth.uid() = po
 // ======================================================================
 
 // ── ENV SWITCH (E0) ─────────────────────────────────────────────
-// Default = PRODUCTION. Append ?env=staging to the URL to point THIS SAME FILE
-// at the S4a staging project for testing. Both keys are PUBLIC anon keys
-// (role=anon), not secrets. No effect on the deployed prod default.
+// Default = STAGING for this preview build. ?env=staging is accepted for parity
+// but is a no-op (staging is already the default) and there is no production
+// selector in this file. Both keys below are PUBLIC anon keys (role=anon), not secrets.
 const PIF_ENVS = {
   production: {
     url: 'https://liujbjfjdycacmaujawu.supabase.co',
@@ -18813,7 +18813,7 @@ async function nexarRenderLatestDraftFromDb() {
     if (!token) throw new Error('Not authenticated');
 
     const resp = await fetch(
-      'https://liujbjfjdycacmaujawu.supabase.co/functions/v1/nexar-confirm-action',
+      `${NEXAR_FN_BASE}/nexar-confirm-action`,
       {
         method: 'POST',
         headers: {
