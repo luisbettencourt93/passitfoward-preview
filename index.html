@@ -1457,11 +1457,15 @@ body.light .nr-state-unread { color:#059669; }
 }
 
 /* -- Section wrapper -------------------------------------------------- */
+@media (min-width: 769px) {
+  /* Use the available document width, excluding classic scrollbars. */
+  #nexar { padding-left: 0; padding-right: 0; }
+}
 .nexar-wrap {
-  /* Full-bleed: break out of parent padding */
+  /* Full-bleed within the section; mobile padding overrides stay in place. */
   position: relative;
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
+  width: 100%;
+  margin-left: 0;
   margin-top: -20px;
   padding: 0;
   font-family: 'Inter', sans-serif;
