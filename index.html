@@ -674,6 +674,23 @@
     /* TOAST */
     .toast { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: #0d1526; border: 1px solid var(--primary); color: white; padding: 0.75rem 1.4rem; border-radius: 16px; font-weight: 600; font-size: 0.85rem; box-shadow: 0 8px 30px rgba(16,185,129,0.25); display: none; align-items: center; gap: 10px; z-index: 5000; max-width: 90vw; text-align: center; line-height: 1.4; }
     .toast i { color: var(--primary); }
+    /* Shared phone notices: keep the bottom message composer accessible. */
+    @media (max-width: 640px) {
+      .toast {
+        top: calc(12px + env(safe-area-inset-top, 0px));
+        bottom: auto;
+        left: calc(16px + env(safe-area-inset-left, 0px));
+        right: calc(16px + env(safe-area-inset-right, 0px));
+        width: auto;
+        max-width: none;
+        transform: none;
+        padding: 12px 16px;
+        border-radius: 12px;
+        text-align: left;
+      }
+      .toast i { flex: 0 0 auto; }
+      #toast-text { min-width: 0; overflow-wrap: anywhere; }
+    }
 
     /* FORM SELECT */
     .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem; }
@@ -1440,11 +1457,15 @@ body.light .nr-state-unread { color:#059669; }
 }
 
 /* -- Section wrapper -------------------------------------------------- */
+@media (min-width: 769px) {
+  /* Use the available document width, excluding classic scrollbars. */
+  #nexar { padding-left: 0; padding-right: 0; }
+}
 .nexar-wrap {
-  /* Full-bleed: break out of parent padding */
+  /* Full-bleed within the section; mobile padding overrides stay in place. */
   position: relative;
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
+  width: 100%;
+  margin-left: 0;
   margin-top: -20px;
   padding: 0;
   font-family: 'Inter', sans-serif;
@@ -1492,11 +1513,13 @@ body.light .nr-state-unread { color:#059669; }
   opacity: 0.6;
   pointer-events: none;
 }
-.nexar-header-left { display: flex; align-items: center; gap: 14px; position: relative; z-index: 1; }
+.nexar-header-left { display: flex; align-items: center; gap: 14px; min-width: 0; position: relative; z-index: 1; }
+.nexar-header-copy { min-width: 0; }
 .nexar-header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; position: relative; z-index: 1; }
 
 .nexar-glyph {
   width: 34px; height: 34px;
+  flex: 0 0 34px;
   border-radius: 8px;
   background: linear-gradient(135deg, #10b981 0%, #2dd4a0 100%);
   display: flex; align-items: center; justify-content: center;
@@ -1526,6 +1549,7 @@ body.light .nr-state-unread { color:#059669; }
   font-size: 10px; font-weight: 500;
   color: #2dd4a0; letter-spacing: 0.22em;
   margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 
 .nexar-tier-pill {
@@ -1774,6 +1798,7 @@ body.light .nr-state-unread { color:#059669; }
 }
 .nexar-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none;
@@ -1782,7 +1807,9 @@ body.light .nr-state-unread { color:#059669; }
   font-size: 14px;
   line-height: 1.5;
   resize: none;
+  min-height: calc(1.5em + 16px);
   max-height: 160px;
+  overflow-y: auto;
   padding: 8px 4px;
 }
 .nexar-input::placeholder { color: #5a7a9a; }
@@ -4640,7 +4667,7 @@ body.light .nr-state-unread { color:#059669; }
     <div class="nexar-header">
       <div class="nexar-header-left">
         <div class="nexar-glyph"><span></span></div>
-        <div>
+        <div class="nexar-header-copy">
           <div class="nexar-title">NEXAR</div>
           <div class="nexar-sub" id="nexar-sub-line">AI OPERATOR · INITIALIZING…</div>
         </div>
@@ -4692,7 +4719,8 @@ body.light .nr-state-unread { color:#059669; }
           class="nexar-input"
           rows="1"
           maxlength="4000"
-          placeholder="Ask NEXAR anything — find work, earn, execute actions…"
+          aria-label="Ask NEXAR…"
+          placeholder="Ask NEXAR…"
           onkeydown="nexarOnKey(event)"
           oninput="nexarAutoGrow(this)"
         ></textarea>
@@ -18449,80 +18477,208 @@ const NEXAR_CHECKOUT_URL  = `${NEXAR_FN_BASE}/nexar-create-checkout`;
 // -- STATE ------------------------------------------------------------
 let nexarState = {
   sending: false,
-  tier: null,        // 'basic' | 'pro' | null
+  tier: null,        // 'basic' | 'pro' | null (display lookup unknown)
   remainingToday: null,
   hydrated: false,
+  tierRequest: 0,
+  loadRequest: 0,
+  displayUserId: null,
+  authClient: null,
+  authSubscription: null,
+  authSignedOut: false,
+  authUserId: null,
+  authVersion: 0,
+  confirmedMembership: null,
+  // Page-memory only; reset on sign-out/reload. Not an entitlement cache.
+  welcomedAccounts: new Set(),
 };
 
 // -- LOAD (called by switchTab) ---------------------------------------
 async function loadNexar() {
   if (!currentUser) { showToast('Members only'); return; }
+  const user = currentUser;
+  const userId = user.id;
+  const loadRequest = ++nexarState.loadRequest;
 
-  // Handle Stripe redirect success param
-  const params = new URLSearchParams(location.search);
-  if (params.get('nexar') === 'success') {
-    showToast('✅ NEXAR Pro activated — welcome');
-    // Clean URL
-    history.replaceState({}, '', location.pathname);
-  } else if (params.get('nexar') === 'cancel') {
-    showToast('Checkout cancelled');
-    history.replaceState({}, '', location.pathname);
+  // A checkout return is only a presentation hint, never proof of payment.
+  const url = new URL(location.href);
+  const checkoutReturn = url.searchParams.get('nexar');
+  if (checkoutReturn === 'success' || checkoutReturn === 'cancel') {
+    url.searchParams.delete('nexar');
+    history.replaceState(history.state, '', url.pathname + url.search + url.hash);
+    if (checkoutReturn === 'cancel') showToast('Checkout cancelled');
   }
 
-  await nexarRefreshTier();
-  await nexarLoadHistory();
-  nexarState.hydrated = true;
+  const result = await nexarRefreshTier();
+  const isCurrent = () => result && currentUser === user && currentUser.id === userId &&
+    nexarState.loadRequest === loadRequest && nexarState.tierRequest === result.request &&
+    !nexarState.authSignedOut;
+  if (!isCurrent()) return;
+  if (result.demo) return;
 
-  // Focus input on desktop only (mobile: avoid keyboard pop)
+  if (checkoutReturn === 'success') {
+    if (result.tier === 'pro') {
+      if (!nexarState.welcomedAccounts.has(userId)) {
+        nexarState.welcomedAccounts.add(userId);
+        showToast('NEXAR membership confirmed — welcome');
+      }
+    } else {
+      showToast(result.tier === 'basic'
+        ? 'Checkout return received. Your membership is not showing as active yet.'
+        : 'Checkout return received. Membership confirmation is unavailable; you can still send a message.');
+    }
+  }
+
+  // The existing history loader has tier-specific filters. An unknown display
+  // lookup must not silently apply its basic-tier history filter.
+  if (result.tier !== null) {
+    await nexarLoadHistory();
+    if (!isCurrent()) return;
+    nexarState.hydrated = true;
+  }
+
+  // Focus input on desktop only (mobile: avoid keyboard pop).
   if (window.innerWidth > 768) {
     const ta = document.getElementById('nexar-input');
-    if (ta) setTimeout(() => ta.focus(), 120);
+    if (ta) setTimeout(() => { if (isCurrent()) ta.focus(); }, 120);
   }
 }
 
 // -- TIER + USAGE DISPLAY ---------------------------------------------
 async function nexarRefreshTier() {
-  if (!sb || !currentUser) return;
+  // This lookup updates presentation only. It never disables the composer or
+  // sends a message; the unchanged chat endpoint checks each actual request.
+  const render = (tier, remaining, pending = false, pendingTier = null) => {
+    // Preserve a same-account confirmed tier only while checking. Existing
+    // Pipeline UI reads this field; the badge can show checking independently.
+    nexarState.tier = pending ? pendingTier : tier;
+    nexarState.remainingToday = remaining;
+    const isPaid = tier === 'pro';
+    const pill = document.getElementById('nexar-tier-pill');
+    const label = document.getElementById('nexar-tier-label');
+    const sub = document.getElementById('nexar-sub-line');
+    const usage = document.getElementById('nexar-usage');
+    const usageText = document.getElementById('nexar-usage-text');
+    const banner = document.getElementById('nexar-upgrade-banner');
+    if (pill) pill.classList.toggle('pro', isPaid);
+    if (label) label.textContent = isPaid ? 'PRO · UNLIMITED' : tier === 'basic'
+      ? 'BASIC · FREE' : pending ? 'CHECKING MEMBERSHIP' : 'MEMBERSHIP UNCONFIRMED';
+    if (sub) sub.textContent = isPaid ? 'AI OPERATOR · ONLINE' : tier === 'basic'
+      ? 'AI OPERATOR · GUIDANCE MODE' : pending
+        ? 'Checking your membership. You can still send a message.'
+        : "Can't confirm membership right now. You can still send a message, or reopen NEXAR to retry.";
+    if (usage) usage.style.display = tier === 'basic' ? 'inline-flex' : 'none';
+    if (usageText) usageText.textContent = tier === 'basic'
+      ? remaining === null ? 'USAGE UNAVAILABLE' : `${remaining} / 5 LEFT TODAY` : '';
+    if (banner) banner.style.display = tier === 'basic' && remaining === 0 ? 'block' : 'none';
+  };
 
-  // Read effective status via RPC (handles auto-downgrade on expiry)
-  const { data: status } = await sb.rpc('nexar_effective_status', { uid: currentUser.id });
-  const isPaid = status === 'active' || status === 'trialing';
-  nexarState.tier = isPaid ? 'pro' : 'basic';
-
-  // Usage count for free tier
-  let used = 0;
-  if (!isPaid) {
-    const { data: cnt } = await sb.rpc('nexar_today_msg_count', { uid: currentUser.id });
-    used = Number(cnt ?? 0);
-    nexarState.remainingToday = Math.max(0, 5 - used);
-  } else {
-    nexarState.remainingToday = null;
+  // Auth events invalidate in-flight lookups before the app's delayed logout
+  // reload. The callback performs no asynchronous auth calls.
+  const isDemo = String(currentUser?.id || '').startsWith('demo-');
+  if (!isDemo && sb && nexarState.authClient !== sb) {
+    nexarState.authSubscription?.unsubscribe();
+    nexarState.authVersion++;
+    nexarState.confirmedMembership = null;
+    nexarState.authClient = sb;
+    nexarState.authSignedOut = false;
+    nexarState.authUserId = null;
+    const authClient = sb;
+    const { data } = sb.auth.onAuthStateChange((event, session) => {
+      if (nexarState.authClient !== authClient) return;
+      if (session?.user?.id) nexarState.authUserId = session.user.id;
+      if (event === 'SIGNED_OUT') nexarState.authUserId = null;
+      if (event === 'SIGNED_IN') nexarState.authSignedOut = false;
+      if (event === 'SIGNED_OUT' || (session?.user?.id &&
+          nexarState.displayUserId && session.user.id !== nexarState.displayUserId)) {
+        nexarState.authVersion++;
+        nexarState.confirmedMembership = null;
+        nexarState.tierRequest++;
+        nexarState.loadRequest++;
+        nexarState.authSignedOut = event === 'SIGNED_OUT';
+        nexarState.displayUserId = null;
+        nexarState.hydrated = false;
+        if (event === 'SIGNED_OUT') nexarState.welcomedAccounts.clear();
+        render(null, null);
+        const stream = document.getElementById('nexar-stream');
+        if (stream) stream.textContent = '';
+      }
+    });
+    nexarState.authSubscription = data?.subscription || null;
   }
 
-  // Update UI
-  const pill  = document.getElementById('nexar-tier-pill');
-  const label = document.getElementById('nexar-tier-label');
-  const sub   = document.getElementById('nexar-sub-line');
-  const usage = document.getElementById('nexar-usage');
-  const usageText = document.getElementById('nexar-usage-text');
-
-  if (pill && label) {
-    pill.classList.toggle('pro', isPaid);
-    label.textContent = isPaid ? 'PRO · UNLIMITED' : 'BASIC · FREE';
-  }
-  if (sub) sub.textContent = isPaid ? 'AI OPERATOR · ONLINE' : 'AI OPERATOR · GUIDANCE MODE';
-  if (usage) {
-    usage.style.display = isPaid ? 'none' : 'inline-flex';
-    if (usageText && !isPaid) {
-      usageText.textContent = `${nexarState.remainingToday} / 5 LEFT TODAY`;
+  const user = currentUser;
+  const userId = user?.id;
+  const client = sb;
+  const request = ++nexarState.tierRequest;
+  const confirmed = nexarState.confirmedMembership;
+  const sameConfirmedAccount = confirmed && confirmed.user === user && confirmed.userId === userId &&
+    confirmed.client === client && confirmed.authVersion === nexarState.authVersion;
+  if (!sameConfirmedAccount) nexarState.confirmedMembership = null;
+  const isCurrent = () => currentUser === user && currentUser?.id === userId &&
+    sb === client && nexarState.tierRequest === request && !nexarState.authSignedOut &&
+    (!nexarState.authUserId || nexarState.authUserId === userId);
+  if (nexarState.displayUserId !== userId) {
+    nexarState.hydrated = false;
+    if (nexarState.displayUserId !== null) {
+      const stream = document.getElementById('nexar-stream');
+      if (stream) stream.textContent = '';
     }
+    nexarState.displayUserId = userId || null;
   }
+  // Clear a stale paid badge or exhausted basic allowance immediately.
+  const canLookup = Boolean(!isDemo && client && userId && !nexarState.authSignedOut &&
+    (!nexarState.authUserId || nexarState.authUserId === userId));
+  const pendingTier = canLookup && sameConfirmedAccount ? confirmed.tier : null;
+  render(null, null, canLookup, pendingTier);
+  if (isDemo || !client) {
+    nexarState.confirmedMembership = null;
+    const label = document.getElementById('nexar-tier-label');
+    const sub = document.getElementById('nexar-sub-line');
+    if (label) label.textContent = isDemo ? 'DEMO' : 'CONNECTION UNAVAILABLE';
+    if (sub) sub.textContent = isDemo ? 'Sign in with a member account to use NEXAR.'
+      : "NEXAR can't connect right now. Reload the page to reconnect.";
+    return isDemo ? { userId, request, tier: null, demo: true } : null;
+  }
+  if (!canLookup) return null;
 
-  // Show upgrade banner if out of messages
-  const banner = document.getElementById('nexar-upgrade-banner');
-  if (banner) banner.style.display = (!isPaid && nexarState.remainingToday === 0) ? 'block' : 'none';
+  let tier = null;
+  let remaining = null;
+  try {
+    const response = await client.rpc('nexar_effective_status', { uid: userId });
+    if (!isCurrent()) return null;
+    const status = response?.data;
+    // Older deployed RPCs may return null for a member with no subscription.
+    // Preserve the non-paid -> basic contract, without treating errors or
+    // malformed responses as a membership result. This is display, not authority.
+    const validStatus = response && !response.error &&
+      (status === null || typeof status === 'string');
+    if (validStatus && (status === 'active' || status === 'trialing')) {
+      tier = 'pro';
+    } else if (validStatus) {
+      tier = 'basic';
+      // Membership is known even if the separate usage lookup is still pending.
+      nexarState.confirmedMembership = { tier, user, userId, client, authVersion: nexarState.authVersion };
+      render(tier, null);
+      try {
+        const count = await client.rpc('nexar_today_msg_count', { uid: userId });
+        if (!isCurrent()) return null;
+        if (!count?.error && Number.isSafeInteger(count?.data) && count.data >= 0) {
+          remaining = Math.max(0, 5 - count.data);
+        }
+      } catch (_) {
+        // Unknown usage is not a fresh allowance or an exhausted allowance.
+      }
+    }
+  } catch (_) {
+    // Unknown membership affects display only, never server-side access.
+  }
+  if (!isCurrent()) return null;
+  nexarState.confirmedMembership = tier === null ? null
+    : { tier, user, userId, client, authVersion: nexarState.authVersion };
+  render(tier, remaining);
+  return { userId, request, tier };
 }
-
 // -- HISTORY LOAD -----------------------------------------------------
 async function nexarLoadHistory() {
   const stream = document.getElementById('nexar-stream');
