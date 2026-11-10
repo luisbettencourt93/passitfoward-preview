@@ -2,6 +2,11 @@
   "name": "nexar-focused-tests",
   "private": true,
   "description": "Local tests for the NEXAR Pipeline permission and delete-request patch. They never connect to staging or production.",
-  "scripts": { "test": "node --test db.test.mjs ui.test.mjs" },
-  "devDependencies": { "jsdom": "^26.0.0", "pg": "^8.13.0" }
+  "scripts": {
+    "test": "node --test db.test.mjs ui.test.mjs send.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0",
+    "pg": "^8.13.0"
+  }
 }
