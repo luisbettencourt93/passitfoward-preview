@@ -2239,6 +2239,11 @@ body.light .nr-state-unread { color:#059669; }
 .np-icon-btn:hover { color: #2dd4a0; border-color: rgba(45, 212, 160, 0.4); }
 .np-icon-btn.danger:hover { color: #f0a4a4; border-color: rgba(239, 68, 68, 0.4); }
 
+.np-readonly {
+  display: none; flex-direction: column; gap: 10px; align-items: flex-start;
+  padding: 12px 14px; margin-bottom: 12px; border-radius: 8px;
+  border: 1px dashed rgba(148, 163, 184, 0.45); color: #cbd5e1; font-size: 13px; line-height: 1.45;
+}
 .np-empty {
   text-align: center; padding: 50px 20px;
   display: flex; flex-direction: column;
@@ -4762,7 +4767,7 @@ body.light .nr-state-unread { color:#059669; }
             <button class="np-chip"        data-status="Offered"   onclick="nexarPipelineFilter('Offered')">OFFERED</button>
             <button class="np-chip"        data-status="Rejected"  onclick="nexarPipelineFilter('Rejected')">REJECTED</button>
           </div>
-          <button class="np-add-btn" onclick="nexarPipelineAddOpen()">+ ADD JOB</button>
+          <button class="np-add-btn" id="np-add-btn" onclick="nexarPipelineAddOpen()">+ ADD JOB</button>
         </div>
 
         <div class="np-form" id="np-form" style="display:none;">
@@ -4785,6 +4790,11 @@ body.light .nr-state-unread { color:#059669; }
             <button class="np-btn ghost" onclick="nexarPipelineAddCancel()">CANCEL</button>
             <button class="np-btn primary" onclick="nexarPipelineSave()">SAVE</button>
           </div>
+        </div>
+
+        <div class="np-readonly" id="np-readonly" role="status">
+          <div id="np-readonly-text"></div>
+          <button class="nexar-upgrade-btn" id="np-readonly-upgrade" onclick="nexarStartCheckout()">Upgrade to NEXAR Pro</button>
         </div>
 
         <div class="np-list" id="np-list"></div>
@@ -18707,6 +18717,7 @@ async function nexarLoadHistory() {
 
   if (!data || data.length === 0) {
     renderNexarEmpty();
+    try { await nexarRestorePendingConfirm(); } catch (_) {}
     return;
   }
 
@@ -18714,6 +18725,7 @@ async function nexarLoadHistory() {
   data.reverse().forEach(m => renderNexarMessage(m.role, m.content, /*animate=*/false));
   scrollNexarBottom(/*smooth=*/false);
   requestAnimationFrame(() => { try { nexarUpdateFabs(); } catch(_) {} });
+  try { await nexarRestorePendingConfirm(); } catch (_) {}
 }
 
 function renderNexarEmpty() {
@@ -18838,49 +18850,155 @@ function nexarRenderConfirmCard(payload) {
     const stream = document.getElementById('nexar-stream');
     if (!stream) return;
     if (!payload?.action_id) return;
+    if (stream.querySelector('.nexar-confirm-card[data-action-id="' + String(payload.action_id).replace(/[^0-9a-f-]/gi, '') + '"]')) return;
 
     const card = document.createElement('div');
     card.className = 'nexar-confirm-card';
     card.dataset.actionId = payload.action_id;
-    card.dataset.consumed = '0';
+    card.dataset.state = 'open';            // open | sending | uncertain | resolved
+    card.dataset.expiresAt = payload.expires_at || '';
 
     const head = document.createElement('div');
     head.className = 'ncc-head';
-    head.textContent = 'CONFIRM ACTION';
+    head.textContent = 'CONFIRM DELETE';
     card.appendChild(head);
 
     const body = document.createElement('div');
     body.className = 'ncc-body';
-    body.textContent = payload.preview || 'Confirm this action?';
+    body.textContent = payload.preview || 'Delete this job?';
     card.appendChild(body);
 
     const meta = document.createElement('div');
     meta.className = 'ncc-meta';
-    meta.textContent = 'Server-enforced two-step. Expires in 10 minutes.';
+    const exp = payload.expires_at ? new Date(payload.expires_at) : null;
+    meta.textContent = 'Nothing is deleted until you choose.' + ((exp && !isNaN(exp))
+      ? ' This request expires at ' + exp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.' : '');
     card.appendChild(meta);
 
     const actions = document.createElement('div');
     actions.className = 'ncc-actions';
-
-    const noBtn = document.createElement('button');
-    noBtn.className = 'ncc-btn ncc-no';
-    noBtn.textContent = 'CANCEL';
-    noBtn.onclick = () => nexarConfirmAction(payload.action_id, false, card);
-
-    const yesBtn = document.createElement('button');
-    yesBtn.className = 'ncc-btn ncc-yes';
-    yesBtn.textContent = 'CONFIRM DELETE';
-    yesBtn.onclick = () => nexarConfirmAction(payload.action_id, true, card);
-
-    actions.appendChild(noBtn);
-    actions.appendChild(yesBtn);
     card.appendChild(actions);
+    nexarConfirmSetButtons(card, [
+      ['KEEP JOB', 'ncc-no', () => nexarConfirmAction(payload.action_id, false, card)],
+      ['DELETE', 'ncc-yes', () => nexarConfirmAction(payload.action_id, true, card)],
+    ]);
 
     stream.appendChild(card);
     stream.scrollTop = stream.scrollHeight;
+
+    // A new request closes older open requests for the same job on the server.
+    // Re-read every other unresolved card so it shows what the server recorded.
+    stream.querySelectorAll('.nexar-confirm-card').forEach(c => {
+      if (c !== card && c.dataset.state === 'open') nexarConfirmResolve(c, { quietIfOpen: true });
+    });
   } catch (e) {
     console.warn('[nexar confirm card]', e);
   }
+}
+
+// Replace the card's buttons. defs: [label, className, onClick][]
+function nexarConfirmSetButtons(card, defs) {
+  const actions = card.querySelector('.ncc-actions');
+  if (!actions) return;
+  actions.textContent = '';
+  actions.style.display = defs.length ? '' : 'none';
+  defs.forEach(([label, cls, fn]) => {
+    const b = document.createElement('button');
+    b.className = 'ncc-btn ' + cls;
+    b.textContent = label;
+    b.onclick = fn;
+    actions.appendChild(b);
+  });
+}
+
+function nexarConfirmShow(card, state, bodyText, metaText, defs) {
+  card.dataset.state = state;
+  const body = card.querySelector('.ncc-body');
+  const meta = card.querySelector('.ncc-meta');
+  if (body) body.textContent = bodyText;
+  if (meta) meta.textContent = metaText || '';
+  nexarConfirmSetButtons(card, defs || []);
+  card.classList.toggle('ncc-resolved', state === 'resolved');
+}
+
+// Text for an outcome the server recorded on the request. Returns null when the
+// request is still open. Pure: no DOM, no network.
+function nexarConfirmOutcomeText(row, nowMs) {
+  if (!row) return null;
+  const o = row.outcome;
+  if (o === 'deleted')        return ['Deleted.', 'The server confirmed this deletion.'];
+  if (o === 'cancelled')      return ['Request cancelled.', 'This request did not delete the job.'];
+  if (o === 'already_gone')   return ['Already removed.', 'The job was not in your Pipeline when this request ran.'];
+  if (o === 'target_changed') return ['This job changed after you asked.', 'The request was closed and did not delete the job. Ask again to delete it.'];
+  if (o === 'superseded')     return ['Replaced by a newer request.', 'This request did not delete the job. Use the latest request.'];
+  if (o === 'expired')        return ['Request expired.', 'This request did not delete the job. Ask again if you still want to delete it.'];
+  if (row.consumed_at)        return ['This request is closed.', 'Check your Pipeline for the current state.'];
+  const exp = row.expires_at ? new Date(row.expires_at).getTime() : NaN;
+  if (!isNaN(exp) && exp <= nowMs) return ['Request expired.', 'This request did not delete the job. Ask again if you still want to delete it.'];
+  return null;
+}
+
+// Read the request the server holds and show its recorded outcome. The request
+// row is the only source of truth: an unchanged job does not prove an answer
+// that is still travelling has stopped, so the card stays "not confirmed" until
+// the request is recorded as answered or its expiry has passed.
+async function nexarConfirmResolve(card, opts) {
+  const o = opts || {};
+  const id = card.dataset.actionId;
+  let row = null, failed = false;
+  try {
+    const { data, error } = await sb.from('nexar_pending_actions')
+      .select('id, consumed_at, expires_at, outcome')
+      .eq('id', id).maybeSingle();
+    if (error) failed = true; else row = data;
+  } catch (_) { failed = true; }
+
+  const again = ['CHECK AGAIN', 'ncc-no', () => nexarConfirmResolve(card)];
+  if (failed) {
+    if (o.quietIfOpen) return;
+    nexarConfirmShow(card, 'uncertain', 'Could not check this request.',
+      'We do not know yet whether the job was deleted.', [again]);
+    return;
+  }
+  if (!row) {
+    nexarConfirmShow(card, 'resolved', 'This request is closed.', 'Check your Pipeline for the current state.');
+    return;
+  }
+  const text = nexarConfirmOutcomeText(row, Date.now());
+  if (text) {
+    nexarConfirmShow(card, 'resolved', text[0], text[1]);
+    if (row.outcome === 'deleted' || row.outcome === 'already_gone') {
+      try { await nexarPipelineLoad(); nexarPipelineRender(); } catch (_) {}
+    }
+    return;
+  }
+  if (o.quietIfOpen) return;               // still open and nobody answered: leave it
+  // Open on the server, but an answer may still be on its way.
+  const sent = card.dataset.sentAccept;
+  const defs = [again];
+  if (sent === 'true' || sent === 'false') {
+    // Re-sending the SAME answer is safe: the server accepts one answer per
+    // request and refuses if the job changed or the request was replaced.
+    defs.push([sent === 'true' ? 'SEND DELETE AGAIN' : 'SEND KEEP AGAIN', sent === 'true' ? 'ncc-yes' : 'ncc-no',
+      () => nexarConfirmAction(id, sent === 'true', card)]);
+  }
+  nexarConfirmShow(card, 'uncertain', 'Not confirmed yet.',
+    'Your answer may still be on its way. We do not know yet whether the job was deleted.', defs);
+}
+
+// After a reload: bring back delete requests that are still open on the server.
+async function nexarRestorePendingConfirm() {
+  if (!sb || !currentUser) return;
+  const { data, error } = await sb.from('nexar_pending_actions')
+    .select('id, preview, expires_at, action_type')
+    .eq('user_id', currentUser.id)
+    .eq('action_type', 'delete_pipeline')
+    .is('consumed_at', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('created_at', { ascending: true })
+    .limit(5);
+  if (error || !Array.isArray(data)) return;
+  data.forEach(r => nexarRenderConfirmCard({ action_id: r.id, preview: r.preview, expires_at: r.expires_at, action_type: r.action_type }));
 }
 
 function nexarEscapeHtml(s) {
@@ -18929,11 +19047,12 @@ function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
   
 async function nexarRenderLatestDraftFromDb() {
   try {
-    if (typeof sb === 'undefined') return;
+    if (typeof sb === 'undefined' || !sb || !currentUser) return;
 
     const { data, error } = await sb
       .from('nexar_matches')
-      .select('id, draft_text, opportunity_id, status')
+      .select('id, draft_text, opportunity_id, status, opportunities(poster_handle)')
+      .eq('user_id', currentUser.id)
       .eq('status', 'drafted')
       .not('draft_text', 'is', null)
       .order('created_at', { ascending: false })
@@ -18946,86 +19065,74 @@ async function nexarRenderLatestDraftFromDb() {
     if (window.__nexarLastDraftRenderKey === renderKey) return;
     window.__nexarLastDraftRenderKey = renderKey;
 
-    nexarRenderDraftBlock(
-      data.draft_text,
-      '@similoluwaoshoisreal',
-      data.id
-    );
+    // Label with the poster of THIS match's opportunity; the block falls back to
+    // "opportunity poster" when the handle is not available.
+    nexarRenderDraftBlock(data.draft_text, data.opportunities?.poster_handle || '', data.id);
   } catch (e) {
     console.warn('[nexar latest draft render]', e);
   }
 }
-  async function nexarConfirmAction(action_id, accept, card) {
-  if (!card || card.dataset.consumed === '1') return;
-  card.dataset.consumed = '1';
-  // Disable both buttons immediately to prevent double-click
-  const btns = card.querySelectorAll('.ncc-btn');
-  btns.forEach(b => { b.disabled = true; b.style.opacity = '0.5'; });
+async function nexarConfirmAction(action_id, accept, card) {
+  if (!card || card.dataset.state === 'sending' || card.dataset.state === 'resolved') return;
+  // After an answer has been sent, only the same answer may be sent again.
+  const sent = card.dataset.sentAccept;
+  if ((sent === 'true' || sent === 'false') && String(accept) !== sent) return;
+  card.dataset.sentAccept = String(accept);
+  nexarConfirmShow(card, 'sending', accept ? 'Deleting…' : 'Cancelling…', 'Waiting for the server.');
 
+  let resp = null, result = null;
   try {
     if (!sb) throw new Error('No supabase client');
     const { data: sess } = await sb.auth.getSession();
     const token = sess?.session?.access_token;
     if (!token) throw new Error('Not authenticated');
 
-    const resp = await fetch(
-      'https://liujbjfjdycacmaujawu.supabase.co/functions/v1/nexar-confirm-action',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + token,
-          'Content-Type':  'application/json',
-        },
-        body: JSON.stringify({ action_id, accept }),
-      }
-    );
+    // Same environment as every other NEXAR call (was a fixed address).
+    resp = await fetch(`${NEXAR_FN_BASE}/nexar-confirm-action`, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({ action_id, accept }),
+    });
+    result = await resp.json().catch(() => null);
+  } catch (e) {
+    console.error('[nexarConfirmAction]', e);
+  }
 
-    const result = await resp.json().catch(() => ({}));
-
-    if (!resp.ok || !result.ok) {
-      const msg = result?.error || 'confirm_failed';
-      showToast('Action failed: ' + msg);
-      // Update card to show failure
-      const body = card.querySelector('.ncc-body');
-      if (body) body.textContent = `❌ Failed: ${msg}`;
-      const actions = card.querySelector('.ncc-actions');
-      if (actions) actions.style.display = 'none';
+  // A recorded outcome is the only thing that settles this card.
+  if (resp && resp.ok && result && result.ok === true) {
+    if (result.action === 'deleted') {
+      const t = result.target || {};
+      nexarConfirmShow(card, 'resolved', `Deleted: ${t.title || 'job'}${t.company ? ' @ ' + t.company : ''}`, 'The server confirmed this deletion.');
+      showToast('Deleted');
+    } else if (result.action === 'cancelled') {
+      nexarConfirmShow(card, 'resolved', 'Request cancelled.', 'This request did not delete the job.');
+    } else if (result.action === 'already_gone') {
+      nexarConfirmShow(card, 'resolved', 'Already removed.', 'The job was not in your Pipeline when this request ran.');
+    } else {
+      await nexarConfirmResolve(card);
       return;
     }
-
-    // Success — update card to show outcome
-    const body = card.querySelector('.ncc-body');
-    const actions = card.querySelector('.ncc-actions');
-    const meta = card.querySelector('.ncc-meta');
-
-    if (result.action === 'cancelled') {
-      if (body) body.textContent = '⊘ Cancelled. No changes made.';
-      if (meta) meta.textContent = 'You declined the action.';
-      showToast('Cancelled');
-    } else if (result.action === 'deleted') {
-      const t = result.target;
-      if (body) body.textContent = `✓ Deleted: ${t?.title || 'entry'} @ ${t?.company || ''}`;
-      if (meta) meta.textContent = 'Action complete.';
-      showToast(`✓ Deleted ${t?.title || 'entry'}`);
-    } else if (result.action === 'already_gone') {
-      if (body) body.textContent = '⊘ Entry was already removed.';
-      showToast('Already removed');
-    }
-
-    if (actions) actions.style.display = 'none';
-    card.classList.add('ncc-resolved');
-
-    // Refresh the pipeline cache so the UI reflects deletion
-    if (typeof nexarPipelineLoad === 'function') {
+    if (result.action !== 'cancelled' && typeof nexarPipelineLoad === 'function') {
       await nexarPipelineLoad();
       if (typeof nexarPipelineRender === 'function') nexarPipelineRender();
     }
-  } catch (e) {
-    console.error('[nexarConfirmAction]', e);
-    showToast('Action failed: network error');
-    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
-    card.dataset.consumed = '0';
+    return;
   }
+
+  if (resp && result && result.error === 'target_changed') {
+    const c = result.current || {};
+    nexarConfirmShow(card, 'resolved', 'This job changed after you asked.',
+      `Now: ${c.title || 'job'}${c.company ? ' @ ' + c.company : ''}${c.status ? ' (' + c.status + ')' : ''}. ` +
+      'The request was closed and did not delete the job. Ask again to delete it.');
+    return;
+  }
+
+  // No response, a server error, or "already answered": read what the server
+  // recorded instead of guessing. Never re-enable Keep/Delete blindly.
+  await nexarConfirmResolve(card);
 }
   function nexarHandleToolCall(payload) {
   // Fired before tool executes — show subtle indicator
@@ -19900,6 +20007,8 @@ async function nexarComputePipelineReminders() {
   }
 }
 let _pipelineFilter = 'all';
+let _pipelineCanWrite = false;    // true only for a confirmed NEXAR Pro member (server enforces the same rule)
+let _pipelineLoadFailed = false;
 let _pipelineFocusMode = false;   // Follow-up Focus Mode active?
 let _pipelineFocusIds = [];       // pipeline_ids of stale entries to highlight
 
@@ -19925,19 +20034,32 @@ async function nexarSwitchView(view) {
 }
 
 async function nexarPipelineRefresh() {
-  const isPro = (typeof nexarState !== 'undefined') && nexarState.tier === 'pro';
+  const tier = (typeof nexarState !== 'undefined') ? nexarState.tier : null;   // 'pro' | 'basic' | null (unknown)
   const lockedEl = document.getElementById('nexar-pipeline-locked');
   const proEl    = document.getElementById('nexar-pipeline-pro');
   if (!lockedEl || !proEl) return;
 
-  if (!isPro) {
-    lockedEl.style.display = 'flex';
-    proEl.style.display = 'none';
-    return;
-  }
-  lockedEl.style.display = 'none';
-  proEl.style.display = 'flex';
+  // Adding and editing need NEXAR Pro. Every member keeps read and delete
+  // access to their own jobs, so the list is always loaded.
+  _pipelineCanWrite = tier === 'pro';
   await nexarPipelineLoad();
+
+  const showLocked = tier === 'basic' && !_pipelineLoadFailed && _pipelineCache.length === 0;
+  lockedEl.style.display = showLocked ? 'flex' : 'none';
+  proEl.style.display = showLocked ? 'none' : 'flex';
+  if (showLocked) return;
+
+  const addBtn = document.getElementById('np-add-btn');
+  const ro     = document.getElementById('np-readonly');
+  const roText = document.getElementById('np-readonly-text');
+  const roUp   = document.getElementById('np-readonly-upgrade');
+  if (addBtn) addBtn.style.display = _pipelineCanWrite ? '' : 'none';
+  if (!_pipelineCanWrite) nexarPipelineAddCancel();
+  if (ro) ro.style.display = _pipelineCanWrite ? 'none' : 'flex';
+  if (roText) roText.textContent = tier === 'basic'
+    ? 'Your jobs are read-only. You can still view and delete them. Adding and editing jobs is part of NEXAR Pro.'
+    : "We can't confirm your membership right now, so your jobs are read-only. You can still view and delete them.";
+  if (roUp) roUp.style.display = tier === 'basic' ? '' : 'none';
   nexarPipelineRender();
 }
 
@@ -19949,11 +20071,13 @@ async function nexarPipelineLoad() {
       .select('id, title, company, status, notes, created_at, updated_at')
       .eq('user_id', currentUser.id)
       .order('updated_at', { ascending: false });
-    if (error) { console.error('[pipeline] load', error); _pipelineCache = []; return; }
+    if (error) { console.error('[pipeline] load', error); _pipelineCache = []; _pipelineLoadFailed = true; return; }
     _pipelineCache = data || [];
+    _pipelineLoadFailed = false;
   } catch (e) {
     console.error('[pipeline] load fail', e);
     _pipelineCache = [];
+    _pipelineLoadFailed = true;
   }
 }
 
@@ -20029,7 +20153,16 @@ function nexarPipelineRender() {
     list.appendChild(banner);
   }
 
-  if (!filtered.length) { empty.style.display = 'flex'; return; }
+  if (!filtered.length) {
+    const et = empty.querySelector('.np-empty-title');
+    const eb = empty.querySelector('.np-empty-body');
+    if (et) et.textContent = _pipelineLoadFailed ? 'Could not load your pipeline'
+      : (_pipelineCache.length ? 'No jobs with this status' : 'No jobs in your pipeline yet');
+    if (eb) eb.textContent = _pipelineLoadFailed ? 'Your jobs have not been changed. Reopen Pipeline to try again.'
+      : (_pipelineCache.length ? 'Your other jobs are still in your pipeline.' : (_pipelineCanWrite ? 'Click + ADD JOB to start tracking.' : ''));
+    empty.style.display = 'flex';
+    return;
+  }
   empty.style.display = 'none';
 
   for (const job of filtered) {
@@ -20100,7 +20233,7 @@ function nexarPipelineRender() {
     db.innerHTML = '<i class="fas fa-trash"></i>';
     db.onclick = () => nexarPipelineDelete(job.id);
 
-    btns.appendChild(eb);
+    if (_pipelineCanWrite) btns.appendChild(eb);
     btns.appendChild(db);
 
     actions.appendChild(meta);
@@ -20131,9 +20264,11 @@ function nexarPipelineRender() {
       delBtn.textContent = 'Delete';
       delBtn.onclick = () => nexarPipelineDelete(job.id);
 
-      fa.appendChild(draftBtn);
-      fa.appendChild(respBtn);
-      fa.appendChild(intBtn);
+      if (_pipelineCanWrite) {
+        fa.appendChild(draftBtn);
+        fa.appendChild(respBtn);
+        fa.appendChild(intBtn);
+      }
       fa.appendChild(delBtn);
 
       card.appendChild(fa);
@@ -20143,7 +20278,15 @@ function nexarPipelineRender() {
   }
 }
 
+// Shown when a write is refused. The database applies the same rule.
+function nexarPipelineWriteBlocked() {
+  if (_pipelineCanWrite) return false;
+  showToast('Adding and editing jobs needs NEXAR Pro');
+  return true;
+}
+
 function nexarPipelineAddOpen() {
+  if (nexarPipelineWriteBlocked()) return;
   const f = document.getElementById('np-form'); if (!f) return;
   document.getElementById('np-form-id').value = '';
   document.getElementById('np-form-title').value = '';
@@ -20155,6 +20298,7 @@ function nexarPipelineAddOpen() {
 }
 
 function nexarPipelineEditOpen(id) {
+  if (nexarPipelineWriteBlocked()) return;
   const job = _pipelineCache.find(j => j.id === id); if (!job) return;
   const f = document.getElementById('np-form'); if (!f) return;
   document.getElementById('np-form-id').value = job.id;
@@ -20179,11 +20323,15 @@ async function nexarPipelineSave() {
   if (!title)   { showToast('Job title required'); return; }
   if (!company) { showToast('Company required'); return; }
   if (!sb || !currentUser) return;
+  if (nexarPipelineWriteBlocked()) return;
   const payload = { title, company, status, notes };
   try {
     if (id) {
-      const { error } = await sb.from('nexar_pipeline').update(payload).eq('id', id).eq('user_id', currentUser.id);
+      // Ask for the changed row back: a refused or missed update returns no
+      // row and no error, and must not be reported as "Updated".
+      const { data: changed, error } = await sb.from('nexar_pipeline').update(payload).eq('id', id).eq('user_id', currentUser.id).select('id');
       if (error) throw error;
+      if (!Array.isArray(changed) || changed.length === 0) throw new Error('not saved. The job may have been removed, or your plan no longer allows editing');
       showToast('Updated');
     } else {
       payload.user_id = currentUser.id;
@@ -20197,7 +20345,8 @@ async function nexarPipelineSave() {
     nexarPipelineRender();
   } catch (e) {
     console.error('[pipeline] save', e);
-    showToast('Save failed: ' + (e?.message || 'unknown'));
+    showToast(e?.code === '42501' ? 'Save failed: adding and editing jobs needs NEXAR Pro' : 'Save failed: ' + (e?.message || 'unknown'));
+    if (e?.code === '42501') { try { await nexarRefreshTier(); await nexarPipelineRefresh(); } catch (_) {} }
   }
 }
 
@@ -20221,12 +20370,15 @@ async function nexarPipelineSetStatus(id, status) {
   if (!sb || !currentUser) return;
   const valid = ['Applied', 'Responded', 'Interview', 'Offered', 'Rejected'];
   if (valid.indexOf(status) === -1) return;
+  if (nexarPipelineWriteBlocked()) return;
   try {
-    const { error } = await sb.from('nexar_pipeline')
+    const { data: changed, error } = await sb.from('nexar_pipeline')
       .update({ status: status })
       .eq('id', id)
-      .eq('user_id', currentUser.id);
+      .eq('user_id', currentUser.id)
+      .select('id');
     if (error) throw error;
+    if (!Array.isArray(changed) || changed.length === 0) throw new Error('not saved. The job may have been removed, or your plan no longer allows editing');
     showToast('Marked ' + status);
     _pipelineFocusIds = _pipelineFocusIds.filter(function(fid) { return fid !== id; });
     if (_pipelineFocusIds.length === 0) _pipelineFocusMode = false;
