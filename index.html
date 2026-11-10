@@ -18980,7 +18980,12 @@ function nexarConfirmStore(userId) {
   return {
     ok,
     get(id) { try { const v = window.localStorage.getItem(key(id)); return (v === 'true' || v === 'false') ? v : null; } catch (_) { return null; } },
-    set(id, accept) { try { window.localStorage.setItem(key(id), String(accept)); return true; } catch (_) { return false; } },
+    // True only when the choice can be read back. A probe that works does not
+    // prove this particular write was kept.
+    set(id, accept) {
+      try { window.localStorage.setItem(key(id), String(accept)); } catch (_) {}
+      try { return window.localStorage.getItem(key(id)) === String(accept); } catch (_) { return false; }
+    },
     clear(id) { try { window.localStorage.removeItem(key(id)); } catch (_) {} },
   };
 }
@@ -19171,9 +19176,16 @@ async function nexarConfirmAction(action_id, accept, card) {
   const snap = nexarConfirmSnap();
   if (!nexarConfirmCardValid(card, snap)) return;
 
-  // Record the choice BEFORE sending, in the page and for a later reload.
+  // Save the choice BEFORE sending and make sure it really was saved. Without
+  // it, a reload could offer the opposite answer while this one is still
+  // running, so an answer that cannot be recorded is not sent at all.
+  if (!nexarConfirmStore(snap.userId).set(action_id, accept)) {
+    nexarConfirmShow(card, 'info', card.querySelector('.ncc-body')?.textContent || 'Delete this job?',
+      'Your answer was not sent. This browser could not save your choice, which is needed to keep this request safe after a reload. ' +
+      'Allow site storage for this site and reload, or delete the job from Pipeline.', []);
+    return;
+  }
   card.dataset.sentAccept = String(accept);
-  nexarConfirmStore(snap.userId).set(action_id, accept);
   card.dataset.seq = String((Number(card.dataset.seq) || 0) + 1);   // older reads are now out of date
   nexarConfirmShow(card, 'sending', accept ? 'Deleting…' : 'Cancelling…', 'Waiting for the server.');
 
