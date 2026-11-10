@@ -18698,6 +18698,7 @@ async function nexarLoadHistory() {
   if (!sb || !currentUser) return;
 
   const isPaid = nexarState.tier === 'pro';
+  const snap = nexarConfirmSnap();   // the account, connection and load this read belongs to
   // Fetch DESC + reverse so we always get the MOST RECENT N messages,
   // not the first N from all-time history.
   let q = sb.from('nexar_conversations')
@@ -18713,11 +18714,13 @@ async function nexarLoadHistory() {
   }
 
   const { data, error } = await q;
+  // The read may finish after a sign-out or account switch: draw nothing then.
+  if (!nexarConfirmSnapValid(snap) || nexarState.loadRequest !== snap.loadRequest) return;
   if (error) { console.error('history load', error); return; }
 
   if (!data || data.length === 0) {
     renderNexarEmpty();
-    try { await nexarRestorePendingConfirm(); } catch (_) {}
+    try { nexarShowInterruptedNote(); await nexarRestorePendingConfirm(); } catch (_) {}
     return;
   }
 
@@ -18725,7 +18728,7 @@ async function nexarLoadHistory() {
   data.reverse().forEach(m => renderNexarMessage(m.role, m.content, /*animate=*/false));
   scrollNexarBottom(/*smooth=*/false);
   requestAnimationFrame(() => { try { nexarUpdateFabs(); } catch(_) {} });
-  try { await nexarRestorePendingConfirm(); } catch (_) {}
+  try { nexarShowInterruptedNote(); await nexarRestorePendingConfirm(); } catch (_) {}
 }
 
 function renderNexarEmpty() {
@@ -19126,20 +19129,27 @@ function nexarRenderDraftBlock(draftText, posterHandle, matchId) {
   stream.scrollTop = stream.scrollHeight;
 }
   
-async function nexarRenderLatestDraftFromDb() {
+async function nexarRenderLatestDraftFromDb(guard) {
   try {
     if (typeof sb === 'undefined' || !sb || !currentUser) return;
+    // Bound to the account, connection and sign-in it started under, and to the
+    // caller's own guard when one is passed.
+    const snap = nexarConfirmSnap();
+    const stillValid = () => nexarConfirmSnapValid(snap) && (typeof guard !== 'function' || guard());
+    if (!stillValid()) return;
 
-    const { data, error } = await sb
+    const { data, error } = await snap.client
       .from('nexar_matches')
       .select('id, draft_text, opportunity_id, status, opportunities(poster_handle)')
-      .eq('user_id', currentUser.id)
+      .eq('user_id', snap.userId)
       .eq('status', 'drafted')
       .not('draft_text', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
+    // The read can finish after a sign-out or account switch.
+    if (!stillValid()) return;
     if (error || !data?.draft_text) return;
 
     const renderKey = `${data.id}:${data.draft_text.slice(0, 80)}`;
@@ -19237,7 +19247,10 @@ async function nexarConfirmAction(action_id, accept, card) {
   } catch (e) { console.warn('[nexar tool_call ui]', e); }
 }
 
-async function nexarHandleToolResult(payload) {
+async function nexarHandleToolResult(payload, guard) {
+// guard(): false once the account or sign-in that sent the message has changed.
+const sameAccount = () => (typeof guard !== 'function' || guard());
+if (!sameAccount()) return;
 console.log('[tool_result]', {
   name: payload?.name,
   ok: payload?.ok,
@@ -19279,8 +19292,8 @@ if (toolName === 'draft_opportunity_response' && toolOk) {
   window.__nexarSuppressDraftAssistantText = true;
 
   setTimeout(() => {
-    if (typeof nexarRenderLatestDraftFromDb === 'function') {
-      nexarRenderLatestDraftFromDb();
+    if (sameAccount() && typeof nexarRenderLatestDraftFromDb === 'function') {
+      nexarRenderLatestDraftFromDb(guard);
     }
   }, 350);
 }
@@ -19364,12 +19377,81 @@ if (payload?.name === 'update_match_status') {
     // Refresh pipeline cache + re-render if pipeline view exists
     if (typeof nexarPipelineLoad === 'function') {
       await nexarPipelineLoad();
+      if (!sameAccount()) return;
       if (typeof nexarPipelineRender === 'function') nexarPipelineRender();
     }
   } catch (e) { console.warn('[nexar tool_result ui]', e); }
 }
+// A message whose stream was cut short may still have been acted on by the
+// server. That stays "not known" for the member until they have checked.
+// Kept per account; survives a reload when the browser allows storage.
+const nexarInterruptedMem = new Map();
+function nexarMarkInterrupted(userId, toolName) {
+  if (!userId) return;
+  const v = JSON.stringify({ at: new Date().toISOString(), tool: toolName || null });
+  nexarInterruptedMem.set(userId, v);
+  try { window.localStorage.setItem('nexar.interrupted.' + userId, v); } catch (_) {}
+}
+function nexarReadInterrupted(userId) {
+  let v = null;
+  try { v = window.localStorage.getItem('nexar.interrupted.' + userId); } catch (_) {}
+  v = v || nexarInterruptedMem.get(userId) || null;
+  try { return v ? JSON.parse(v) : null; } catch (_) { return null; }
+}
+function nexarClearInterrupted(userId) {
+  nexarInterruptedMem.delete(userId);
+  try { window.localStorage.removeItem('nexar.interrupted.' + userId); } catch (_) {}
+}
+function nexarShowInterruptedNote() {
+  const stream = document.getElementById('nexar-stream');
+  if (!stream || !currentUser) return;
+  const userId = currentUser.id;
+  const info = nexarReadInterrupted(userId);
+  if (!info || stream.querySelector('.nexar-interrupted-note')) return;
+  const what = { update_pipeline_status: 'a status change', add_pipeline_entry: 'adding a job',
+    request_pipeline_delete: 'a delete request', update_user_skills: 'a skills update' }[info.tool] || (info.tool ? 'an action' : '');
+  const at = info.at ? new Date(info.at) : null;
+  const wrap = document.createElement('div');
+  wrap.className = 'nexar-msg assistant nexar-interrupted-note';
+  wrap.dataset.userId = userId;
+  const bubble = document.createElement('div');
+  bubble.className = 'nexar-bubble';
+  const text = document.createElement('div');
+  text.textContent = 'A message to NEXAR was interrupted' + ((at && !isNaN(at)) ? ' at ' + at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '') +
+    '. NEXAR may still have acted on it' + (what ? ' (it had started ' + what + ')' : '') +
+    '. We do not know whether that completed. Check your Pipeline before asking again.';
+  const btn = document.createElement('button');
+  btn.className = 'np-btn ghost';
+  btn.style.marginTop = '10px';
+  btn.textContent = 'I HAVE CHECKED';
+  btn.onclick = () => {
+    if (!currentUser || currentUser.id !== userId) return;
+    nexarClearInterrupted(userId);
+    wrap.remove();
+  };
+  bubble.appendChild(text);
+  bubble.appendChild(btn);
+  wrap.appendChild(bubble);
+  stream.appendChild(wrap);
+}
+
+let nexarSendSeq = 0;
+let nexarActiveSend = null;   // the send that currently owns the composer controls
+
+// Stop reading an abandoned send. The server may already have acted on it, so
+// once the request has gone out this is recorded as "not known" for its account.
+function nexarAbandonSend(send) {
+  if (!send || send.abandoned) return;
+  send.abandoned = true;
+  if (send.requested) nexarMarkInterrupted(send.snap.userId, send.tool);
+  try { if (send.controller) send.controller.abort(); } catch (_) {}
+  try { if (send.reader) send.reader.cancel().catch(() => {}); } catch (_) {}
+}
+
   async function nexarSend() {
-  if (nexarState.sending) return;
+  // One send at a time per sign-in. A send left over from another account or an
+  // earlier sign-in no longer owns the controls: it is abandoned, not waited for.
+  if (nexarState.sending && (!nexarActiveSend || nexarConfirmSnapValid(nexarActiveSend.snap))) return;
 
   const ta = document.getElementById('nexar-input');
   if (!ta) return;
@@ -19381,6 +19463,17 @@ if (payload?.name === 'update_match_status') {
     showNexarProModal();
     return;
   }
+
+  // Everything below belongs to this member, this connection and this sign-in.
+  const snap = nexarConfirmSnap();
+  if (!nexarConfirmSnapValid(snap)) return;
+  if (nexarActiveSend) nexarAbandonSend(nexarActiveSend);
+  const send = { id: ++nexarSendSeq, snap, requested: false, tool: null, toolSeen: false, reader: null, abandoned: false,
+    controller: (typeof AbortController === 'function') ? new AbortController() : null };
+  nexarActiveSend = send;
+  const sameAccount = () => nexarConfirmSnapValid(snap);
+  const live = () => nexarActiveSend === send && sameAccount();
+  const stop = () => nexarAbandonSend(send);
 
   // Optimistic render of user message
   renderNexarMessage('user', msg);
@@ -19396,6 +19489,7 @@ if (payload?.name === 'update_match_status') {
 
   let assistantBubble = null;
   let fullText = '';
+  let sawDone = false;
 
   const ensureBubble = () => {
     if (assistantBubble) return assistantBubble;
@@ -19423,11 +19517,16 @@ if (payload?.name === 'update_match_status') {
   };
 
   try {
-    const { data: sess } = await sb.auth.getSession();
+    const { data: sess } = await snap.client.auth.getSession();
+    if (!live()) return;
     const token = sess?.session?.access_token;
 
     if (!token) throw new Error('no_session');
 
+    const context = await ccBuildNexarContext();
+    if (!live()) return;   // never send one member's message with another member's context or session
+
+    send.requested = true;
     const resp = await fetch(NEXAR_CHAT_URL, {
       method: 'POST',
       headers: {
@@ -19435,14 +19534,18 @@ if (payload?.name === 'update_match_status') {
         'Authorization': `Bearer ${token}`,
         'Accept': 'text/event-stream',
       },
-      body: JSON.stringify({ message: msg, client_context_version: 'v1', context: await ccBuildNexarContext() }),
+      body: JSON.stringify({ message: msg, client_context_version: 'v1', context }),
+      ...(send.controller ? { signal: send.controller.signal } : {}),
     });
+    if (!live()) { stop(); return; }
 
     // Rate-limit response
     if (resp.status === 429) {
+      send.requested = false;   // refused before anything ran
       hideNexarTyping();
       nexarState.remainingToday = 0;
       await nexarRefreshTier();
+      if (!live()) return;
       showNexarProModal();
       return;
     }
@@ -19451,8 +19554,7 @@ if (payload?.name === 'update_match_status') {
     const contentType = resp.headers.get('content-type') || '';
 
     if (!resp.ok || !contentType.includes('text/event-stream')) {
-      hideNexarTyping();
-
+      send.requested = false;   // the server answered without starting the reply or any action
       let errMsg = 'unexpected';
 
       try {
@@ -19462,18 +19564,22 @@ if (payload?.name === 'update_match_status') {
       } catch (_) {
         console.error('nexar-chat failed', resp.status);
       }
+      if (!live()) return;
 
+      hideNexarTyping();
       renderNexarMessage('assistant', `⚠ SYSTEM ERROR — ${errMsg}. Try again.`);
       return;
     }
 
     // SSE stream
     const reader = resp.body.getReader();
+    send.reader = reader;
     const decoder = new TextDecoder();
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
+      if (!live()) { stop(); return; }
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -19503,6 +19609,10 @@ if (payload?.name === 'update_match_status') {
           continue;
         }
 
+        // An earlier event in this batch may have waited. Apply nothing once
+        // the account, connection or sign-in has changed.
+        if (!live()) { stop(); return; }
+
         if (eventName === 'meta') {
           if (typeof payload.remaining_today === 'number') {
             nexarState.remainingToday = payload.remaining_today;
@@ -19530,6 +19640,8 @@ if (payload?.name === 'update_match_status') {
           }
 
         } else if (eventName === 'tool_call') {
+          send.tool = payload?.name || 'action';   // started; its result has not arrived yet
+          send.toolSeen = true;
           try {
             nexarHandleToolCall(payload);
           } catch (e) {
@@ -19537,11 +19649,13 @@ if (payload?.name === 'update_match_status') {
           }
 
         } else if (eventName === 'tool_result') {
+          send.tool = null;
           try {
-            await nexarHandleToolResult(payload);
+            await nexarHandleToolResult(payload, sameAccount);
           } catch (e) {
             console.warn('tool_result handler', e);
           }
+          if (!live()) { stop(); return; }
 
         } else if (eventName === 'confirm_required') {
           try {
@@ -19551,53 +19665,84 @@ if (payload?.name === 'update_match_status') {
           }
 
         } else if (eventName === 'done') {
+          sawDone = true;
           try {
             nexarUpdateFabs();
           } catch (_) {}
 
           try {
-            await nexarRenderLatestDraftFromDb();
+            await nexarRenderLatestDraftFromDb(sameAccount);
           } catch (_) {}
+          if (!live()) { stop(); return; }
 
         } else if (eventName === 'error') {
           const bubble = ensureBubble();
+          // After an action has started, "try again" could repeat it.
+          const next = send.toolSeen ? ' An action had started for this message. Check your Pipeline before asking again.' : ' Try again.';
 
           if (bubble) {
-            bubble.innerHTML = nexarFormat(fullText + `\n\n⚠ STREAM ERROR — ${payload.error || 'unknown'}`);
+            bubble.innerHTML = nexarFormat(fullText + `\n\n⚠ STREAM ERROR — ${payload.error || 'unknown'}.` + (send.toolSeen ? next : ''));
           } else {
-            renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}. Try again.`);
+            renderNexarMessage('assistant', `⚠ STREAM ERROR — ${payload.error || 'unknown'}.${next}`);
           }
         }
       }
     }
 
+    // The stream closed without the server's closing event: it was cut short.
+    if (!sawDone) throw new Error('stream ended early');
+
+    // The server finished this message. Nothing is left running for it.
+    send.requested = false;
+
     // Safety: if stream ended with no content, show a friendly error
     if (!fullText) {
       hideNexarTyping();
-      renderNexarMessage('assistant', '⚠ SYSTEM ERROR — empty response. Try again.');
+      renderNexarMessage('assistant', send.toolSeen
+        ? '⚠ NEXAR returned no reply text. An action ran for this message. Check your Pipeline before asking again.'
+        : '⚠ SYSTEM ERROR — empty response. Try again.');
     }
 
   } catch (e) {
+    // Not this member's view any more: draw nothing. stop() records the open
+    // outcome against the account that sent the message.
+    if (!live()) { stop(); return; }
+
     hideNexarTyping();
 
-    if (assistantBubble) {
-      assistantBubble.innerHTML = nexarFormat(fullText + `\n\n⚠ CONNECTION LOST — ${String(e.message || e)}`);
-    } else {
+    if (!send.requested) {
+      // Failed before anything was sent.
       renderNexarMessage('assistant', `⚠ CONNECTION ERROR — ${String(e.message || e)}. Try again.`);
+    } else {
+      // Sent, then cut short. The server may still act on it, so the outcome is
+      // not known: say so, keep it recorded, and do not suggest sending again.
+      nexarMarkInterrupted(snap.userId, send.tool);
+      if (assistantBubble) assistantBubble.innerHTML = nexarFormat(fullText + '\n\n⚠ CONNECTION LOST');
+      const sub = document.getElementById('nexar-sub-line');
+      if (sub && sub.dataset.toolBusy) { sub.textContent = 'AI OPERATOR · ONLINE'; delete sub.dataset.toolBusy; }
+      nexarShowInterruptedNote();
     }
 
     console.error('nexar send failed', e);
 
   } finally {
-    nexarState.sending = false;
+    // Only the send that still owns the controls may reset them. A send that was
+    // replaced by a newer one must not re-enable the newer one's controls.
+    if (nexarActiveSend === send) {
+      nexarActiveSend = null;
+      nexarState.sending = false;
+      hideNexarTyping();
 
-    const btn = document.getElementById('nexar-send-btn');
-    if (btn) btn.disabled = false;
+      const btn = document.getElementById('nexar-send-btn');
+      if (btn) btn.disabled = false;
 
-    requestAnimationFrame(() => {
-      try { scrollNexarBottom(); } catch (_) {}
-      try { nexarUpdateFabs(); } catch (_) {}
-    });
+      if (sameAccount()) {
+        requestAnimationFrame(() => {
+          try { scrollNexarBottom(); } catch (_) {}
+          try { nexarUpdateFabs(); } catch (_) {}
+        });
+      }
+    }
   }
 }
 // -- PRO UPGRADE FLOW -------------------------------------------------
