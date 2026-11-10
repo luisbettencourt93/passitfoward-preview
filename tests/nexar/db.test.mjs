@@ -38,7 +38,9 @@ const one = async (c, q, a) => (await c.query(q, a)).rows[0];
 async function addJob(who = 'pro', title = 'Product designer') {
   return (await pool.query(`insert into public.nexar_pipeline (user_id, handle, title, company) values ($1,'h',$2,'Lanternworks') returning id`, [U[who], title])).rows[0].id;
 }
-const request = (who, job) => as('service', (c) => one(c, `insert into public.nexar_pending_actions (user_id, action_type, target_id, preview) values ($1,'delete_pipeline',$2,'Delete?') returning id`, [U[who], job])).then(r => r.id);
+const request = (who, job, preview = 'Delete?') => as('service', (c) => one(c, `insert into public.nexar_pending_actions (user_id, action_type, target_id, preview) values ($1,'delete_pipeline',$2,$3) returning id`, [U[who], job, preview])).then(r => r.id);
+const settle = (who, id, client) => as(who, (c) => one(c, 'select public.nexar_settle_pending_action($1) as r', [id]), client).then(r => r.r);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const confirm = (who, id, accept) => as('service', (c) => one(c, `select public.nexar_confirm_pending_action($1,$2,$3) as r`, [id, U[who], accept])).then(r => r.r);
 const jobExists = async (id) => (await pool.query('select 1 from public.nexar_pipeline where id=$1', [id])).rowCount === 1;
 const outcome = async (id) => (await pool.query('select outcome, consumed_at from public.nexar_pending_actions where id=$1', [id])).rows[0];
@@ -220,13 +222,89 @@ test('a request made before the migration (no recorded job version) cannot delet
   assert.equal((await confirm('pro', id, true)).error, 'target_changed'); assert.ok(await jobExists(job));
 });
 
+// ---- Regression: review round 2 ---------------------------------------------------
+test('R3 the confirmation text and the expected version come from one reading of the job', async () => {
+  // The caller builds its text, the job is then edited, and only then is the request stored.
+  const job = await addJob('pro', 'Original title');
+  const stale = 'Delete "Original title" @ Lanternworks (Applied)?';
+  await as('pro', (c) => c.query(`update public.nexar_pipeline set title='Edited title' where id=$1`, [job]));
+  const id = await request('pro', job, stale);
+  const row = (await pool.query('select preview, target_snapshot from public.nexar_pending_actions where id=$1', [id])).rows[0];
+  assert.equal(row.preview, 'Delete "Edited title" @ Lanternworks (Applied)?', 'the stored text describes the job as stored');
+  assert.equal(row.target_snapshot.title, 'Edited title');
+  const r = await confirm('pro', id, true);
+  assert.equal(r.action, 'deleted'); assert.equal(r.preview, row.preview); assert.equal(r.target.title, 'Edited title');
+});
+test('R3 any change between the request and the answer is refused, even with an identical timestamp', async () => {
+  for (const change of [`title='Changed'`, `company='Changed'`, `status='Offered'`, `notes='Changed'`]) {
+    const job = await addJob(); const id = await request('pro', job);
+    const c = await pool.connect();
+    try {   // bypass the touch trigger so updated_at stays exactly as recorded
+      await c.query('begin'); await c.query(`set local session_replication_role = replica`);
+      await c.query(`update public.nexar_pipeline set ${change} where id=$1`, [job]); await c.query('commit');
+    } finally { c.release(); }
+    const same = (await pool.query('select p.updated_at = a.target_updated_at as same from public.nexar_pipeline p, public.nexar_pending_actions a where p.id=$1 and a.id=$2', [job, id])).rows[0].same;
+    assert.equal(same, true, 'timestamps are identical in this case');
+    const r = await confirm('pro', id, true);
+    assert.equal(r.error, 'target_changed', change); assert.ok(await jobExists(job));
+  }
+});
+test('R3 a request cannot be stored for a missing job or another member\'s job', async () => {
+  const other = await addJob('pro2');
+  await assert.rejects(request('pro', other), (e) => e.code === 'P0002');
+  await assert.rejects(request('pro', U.free), (e) => e.code === 'P0002');
+});
+test('R2 an answer still being processed after the deadline is reported as what it did, never as expired', async () => {
+  const job = await addJob(); const id = await request('pro', job);
+  await pool.query(`update public.nexar_pending_actions set expires_at = now() + interval '500 milliseconds' where id=$1`, [id]);
+  const holder = await pool.connect();
+  let answered = false, settled = false;
+  try {
+    await holder.query('begin'); await holder.query('select 1 from public.nexar_pipeline where id=$1 for update', [job]);   // hold the job
+    const answer = confirm('pro', id, true).then((r) => { answered = true; return r; });     // arrives in time, then waits
+    await sleep(900);                                                                         // the deadline passes
+    assert.equal(answered, false);
+    assert.equal((await pool.query('select outcome, expires_at < clock_timestamp() as past from public.nexar_pending_actions where id=$1', [id])).rows[0].past, true);
+    const check = settle('pro', id).then((r) => { settled = true; return r; });               // the member's check
+    await sleep(300);
+    assert.equal(settled, false, 'the check waits for the answer instead of declaring it expired');
+    await holder.query('commit');
+    const [a, s] = await Promise.all([answer, check]);
+    assert.equal(a.action, 'deleted'); assert.equal(s.outcome, 'deleted'); assert.equal(await jobExists(job), false);
+  } finally { await holder.query('rollback').catch(() => {}); holder.release(); }
+});
+test('R2 expiry is recorded only by the server, only for an unanswered request past its deadline, only for its owner', async () => {
+  const job = await addJob(); const id = await request('pro', job);
+  let s = await settle('pro', id);
+  assert.deepEqual([s.found, s.outcome, s.consumed_at], [true, null, null], 'an open request is left open');
+  assert.deepEqual(await settle('pro2', id), { found: false }); assert.deepEqual(await settle('free', id), { found: false });
+  await denied(settle('anon', id));
+  await pool.query(`update public.nexar_pending_actions set expires_at = now() - interval '1 second' where id=$1`, [id]);
+  assert.deepEqual(await settle('pro2', id), { found: false }); assert.equal((await outcome(id)).outcome, null, 'another member cannot expire it');
+  s = await settle('pro', id); assert.equal(s.outcome, 'expired');
+  const late = await confirm('pro', id, true);
+  assert.deepEqual([late.ok, late.error, late.outcome], [false, 'already_resolved', 'expired']); assert.ok(await jobExists(job));
+  const job2 = await addJob(); const id2 = await request('pro', job2); await confirm('pro', id2, false);
+  await pool.query(`update public.nexar_pending_actions set expires_at = now() - interval '1 second' where id=$1`, [id2]);
+  assert.equal((await settle('pro', id2)).outcome, 'cancelled', 'a recorded outcome is never rewritten');
+});
+test('R2 an answer that arrives after the server recorded expiry cannot delete (20 rounds, racing)', async () => {
+  for (let i = 0; i < 20; i++) {
+    const job = await addJob(); const id = await request('pro', job);
+    await pool.query(`update public.nexar_pending_actions set expires_at = now() - interval '1 millisecond' where id=$1`, [id]);
+    const [s, a] = await Promise.all([settle('pro', id), confirm('pro', id, true)]);
+    assert.equal(a.ok, false); assert.ok(await jobExists(job)); assert.equal((await outcome(id)).outcome, 'expired'); assert.ok(s.found);
+  }
+});
+
 // ---- Rollback -----------------------------------------------------------------
 test('the rollback scripts restore the previous rules, and the migrations re-apply', async () => {
   await pool.query('delete from public.nexar_pending_actions');
   await applyAll('rollback', '.down', [...MIG].reverse());
   await as('free', (c) => c.query('select * from public.generate_pipeline_reminders()'));
   await as('free', (c) => c.query(`insert into public.nexar_pipeline (user_id, handle, title, company) values ($1,'h','After rollback','Co')`, [U.free]));
-  assert.equal((await pool.query(`select count(*)::int n from information_schema.columns where table_name='nexar_pending_actions' and column_name in ('outcome','target_updated_at')`)).rows[0].n, 0);
+  assert.equal((await pool.query(`select count(*)::int n from information_schema.columns where table_name='nexar_pending_actions' and column_name in ('outcome','target_updated_at','target_snapshot')`)).rows[0].n, 0);
+  assert.equal((await pool.query(`select count(*)::int n from pg_proc where proname in ('nexar_settle_pending_action','nexar_confirm_pending_action','nexar_pipeline_snapshot','nexar_pending_action_prepare')`)).rows[0].n, 0);
   await applyAll('migrations', '', MIG);
   await denied(as('free', (c) => c.query(`insert into public.nexar_pipeline (user_id, handle, title, company) values ($1,'h','X','Y')`, [U.free])));
 });

@@ -22,7 +22,7 @@ function fn(name, src = html) {
   }
   throw new Error('unbalanced: ' + name);
 }
-const NAMES = ['nexarRenderConfirmCard', 'nexarConfirmSetButtons', 'nexarConfirmShow', 'nexarConfirmOutcomeText', 'nexarConfirmResolve',
+const NAMES = ['nexarRenderConfirmCard', 'nexarConfirmOpenButtons', 'nexarConfirmSnap', 'nexarConfirmSnapValid', 'nexarConfirmCardValid', 'nexarConfirmStore', 'nexarConfirmSetButtons', 'nexarConfirmShow', 'nexarConfirmOutcomeText', 'nexarConfirmResolve',
   'nexarRestorePendingConfirm', 'nexarConfirmAction', 'nexarRenderLatestDraftFromDb', 'nexarPipelineRefresh', 'nexarPipelineLoad',
   'nexarPipelineRender', 'nexarPipelineRelTime', 'nexarPipelineWriteBlocked', 'nexarPipelineAddOpen', 'nexarPipelineEditOpen',
   'nexarPipelineAddCancel', 'nexarPipelineSave', 'nexarPipelineSetStatus', 'nexarPipelineDelete'];
@@ -44,10 +44,13 @@ function fakeSb(backend, log) {
     } });
     return b;
   };
-  return { from, auth: { getSession: async () => ({ data: { session: { access_token: 'staging-token' } } }) } };
+  const rpc = (name, args) => { const q = { table: 'rpc:' + name, op: 'rpc', name, args }; log.push(q); return Promise.resolve().then(() => backend(q)); };
+  return { from, rpc, auth: { getSession: async () => ({ data: { session: { access_token: 'staging-token' } } }) } };
 }
 
-function page({ tier = 'pro', backend = () => ({ data: [], error: null }), fetchImpl } = {}) {
+function memoryStorage() { const m = new Map(); return { getItem: (k) => m.has(k) ? m.get(k) : null, setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); }, _m: m }; }
+const brokenStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); } };
+function page({ tier = 'pro', backend = () => ({ data: [], error: null }), fetchImpl, storage = memoryStorage(), userId = 'user-1' } = {}) {
   const dom = new JSDOM(`<div id="nexar-stream"></div>
     <div id="nexar-pipeline-locked" style="display:none"></div>
     <div id="nexar-pipeline-pro" style="display:none">
@@ -60,9 +63,9 @@ function page({ tier = 'pro', backend = () => ({ data: [], error: null }), fetch
   dom.window.Element.prototype.scrollIntoView = () => {};
   const log = [], toasts = [], fetches = [], drafts = [];
   const ctx = vm.createContext({
-    document: dom.window.document, window: {}, console: { ...console, error() {}, warn() {} }, setTimeout, Date, Promise, String, Array, JSON, isNaN,
-    confirm: () => true, showToast: (t) => toasts.push(t), currentUser: { id: 'user-1', handle: '@amara' },
-    NEXAR_FN_BASE: 'https://staging.example/functions/v1', nexarState: { tier },
+    document: dom.window.document, window: { localStorage: storage }, Number, console: { ...console, error() {}, warn() {} }, setTimeout, Date, Promise, String, Array, JSON, isNaN,
+    confirm: () => true, showToast: (t) => toasts.push(t), currentUser: { id: userId, handle: '@amara' },
+    NEXAR_FN_BASE: 'https://staging.example/functions/v1', nexarState: { tier, authVersion: 1, loadRequest: 1, authSignedOut: false, authUserId: userId },
     fetch: async (url, init) => { fetches.push({ url, body: JSON.parse(init.body), auth: init.headers.Authorization }); return fetchImpl(url, init); },
     nexarRenderDraftBlock: (text, handle, id) => drafts.push({ text, handle, id }),
     nexarStartCheckout() {}, nexarRefreshTier: async () => {},
@@ -74,7 +77,7 @@ function page({ tier = 'pro', backend = () => ({ data: [], error: null }), fetch
   const $ = (s) => dom.window.document.querySelector(s);
   const card = () => { const c = $('.nexar-confirm-card:last-child'); return { el: c, state: c.dataset.state, body: c.querySelector('.ncc-body').textContent,
     meta: c.querySelector('.ncc-meta').textContent, buttons: [...c.querySelectorAll('.ncc-btn')].map(b => b.textContent) }; };
-  return { ctx, dom, $, log, toasts, fetches, drafts, card, run: (code) => vm.runInContext(code, ctx) };
+  return { ctx, dom, $, log, toasts, fetches, drafts, card, storage, run: (code) => vm.runInContext(code, ctx) };
 }
 const res = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 const REQ = `{ action_id: '11111111-1111-4111-8111-111111111111', preview: 'Delete "Design system clean-up" @ Tidewater Studio (Applied)?', expires_at: new Date(Date.now() + 600000).toISOString() }`;
@@ -112,12 +115,14 @@ test('a restored draft is labelled with the poster of its own opportunity, never
 // ---- Delete confirmation -------------------------------------------------------
 test('recorded outcomes map to wording that claims only what the server recorded', () => {
   const p = page();
-  const t = (row) => p.run(`nexarConfirmOutcomeText(${JSON.stringify(row)}, Date.now())`);
+  const t = (row) => p.run(`nexarConfirmOutcomeText(${JSON.stringify(row)})`);
   assert.equal(t({ outcome: 'deleted', consumed_at: 'x' })[0], 'Deleted.');
   assert.match(t({ outcome: 'cancelled', consumed_at: 'x' })[1], /did not delete/);
   assert.match(t({ outcome: 'superseded', consumed_at: 'x' })[0], /Replaced/);
   assert.match(t({ outcome: 'target_changed', consumed_at: 'x' })[0], /changed after you asked/);
-  assert.match(t({ outcome: null, consumed_at: null, expires_at: new Date(Date.now() - 1000).toISOString() })[0], /expired/);
+  assert.equal(t({ outcome: null, consumed_at: null, expires_at: new Date(Date.now() - 3600000).toISOString() }), null, 'a passed deadline alone settles nothing');
+  assert.match(t({ outcome: 'expired', consumed_at: 'x' })[0], /expired/);
+  assert.equal(/Date\.now|new Date/.test(fn('nexarConfirmOutcomeText')), false, 'the outcome text never reads the clock');
   assert.equal(t({ outcome: null, consumed_at: null, expires_at: new Date(Date.now() + 60000).toISOString() }), null, 'an open request has no outcome');
   for (const o of ['cancelled', 'superseded', 'target_changed', 'expired']) assert.equal(/No changes|unchanged|still in your/i.test(t({ outcome: o, consumed_at: 'x' }).join(' ')), false);
 });
@@ -135,15 +140,15 @@ test('job changed after the request: nothing deleted, current job shown', async 
   assert.equal(p.card().state, 'resolved'); assert.match(p.card().meta, /\(Interview\)/); assert.match(p.card().meta, /did not delete/);
 });
 test('losing a competing answer: the card shows what the server recorded', async () => {
-  const p = page({ backend: (q) => q.table === 'nexar_pending_actions' ? { data: { id: 'x', consumed_at: 'now', outcome: 'cancelled' }, error: null } : jobsBackend(q),
+  const p = page({ backend: (q) => q.op === 'rpc' ? { data: { found: true, id: 'x', consumed_at: 'now', outcome: 'cancelled' }, error: null } : jobsBackend(q),
     fetchImpl: async () => res(409, { ok: false, error: 'already_resolved', outcome: 'cancelled' }) });
   p.run(`nexarRenderConfirmCard(${REQ})`);
   await p.run(`nexarConfirmAction('11111111-1111-4111-8111-111111111111', true, document.querySelector('.nexar-confirm-card'))`);
   assert.equal(p.card().state, 'resolved'); assert.equal(p.card().body, 'Request cancelled.');
 });
 test('no response: stays "not confirmed", never offers the opposite answer, then resolves from the record', async () => {
-  let row = { id: 'x', consumed_at: null, outcome: null, expires_at: new Date(Date.now() + 600000).toISOString() };
-  const p = page({ backend: (q) => q.table === 'nexar_pending_actions' ? { data: row, error: null } : jobsBackend(q), fetchImpl: async () => { throw new Error('network'); } });
+  let row = { found: true, id: 'x', consumed_at: null, outcome: null, expires_at: new Date(Date.now() + 600000).toISOString() };
+  const p = page({ backend: (q) => q.op === 'rpc' ? { data: row, error: null } : jobsBackend(q), fetchImpl: async () => { throw new Error('network'); } });
   p.run(`nexarRenderConfirmCard(${REQ})`);
   await p.run(`nexarConfirmAction('11111111-1111-4111-8111-111111111111', true, document.querySelector('.nexar-confirm-card'))`);
   let c = p.card();
@@ -158,13 +163,13 @@ test('no response: stays "not confirmed", never offers the opposite answer, then
   c = p.card(); assert.equal(c.state, 'resolved'); assert.equal(c.body, 'Deleted.');
 });
 test('the record cannot be read: says so and offers only "check again"', async () => {
-  const p = page({ backend: (q) => q.table === 'nexar_pending_actions' ? { data: null, error: { message: 'x' } } : jobsBackend(q), fetchImpl: async () => res(500, { error: 'confirm_failed' }) });
+  const p = page({ backend: (q) => q.op === 'rpc' ? { data: null, error: { message: 'x' } } : jobsBackend(q), fetchImpl: async () => res(500, { error: 'confirm_failed' }) });
   p.run(`nexarRenderConfirmCard(${REQ})`);
   await p.run(`nexarConfirmAction('11111111-1111-4111-8111-111111111111', true, document.querySelector('.nexar-confirm-card'))`);
   assert.equal(p.card().state, 'uncertain'); assert.deepEqual(p.card().buttons, ['CHECK AGAIN']); assert.match(p.card().meta, /do not know yet/);
 });
 test('a newer request marks the older card as replaced', async () => {
-  const p = page({ backend: (q) => q.table === 'nexar_pending_actions' ? { data: { id: 'old', consumed_at: 'now', outcome: 'superseded' }, error: null } : jobsBackend(q) });
+  const p = page({ backend: (q) => q.op === 'rpc' ? { data: { found: true, id: 'old', consumed_at: 'now', outcome: 'superseded' }, error: null } : jobsBackend(q) });
   p.run(`nexarRenderConfirmCard(${REQ})`);
   p.run(`nexarRenderConfirmCard({ action_id: '22222222-2222-4222-8222-222222222222', preview: 'Delete?', expires_at: new Date(Date.now() + 600000).toISOString() })`);
   await new Promise((r) => setTimeout(r, 20));
@@ -178,6 +183,127 @@ test('after a reload, open requests are restored once each', async () => {
   await p.run('nexarRestorePendingConfirm()'); await p.run('nexarRestorePendingConfirm()');
   assert.equal(p.dom.window.document.querySelectorAll('.nexar-confirm-card').length, 1);
   assert.equal(p.log[0].filters.user_id, 'user-1'); assert.equal(p.log[0].filters.consumed_at, null);
+});
+
+// ---- Regression: review round 2 ---------------------------------------------------
+const ID = '11111111-1111-4111-8111-111111111111';
+const deferred = () => { let resolve; const promise = new Promise((r) => { resolve = r; }); return { promise, resolve }; };
+const OPEN_ROWS = [{ id: ID, preview: 'Delete "A" @ B (Applied)?', expires_at: new Date(Date.now() + 300000).toISOString(), action_type: 'delete_pipeline' }];
+const cards = (p) => [...p.dom.window.document.querySelectorAll('.nexar-confirm-card')];
+
+test('R1 account switch while the restore read is in flight: nothing from the earlier member is shown', async () => {
+  for (const change of [
+    `currentUser = { id: 'user-2' }; nexarState.authVersion++; nexarState.authUserId = 'user-2';`,   // different member signed in
+    `nexarState.authVersion++; nexarState.authSignedOut = true;`,                                     // signed out
+    `sb = { ...sb };`,                                                                                // connection replaced
+    `nexarState.loadRequest++;`,                                                                      // a newer load started
+  ]) {
+    const gate = deferred();
+    const p = page({ backend: (q) => q.table === 'nexar_pending_actions' ? gate.promise : { data: [], error: null } });
+    const pending = p.run('nexarRestorePendingConfirm()');
+    await new Promise((r) => setTimeout(r, 5));
+    p.run(change + ` document.getElementById('nexar-stream').textContent = '';`);
+    gate.resolve({ data: OPEN_ROWS, error: null });
+    await pending;
+    assert.equal(cards(p).length, 0, 'rendered after: ' + change);
+  }
+  const ok = page({ backend: (q) => q.table === 'nexar_pending_actions' ? { data: OPEN_ROWS, error: null } : { data: [], error: null } });
+  await ok.run('nexarRestorePendingConfirm()');
+  assert.equal(cards(ok).length, 1, 'the unchanged account still gets its card');
+});
+test('R1 a check or an answer that finishes after an account switch changes nothing on screen', async () => {
+  const gate = deferred(); const net = deferred();
+  const p = page({ backend: (q) => q.op === 'rpc' ? gate.promise : jobsBackend(q), fetchImpl: () => net.promise });
+  p.run(`nexarRenderConfirmCard(${REQ})`);
+  const c = cards(p)[0];
+  const r1 = p.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);
+  p.run(`currentUser = { id: 'user-2' }; nexarState.authVersion++; nexarState.authUserId = 'user-2';`);
+  gate.resolve({ data: { found: true, consumed_at: 'now', outcome: 'deleted' }, error: null });
+  await r1;
+  assert.equal(c.dataset.state, 'open'); assert.match(c.querySelector('.ncc-body').textContent, /^Delete "/);
+  assert.equal(p.log.filter(q => q.table === 'nexar_pipeline').length, 0, 'no Pipeline reload for the new account');
+  await p.run(`nexarConfirmAction('${ID}', true, document.querySelector('.nexar-confirm-card'))`);
+  assert.equal(p.fetches.length, 0, 'a card from another account cannot send an answer');
+});
+test('R2 a passed deadline on this device never produces "expired": only the server record does', async () => {
+  let row = { found: true, consumed_at: null, outcome: null, expires_at: new Date(Date.now() - 60000).toISOString() };   // already past locally
+  const p = page({ backend: (q) => q.op === 'rpc' ? { data: row, error: null } : jobsBackend(q), fetchImpl: async () => { throw new Error('network'); } });
+  p.run(`nexarRenderConfirmCard({ action_id: '${ID}', preview: 'Delete?', expires_at: '${row.expires_at}' })`);
+  await p.run(`nexarConfirmAction('${ID}', true, document.querySelector('.nexar-confirm-card'))`);
+  let c = p.card();
+  assert.equal(c.state, 'uncertain'); assert.equal(/expired|did not delete/i.test(c.body + c.meta), false);
+  assert.equal(p.log.some(q => q.name === 'nexar_settle_pending_action' && q.args.p_action_id === ID), true, 'asks the server');
+  row = { ...row, consumed_at: 'now', outcome: 'deleted' };                // the original answer completed after the deadline
+  await p.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);
+  c = p.card(); assert.equal(c.state, 'resolved'); assert.equal(c.body, 'Deleted.');
+});
+test('R4 an older "still open" read cannot replace a confirmed result', async () => {
+  const gate = deferred();
+  const p = page({ backend: (q) => q.op === 'rpc' ? gate.promise : jobsBackend(q),
+    fetchImpl: async () => res(200, { ok: true, action: 'deleted', target: { title: 'Design system clean-up', company: 'Tidewater Studio' } }) });
+  p.run(`nexarRenderConfirmCard(${REQ})`);
+  const older = p.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);       // read starts first
+  await p.run(`nexarConfirmAction('${ID}', true, document.querySelector('.nexar-confirm-card'))`); // deletion confirmed
+  assert.equal(p.card().state, 'resolved');
+  gate.resolve({ data: { found: true, consumed_at: null, outcome: null, expires_at: new Date(Date.now() + 600000).toISOString() }, error: null });
+  await older;
+  const c = p.card();
+  assert.equal(c.state, 'resolved'); assert.match(c.body, /^Deleted: /); assert.deepEqual(c.buttons, []);
+});
+test('R4 reads returning out of order: the newest read decides, and a recorded outcome always wins', async () => {
+  const g1 = deferred(), g2 = deferred(); let n = 0;
+  const p = page({ backend: (q) => q.op === 'rpc' ? (++n === 1 ? g1.promise : n === 2 ? g2.promise : { data: null, error: { message: 'x' } }) : jobsBackend(q), fetchImpl: async () => { throw new Error('network'); } });
+  p.run(`nexarRenderConfirmCard(${REQ})`);
+  const open = { found: true, consumed_at: null, outcome: null, expires_at: new Date(Date.now() + 600000).toISOString() };
+  const a = p.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);
+  const b = p.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);
+  g2.resolve({ data: { ...open, consumed_at: 'now', outcome: 'cancelled' }, error: null }); await b;
+  g1.resolve({ data: open, error: null }); await a;
+  assert.equal(p.card().state, 'resolved'); assert.equal(p.card().body, 'Request cancelled.');
+  // and a late terminal read still lands on a card that a newer read left "not confirmed"
+  const q1 = deferred(), q2 = deferred(); let m = 0;
+  const p2 = page({ backend: (q) => q.op === 'rpc' ? (++m === 1 ? { data: open, error: null } : m === 2 ? q1.promise : q2.promise) : jobsBackend(q), fetchImpl: async () => { throw new Error('network'); } });
+  p2.run(`nexarRenderConfirmCard(${REQ})`);
+  await p2.run(`nexarConfirmAction('${ID}', true, document.querySelector('.nexar-confirm-card'))`);
+  const x = p2.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);
+  const y = p2.run(`nexarConfirmResolve(document.querySelector('.nexar-confirm-card'))`);
+  q2.resolve({ data: open, error: null }); await y;
+  q1.resolve({ data: { ...open, consumed_at: 'now', outcome: 'deleted' }, error: null }); await x;
+  assert.equal(p2.card().state, 'resolved'); assert.equal(p2.card().body, 'Deleted.');
+});
+test('R5 after an unconfirmed Delete, a reload keeps the restriction to that answer', async () => {
+  const storage = memoryStorage();
+  const open = { found: true, consumed_at: null, outcome: null, expires_at: OPEN_ROWS[0].expires_at };
+  const backend = (q) => q.op === 'rpc' ? { data: open, error: null } : q.table === 'nexar_pending_actions' ? { data: OPEN_ROWS, error: null } : jobsBackend(q);
+  const first = page({ storage, backend, fetchImpl: async () => { throw new Error('network'); } });
+  first.run(`nexarRenderConfirmCard(${REQ})`);
+  await first.run(`nexarConfirmAction('${ID}', true, document.querySelector('.nexar-confirm-card'))`);
+  assert.equal(storage.getItem('nexar.confirm.user-1.' + ID), 'true');
+
+  const reloaded = page({ storage, backend, fetchImpl: async () => res(200, { ok: true, action: 'cancelled' }) });   // a brand-new page
+  await reloaded.run('nexarRestorePendingConfirm()'); await new Promise((r) => setTimeout(r, 10));
+  const c = reloaded.card();
+  assert.equal(c.state, 'uncertain'); assert.deepEqual(c.buttons, ['CHECK AGAIN', 'SEND DELETE AGAIN']);
+  await reloaded.run(`nexarConfirmAction('${ID}', false, document.querySelector('.nexar-confirm-card'))`);
+  assert.equal(reloaded.fetches.length, 0, 'Keep cannot be sent after Delete, even after a reload');
+
+  const other = page({ storage, userId: 'user-2', backend });          // same browser, another account
+  await other.run('nexarRestorePendingConfirm()'); await new Promise((r) => setTimeout(r, 10));
+  assert.deepEqual(other.card().buttons, ['KEEP JOB', 'DELETE'], 'the stored choice is scoped to the account');
+});
+test('R5 the stored choice is written before sending and removed once an outcome is recorded', async () => {
+  const storage = memoryStorage(); let seenAtSend = null;
+  const p = page({ storage, backend: jobsBackend, fetchImpl: async () => { seenAtSend = storage.getItem('nexar.confirm.user-1.' + ID); return res(200, { ok: true, action: 'cancelled' }); } });
+  p.run(`nexarRenderConfirmCard(${REQ})`);
+  await p.run(`nexarConfirmAction('${ID}', false, document.querySelector('.nexar-confirm-card'))`);
+  assert.equal(seenAtSend, 'false'); assert.equal(storage.getItem('nexar.confirm.user-1.' + ID), null);
+});
+test('R5 when the browser cannot store the choice, a restored request offers no answer buttons', async () => {
+  const p = page({ storage: brokenStorage, backend: (q) => q.table === 'nexar_pending_actions' ? { data: OPEN_ROWS, error: null } : jobsBackend(q) });
+  await p.run('nexarRestorePendingConfirm()');
+  const c = p.card(); assert.equal(c.state, 'info'); assert.deepEqual(c.buttons, []); assert.match(c.meta, /cannot tell whether you already answered/);
+  await p.run(`nexarConfirmAction('${ID}', true, document.querySelector('.nexar-confirm-card'))`);
+  assert.equal(p.fetches.length, 0);
 });
 
 // ---- Pipeline permissions ------------------------------------------------------

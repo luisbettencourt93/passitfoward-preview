@@ -18844,19 +18844,22 @@ function nexarOnKey(e) {
 // -- SEND -------------------------------------------------------------
 // ═══════════ NEXAR TOOL EVENT HANDLERS — LAYER 2 ═══════════
 // ═══════════ NEXAR CONFIRM CARD — LAYER 2 SESSION C ═══════════
-function nexarRenderConfirmCard(payload) {
+function nexarRenderConfirmCard(payload, opts) {
   // payload: { action_id, preview, expires_at, action_type }
+  // opts (restore only): { restored, sentAccept: 'true'|'false'|null, storeOk }
   try {
+    const o = opts || {};
     const stream = document.getElementById('nexar-stream');
-    if (!stream) return;
+    if (!stream || !currentUser) return;
     if (!payload?.action_id) return;
     if (stream.querySelector('.nexar-confirm-card[data-action-id="' + String(payload.action_id).replace(/[^0-9a-f-]/gi, '') + '"]')) return;
 
     const card = document.createElement('div');
     card.className = 'nexar-confirm-card';
     card.dataset.actionId = payload.action_id;
-    card.dataset.state = 'open';            // open | sending | uncertain | resolved
-    card.dataset.expiresAt = payload.expires_at || '';
+    card.dataset.userId = currentUser.id;   // the account this card belongs to
+    card.dataset.state = 'open';            // open | sending | uncertain | info | resolved (terminal)
+    card.dataset.seq = '0';                 // orders asynchronous reads
 
     const head = document.createElement('div');
     head.className = 'ncc-head';
@@ -18878,22 +18881,42 @@ function nexarRenderConfirmCard(payload) {
     const actions = document.createElement('div');
     actions.className = 'ncc-actions';
     card.appendChild(actions);
-    nexarConfirmSetButtons(card, [
-      ['KEEP JOB', 'ncc-no', () => nexarConfirmAction(payload.action_id, false, card)],
-      ['DELETE', 'ncc-yes', () => nexarConfirmAction(payload.action_id, true, card)],
-    ]);
 
     stream.appendChild(card);
     stream.scrollTop = stream.scrollHeight;
 
+    if (o.restored && (o.sentAccept === 'true' || o.sentAccept === 'false')) {
+      // An answer was sent before the reload and may still be running: keep
+      // the restriction to that answer and ask the server what it recorded.
+      card.dataset.sentAccept = o.sentAccept;
+      nexarConfirmShow(card, 'uncertain', 'Not confirmed yet.',
+        'You answered this before the page reloaded. We do not know yet whether the job was deleted.', []);
+      nexarConfirmResolve(card);
+    } else if (o.restored && !o.storeOk) {
+      // This browser cannot remember whether an answer was already sent, so
+      // offering Keep and Delete again would not be safe.
+      nexarConfirmShow(card, 'info', payload.preview || 'A delete request is open.',
+        'This request is still open, but this browser cannot tell whether you already answered it. Ask NEXAR again to replace it.', []);
+    } else {
+      nexarConfirmOpenButtons(card);
+    }
+
     // A new request closes older open requests for the same job on the server.
-    // Re-read every other unresolved card so it shows what the server recorded.
+    // Re-read every other unanswered card so it shows what the server recorded.
     stream.querySelectorAll('.nexar-confirm-card').forEach(c => {
       if (c !== card && c.dataset.state === 'open') nexarConfirmResolve(c, { quietIfOpen: true });
     });
   } catch (e) {
     console.warn('[nexar confirm card]', e);
   }
+}
+
+function nexarConfirmOpenButtons(card) {
+  const id = card.dataset.actionId;
+  nexarConfirmSetButtons(card, [
+    ['KEEP JOB', 'ncc-no', () => nexarConfirmAction(id, false, card)],
+    ['DELETE', 'ncc-yes', () => nexarConfirmAction(id, true, card)],
+  ]);
 }
 
 // Replace the card's buttons. defs: [label, className, onClick][]
@@ -18911,7 +18934,10 @@ function nexarConfirmSetButtons(card, defs) {
   });
 }
 
+// 'resolved' is terminal: once a card shows an outcome the server recorded,
+// nothing may replace it (an older read arriving late, for example).
 function nexarConfirmShow(card, state, bodyText, metaText, defs) {
+  if (card.dataset.state === 'resolved') return false;
   card.dataset.state = state;
   const body = card.querySelector('.ncc-body');
   const meta = card.querySelector('.ncc-meta');
@@ -18919,12 +18945,49 @@ function nexarConfirmShow(card, state, bodyText, metaText, defs) {
   if (meta) meta.textContent = metaText || '';
   nexarConfirmSetButtons(card, defs || []);
   card.classList.toggle('ncc-resolved', state === 'resolved');
+  if (state === 'resolved') nexarConfirmStore(card.dataset.userId).clear(card.dataset.actionId);
+  return true;
 }
 
-// Text for an outcome the server recorded on the request. Returns null when the
-// request is still open. Pure: no DOM, no network.
-function nexarConfirmOutcomeText(row, nowMs) {
+// The account and connection a piece of asynchronous work started under. Uses
+// the same markers as the membership and history loaders.
+function nexarConfirmSnap() {
+  return { user: currentUser, userId: currentUser ? currentUser.id : null, client: sb,
+    authVersion: nexarState.authVersion, loadRequest: nexarState.loadRequest };
+}
+function nexarConfirmSnapValid(snap) {
+  return !!snap && !!snap.userId && !!currentUser && currentUser === snap.user && currentUser.id === snap.userId &&
+    sb === snap.client && nexarState.authVersion === snap.authVersion && !nexarState.authSignedOut &&
+    (!nexarState.authUserId || nexarState.authUserId === snap.userId);
+}
+function nexarConfirmCardValid(card, snap) {
+  return nexarConfirmSnapValid(snap) && !!card && card.isConnected && card.dataset.userId === snap.userId;
+}
+
+// Remembers which answer was sent for a request, per account and request, so a
+// reload cannot offer the opposite answer while the first may still be running.
+function nexarConfirmStore(userId) {
+  const key = (id) => 'nexar.confirm.' + userId + '.' + id;
+  let ok = false;
+  try {
+    window.localStorage.setItem('nexar.confirm.probe', '1');
+    window.localStorage.removeItem('nexar.confirm.probe');
+    ok = !!userId;
+  } catch (_) {}
+  return {
+    ok,
+    get(id) { try { const v = window.localStorage.getItem(key(id)); return (v === 'true' || v === 'false') ? v : null; } catch (_) { return null; } },
+    set(id, accept) { try { window.localStorage.setItem(key(id), String(accept)); return true; } catch (_) { return false; } },
+    clear(id) { try { window.localStorage.removeItem(key(id)); } catch (_) {} },
+  };
+}
+
+// Text for an outcome the SERVER recorded on the request. Returns null while no
+// outcome is recorded. Pure. It deliberately does not look at the clock: a
+// passed deadline does not say what an answer already being processed did.
+function nexarConfirmOutcomeText(row) {
   if (!row) return null;
+  if (row.found === false)    return ['This request is closed.', 'Check your Pipeline for the current state.'];
   const o = row.outcome;
   if (o === 'deleted')        return ['Deleted.', 'The server confirmed this deletion.'];
   if (o === 'cancelled')      return ['Request cancelled.', 'This request did not delete the job.'];
@@ -18933,72 +18996,90 @@ function nexarConfirmOutcomeText(row, nowMs) {
   if (o === 'superseded')     return ['Replaced by a newer request.', 'This request did not delete the job. Use the latest request.'];
   if (o === 'expired')        return ['Request expired.', 'This request did not delete the job. Ask again if you still want to delete it.'];
   if (row.consumed_at)        return ['This request is closed.', 'Check your Pipeline for the current state.'];
-  const exp = row.expires_at ? new Date(row.expires_at).getTime() : NaN;
-  if (!isNaN(exp) && exp <= nowMs) return ['Request expired.', 'This request did not delete the job. Ask again if you still want to delete it.'];
   return null;
 }
 
-// Read the request the server holds and show its recorded outcome. The request
-// row is the only source of truth: an unchanged job does not prove an answer
-// that is still travelling has stopped, so the card stays "not confirmed" until
-// the request is recorded as answered or its expiry has passed.
+// Ask the server what it recorded for this request. The server call waits for
+// any answer that is being processed and is the only place an unanswered
+// request is marked expired. An unchanged job, or a deadline that has passed on
+// this device, never settles a card.
 async function nexarConfirmResolve(card, opts) {
   const o = opts || {};
+  const snap = nexarConfirmSnap();
+  if (!nexarConfirmCardValid(card, snap) || card.dataset.state === 'resolved') return;
   const id = card.dataset.actionId;
+  const seq = String((Number(card.dataset.seq) || 0) + 1);
+  card.dataset.seq = seq;
+
   let row = null, failed = false;
   try {
-    const { data, error } = await sb.from('nexar_pending_actions')
-      .select('id, consumed_at, expires_at, outcome')
-      .eq('id', id).maybeSingle();
-    if (error) failed = true; else row = data;
+    const { data, error } = await sb.rpc('nexar_settle_pending_action', { p_action_id: id });
+    if (error || !data || typeof data !== 'object') failed = true; else row = data;
   } catch (_) { failed = true; }
+
+  // The account, connection or page changed while we waited: show nothing.
+  if (!nexarConfirmCardValid(card, snap)) return;
+
+  const text = failed ? null : nexarConfirmOutcomeText(row);
+  if (text) {
+    // A recorded outcome is final and always applies, whatever order reads return in.
+    if (nexarConfirmShow(card, 'resolved', text[0], text[1]) && (row.outcome === 'deleted' || row.outcome === 'already_gone')) {
+      try { await nexarPipelineLoad(); if (nexarConfirmSnapValid(snap)) nexarPipelineRender(); } catch (_) {}
+    }
+    return;
+  }
+
+  // "Still open" or "could not check" is only a snapshot. Drop it if anything
+  // newer has started for this card, or an answer is being sent right now.
+  if (card.dataset.seq !== seq || card.dataset.state === 'sending' || card.dataset.state === 'resolved') return;
+  if (o.quietIfOpen) return;
 
   const again = ['CHECK AGAIN', 'ncc-no', () => nexarConfirmResolve(card)];
   if (failed) {
-    if (o.quietIfOpen) return;
     nexarConfirmShow(card, 'uncertain', 'Could not check this request.',
       'We do not know yet whether the job was deleted.', [again]);
     return;
   }
-  if (!row) {
-    nexarConfirmShow(card, 'resolved', 'This request is closed.', 'Check your Pipeline for the current state.');
-    return;
-  }
-  const text = nexarConfirmOutcomeText(row, Date.now());
-  if (text) {
-    nexarConfirmShow(card, 'resolved', text[0], text[1]);
-    if (row.outcome === 'deleted' || row.outcome === 'already_gone') {
-      try { await nexarPipelineLoad(); nexarPipelineRender(); } catch (_) {}
-    }
-    return;
-  }
-  if (o.quietIfOpen) return;               // still open and nobody answered: leave it
-  // Open on the server, but an answer may still be on its way.
   const sent = card.dataset.sentAccept;
-  const defs = [again];
-  if (sent === 'true' || sent === 'false') {
-    // Re-sending the SAME answer is safe: the server accepts one answer per
-    // request and refuses if the job changed or the request was replaced.
-    defs.push([sent === 'true' ? 'SEND DELETE AGAIN' : 'SEND KEEP AGAIN', sent === 'true' ? 'ncc-yes' : 'ncc-no',
-      () => nexarConfirmAction(id, sent === 'true', card)]);
+  if (sent !== 'true' && sent !== 'false') {
+    // Open on the server and never answered from this account in this browser.
+    nexarConfirmShow(card, 'open', card.querySelector('.ncc-body')?.textContent || 'Delete this job?', 'Nothing is deleted until you choose.', []);
+    nexarConfirmOpenButtons(card);
+    return;
   }
+  // Open on the server, but the answer may still be on its way. Re-sending the
+  // SAME answer is safe: the server accepts one answer per request and refuses
+  // if the job changed or the request was replaced.
   nexarConfirmShow(card, 'uncertain', 'Not confirmed yet.',
-    'Your answer may still be on its way. We do not know yet whether the job was deleted.', defs);
+    'Your answer may still be on its way. We do not know yet whether the job was deleted.',
+    [again, [sent === 'true' ? 'SEND DELETE AGAIN' : 'SEND KEEP AGAIN', sent === 'true' ? 'ncc-yes' : 'ncc-no',
+      () => nexarConfirmAction(id, sent === 'true', card)]]);
 }
 
-// After a reload: bring back delete requests that are still open on the server.
+// After a reload: bring back delete requests that are still open on the server,
+// for the signed-in account only.
 async function nexarRestorePendingConfirm() {
   if (!sb || !currentUser) return;
-  const { data, error } = await sb.from('nexar_pending_actions')
-    .select('id, preview, expires_at, action_type')
-    .eq('user_id', currentUser.id)
-    .eq('action_type', 'delete_pipeline')
-    .is('consumed_at', null)
-    .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: true })
-    .limit(5);
+  const snap = nexarConfirmSnap();
+  let data = null, error = null;
+  try {
+    ({ data, error } = await sb.from('nexar_pending_actions')
+      .select('id, preview, expires_at, action_type')
+      .eq('user_id', snap.userId)
+      .eq('action_type', 'delete_pipeline')
+      .is('consumed_at', null)
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: true })
+      .limit(5));
+  } catch (_) { return; }
+  // The read belongs to the account, connection and load it started under.
+  // If any of those changed while it was in flight, its rows must not be shown.
+  if (!nexarConfirmSnapValid(snap) || nexarState.loadRequest !== snap.loadRequest) return;
   if (error || !Array.isArray(data)) return;
-  data.forEach(r => nexarRenderConfirmCard({ action_id: r.id, preview: r.preview, expires_at: r.expires_at, action_type: r.action_type }));
+  const store = nexarConfirmStore(snap.userId);
+  data.forEach(r => nexarRenderConfirmCard(
+    { action_id: r.id, preview: r.preview, expires_at: r.expires_at, action_type: r.action_type },
+    { restored: true, sentAccept: store.get(r.id), storeOk: store.ok }));
 }
 
 function nexarEscapeHtml(s) {
@@ -19073,19 +19154,25 @@ async function nexarRenderLatestDraftFromDb() {
   }
 }
 async function nexarConfirmAction(action_id, accept, card) {
-  if (!card || card.dataset.state === 'sending' || card.dataset.state === 'resolved') return;
+  if (!card || ['sending', 'resolved', 'info'].includes(card.dataset.state)) return;
   // After an answer has been sent, only the same answer may be sent again.
   const sent = card.dataset.sentAccept;
   if ((sent === 'true' || sent === 'false') && String(accept) !== sent) return;
+  const snap = nexarConfirmSnap();
+  if (!nexarConfirmCardValid(card, snap)) return;
+
+  // Record the choice BEFORE sending, in the page and for a later reload.
   card.dataset.sentAccept = String(accept);
+  nexarConfirmStore(snap.userId).set(action_id, accept);
+  card.dataset.seq = String((Number(card.dataset.seq) || 0) + 1);   // older reads are now out of date
   nexarConfirmShow(card, 'sending', accept ? 'Deleting…' : 'Cancelling…', 'Waiting for the server.');
 
   let resp = null, result = null;
   try {
-    if (!sb) throw new Error('No supabase client');
-    const { data: sess } = await sb.auth.getSession();
+    const { data: sess } = await snap.client.auth.getSession();
     const token = sess?.session?.access_token;
     if (!token) throw new Error('Not authenticated');
+    if (!nexarConfirmCardValid(card, snap)) return;
 
     // Same environment as every other NEXAR call (was a fixed address).
     resp = await fetch(`${NEXAR_FN_BASE}/nexar-confirm-action`, {
@@ -19100,6 +19187,7 @@ async function nexarConfirmAction(action_id, accept, card) {
   } catch (e) {
     console.error('[nexarConfirmAction]', e);
   }
+  if (!nexarConfirmCardValid(card, snap)) return;
 
   // A recorded outcome is the only thing that settles this card.
   if (resp && resp.ok && result && result.ok === true) {
@@ -19111,15 +19199,14 @@ async function nexarConfirmAction(action_id, accept, card) {
       nexarConfirmShow(card, 'resolved', 'Request cancelled.', 'This request did not delete the job.');
     } else if (result.action === 'already_gone') {
       nexarConfirmShow(card, 'resolved', 'Already removed.', 'The job was not in your Pipeline when this request ran.');
-    } else {
-      await nexarConfirmResolve(card);
+    }
+    if (card.dataset.state === 'resolved') {
+      if (result.action !== 'cancelled' && typeof nexarPipelineLoad === 'function') {
+        await nexarPipelineLoad();
+        if (nexarConfirmSnapValid(snap) && typeof nexarPipelineRender === 'function') nexarPipelineRender();
+      }
       return;
     }
-    if (result.action !== 'cancelled' && typeof nexarPipelineLoad === 'function') {
-      await nexarPipelineLoad();
-      if (typeof nexarPipelineRender === 'function') nexarPipelineRender();
-    }
-    return;
   }
 
   if (resp && result && result.error === 'target_changed') {
@@ -19130,8 +19217,9 @@ async function nexarConfirmAction(action_id, accept, card) {
     return;
   }
 
-  // No response, a server error, or "already answered": read what the server
-  // recorded instead of guessing. Never re-enable Keep/Delete blindly.
+  // No response, a server error, or "already answered": ask the server what it
+  // recorded instead of guessing. Keep and Delete are never re-enabled blindly.
+  nexarConfirmShow(card, 'uncertain', 'Not confirmed yet.', 'Checking what the server recorded.', []);
   await nexarConfirmResolve(card);
 }
   function nexarHandleToolCall(payload) {

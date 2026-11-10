@@ -1,7 +1,11 @@
 -- NEXAR delete requests: one answer wins, a changed job is refused, a newer
 -- request replaces older ones, and every request records how it ended.
---   target_updated_at : the job's updated_at when the request was made.
+--   preview           : now written by the database from the job row it reads.
+--   target_updated_at : that same row's updated_at.
+--   target_snapshot   : that same row's title, company, status and notes digest.
 --   outcome           : how the request ended (null while open).
+-- The text shown to the member and the version checked at confirmation
+-- therefore always describe one and the same reading of the job.
 -- The owner can already read their own requests (pending_select_own), so the
 -- app can show the recorded outcome instead of guessing after a timeout.
 -- Scope: staging. Rollback: supabase/rollback/20261110230200_...down.sql
@@ -9,6 +13,7 @@ begin;
 
 alter table public.nexar_pending_actions
   add column if not exists target_updated_at timestamptz,
+  add column if not exists target_snapshot jsonb,
   add column if not exists outcome text;
 
 alter table public.nexar_pending_actions
@@ -20,17 +25,39 @@ alter table public.nexar_pending_actions
         ('cancelled', 'deleted', 'already_gone', 'target_changed', 'superseded', 'expired'))
   );
 
--- On insert: remember the job's version and close older open requests for it.
+-- What a delete request is bound to. Used when it is made and when it is answered.
+create or replace function public.nexar_pipeline_snapshot(j public.nexar_pipeline)
+returns jsonb
+language sql
+immutable
+set search_path to 'public', 'pg_temp'
+as $function$
+  select jsonb_build_object('title', j.title, 'company', j.company, 'status', j.status,
+                            'notes_md5', md5(coalesce(j.notes, '')));
+$function$;
+
+-- On insert: read the job ONCE, write the confirmation text and the expected
+-- version from that one reading, and close older open requests for the job.
+-- The caller's own preview text is replaced, so it can never be older than the
+-- version the request is bound to.
 create or replace function public.nexar_pending_action_prepare()
 returns trigger
 language plpgsql
 set search_path to 'public', 'pg_temp'
 as $function$
+declare
+  j public.nexar_pipeline%rowtype;
 begin
   if new.action_type = 'delete_pipeline' then
-    select p.updated_at into new.target_updated_at
-      from public.nexar_pipeline p
+    select * into j from public.nexar_pipeline p
      where p.id = new.target_id and p.user_id = new.user_id;
+    if not found then
+      raise exception 'nexar_pending_actions: job not found for this member'
+        using errcode = 'P0002';
+    end if;
+    new.preview := format('Delete "%s" @ %s (%s)?', j.title, j.company, j.status);
+    new.target_updated_at := j.updated_at;
+    new.target_snapshot := public.nexar_pipeline_snapshot(j);
 
     update public.nexar_pending_actions a
        set consumed_at = now(), outcome = 'superseded'
@@ -108,7 +135,10 @@ begin
     return jsonb_build_object('ok', true, 'action', 'already_gone', 'preview', r.preview);
   end if;
 
-  if r.target_updated_at is null or j.updated_at is distinct from r.target_updated_at then
+  -- Both must match: the timestamp, and the content the member was shown.
+  if r.target_updated_at is null or r.target_snapshot is null
+     or j.updated_at is distinct from r.target_updated_at
+     or public.nexar_pipeline_snapshot(j) is distinct from r.target_snapshot then
     update public.nexar_pending_actions set consumed_at = now(), outcome = 'target_changed' where id = r.id;
     return jsonb_build_object('ok', false, 'error', 'target_changed', 'outcome', 'target_changed',
       'current', jsonb_build_object('id', j.id, 'title', j.title, 'company', j.company, 'status', j.status));
@@ -124,5 +154,42 @@ $function$;
 revoke all on function public.nexar_confirm_pending_action(uuid, uuid, boolean) from public, anon, authenticated;
 grant execute on function public.nexar_confirm_pending_action(uuid, uuid, boolean) to service_role;
 revoke all on function public.nexar_pending_action_prepare() from public, anon, authenticated;
+revoke all on function public.nexar_pipeline_snapshot(public.nexar_pipeline) from public, anon, authenticated;
+grant execute on function public.nexar_pipeline_snapshot(public.nexar_pipeline) to service_role;
+
+-- The owner asks what was recorded for one of their own requests.
+-- It takes the same row lock as the answer does, so it WAITS for an answer that
+-- is being processed and then reports that answer's outcome. Only here, on the
+-- server clock and under that lock, is an unanswered request marked expired.
+-- It can never delete a job and never changes a request that has an outcome.
+create or replace function public.nexar_settle_pending_action(p_action_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+declare
+  r public.nexar_pending_actions%rowtype;
+begin
+  if p_action_id is null or auth.uid() is null then
+    return jsonb_build_object('found', false);
+  end if;
+  select * into r from public.nexar_pending_actions
+   where id = p_action_id and user_id = auth.uid()
+   for update;
+  if not found then
+    return jsonb_build_object('found', false);
+  end if;
+  if r.consumed_at is null and r.expires_at <= clock_timestamp() then
+    update public.nexar_pending_actions set consumed_at = now(), outcome = 'expired'
+     where id = r.id returning * into r;
+  end if;
+  return jsonb_build_object('found', true, 'id', r.id, 'consumed_at', r.consumed_at,
+                            'expires_at', r.expires_at, 'outcome', r.outcome);
+end;
+$function$;
+
+revoke all on function public.nexar_settle_pending_action(uuid) from public, anon;
+grant execute on function public.nexar_settle_pending_action(uuid) to authenticated, service_role;
 
 commit;
