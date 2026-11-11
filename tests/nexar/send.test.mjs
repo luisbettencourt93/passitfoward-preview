@@ -2,7 +2,7 @@
 // outcomes that stay "not known" after an interrupted message.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { page, jobsBackend, memoryStorage } from './harness.mjs';
+import { page, jobsBackend, memoryStorage, res, REQ } from './harness.mjs';
 
 const tick = (ms = 5) => new Promise((r) => setTimeout(r, ms));
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
@@ -225,4 +225,134 @@ test('S8 follow-up reminders never use jobs cached for a different member', asyn
   const r = await p.run('nexarComputePipelineReminders()');
   assert.deepEqual([r.count, r.items.length], [0, 0]);
   assert.equal(p.log.at(-1).filters.user_id, 'user-2', 'it reloads for the member who is signed in');
+});
+
+// ---- Regression: review round 4 -------------------------------------------------
+const A_JOBS = [{ id: 'a1', title: 'Member one job', company: 'Co', status: 'Applied', updated_at: OLD }];
+const B_JOBS = [{ id: 'b1', title: 'Member two job', company: 'Co', status: 'Applied', updated_at: OLD }];
+const listText = (p) => p.$('#np-list').textContent;
+const OTHER = SWITCHES['another member signs in'];
+
+for (const [name, change] of Object.entries(SWITCHES)) {
+  test(`P1 Pipeline refresh in flight during ${name}: the earlier member's cached jobs are not redrawn`, async () => {
+    let gate = null;
+    const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? (gate ? gate.promise : { data: A_JOBS, error: null }) : { data: [], error: null } });
+    await p.run('nexarPipelineRefresh()');
+    assert.match(listText(p), /Member one job/, 'the cache and the view are populated for member one');
+    gate = deferred();
+    const second = p.run('nexarPipelineRefresh()'); await tick();
+    p.run(change);
+    gate.resolve({ data: A_JOBS, error: null }); await second;
+    if (name === 'away and back to the same account') {
+      assert.equal(p.run('__get().owner'), 'user-1'); assert.match(listText(p), /Member one job/, 'their own jobs may stay');
+    } else {
+      assert.equal(listText(p), '', 'nothing of member one is left on screen'); assert.equal(p.run('__get().cache.length'), 0); assert.equal(p.run('__get().owner'), null);
+      assert.equal(p.run('__get().canWrite'), false);
+    }
+  });
+}
+test('P1 any redraw after an account change clears the earlier member\'s jobs instead of drawing them', async () => {
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? { data: A_JOBS, error: null } : { data: [], error: null } });
+  await p.run('nexarPipelineRefresh()'); assert.match(listText(p), /Member one job/);
+  p.run(`currentUser = { id: 'user-2' }; nexarState.authVersion++; nexarState.authUserId = 'user-2';`);
+  p.run('nexarPipelineRender()');
+  assert.equal(listText(p), ''); assert.equal(p.run('__get().cache.length'), 0); assert.equal(p.$('#np-empty').style.display, 'none', 'and it does not claim the new member has no jobs');
+});
+test('P1 a sign-in change clears the cache and the job view at once; a token refresh for the same member does not', async () => {
+  const fresh = async () => { const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? { data: A_JOBS, error: null } : { data: [], error: null } }); await p.run('nexarPipelineRefresh()'); return p; };
+  let p = await fresh(); p.authEvent('TOKEN_REFRESHED', { user: { id: 'user-1' } });
+  assert.match(listText(p), /Member one job/); assert.equal(p.run('__get().cache.length'), 1);
+  p = await fresh(); p.authEvent('SIGNED_OUT', null);
+  assert.equal(listText(p), ''); assert.equal(p.run('__get().cache.length'), 0);
+  p = await fresh(); p.authEvent('SIGNED_IN', { user: { id: 'user-2' } });
+  assert.equal(listText(p), ''); assert.equal(p.run('__get().owner'), null);
+});
+test('P2 an old read that fails late cannot erase the new member\'s jobs', async () => {
+  for (const failure of ['rejects', 'returns an error']) {
+    const gateA = deferred(); let n = 0;
+    const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? (++n === 1 ? gateA.promise : { data: B_JOBS, error: null }) : { data: [], error: null } });
+    const a = p.run('nexarPipelineLoad()'); await tick();
+    p.run(OTHER);
+    await p.run('nexarPipelineLoad()');
+    assert.equal(p.run('__get().cache[0].id'), 'b1');
+    failure === 'rejects' ? gateA.reject(new Error('network')) : gateA.resolve({ data: null, error: { message: 'boom' } });
+    await a;
+    assert.equal(p.run('__get().cache.length'), 1, failure); assert.equal(p.run('__get().cache[0].id'), 'b1'); assert.equal(p.run('__get().owner'), 'user-2'); assert.equal(p.run('__get().failed'), false);
+  }
+});
+test('P2 on one account, an older read finishing late (failed or not) cannot replace a newer result', async () => {
+  for (const late of ['rejects', 'old data']) {
+    const g1 = deferred(); let n = 0;
+    const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? (++n === 1 ? g1.promise : { data: B_JOBS, error: null }) : { data: [], error: null } });
+    const first = p.run('nexarPipelineLoad()'); await tick(); await p.run('nexarPipelineLoad()');
+    late === 'rejects' ? g1.reject(new Error('network')) : g1.resolve({ data: A_JOBS, error: null }); await first;
+    assert.equal(p.run('__get().cache[0].id'), 'b1', late); assert.equal(p.run('__get().failed'), false);
+  }
+});
+test('P2 a failed read for the signed-in member is still reported as a failure, not as an empty Pipeline', async () => {
+  const p = page({ tier: 'pro', backend: (q) => q.table === 'nexar_pipeline' ? Promise.reject(new Error('down')) : { data: [], error: null } });
+  await p.run('nexarPipelineRefresh()');
+  assert.equal(p.run('__get().failed'), true); assert.equal(p.$('.np-empty-title').textContent, 'Could not load your pipeline');
+});
+
+test('P3 a session that belongs to someone else: the message is not sent under their name', async () => {
+  for (const other of ['user-2', null]) {
+    const p = page({ fetchImpl: async () => { throw new Error('must not be called'); } });
+    p.session.userId = other;                                   // the page still shows user-1
+    await type(p, 'Mark Lanternworks as Interview');
+    assert.equal(p.fetches.length, 0, String(other));
+    assert.match(shown(p).text, /NOT SENT\. Your sign-in changed or could not be confirmed/);
+    assert.equal(p.$('#nexar-input').value, 'Mark Lanternworks as Interview', 'the text is given back');
+    assert.equal(p.storage.getItem('nexar.interrupted.user-1'), null, 'nothing went out'); assert.equal(shown(p).notes, 0);
+    assert.equal(p.run('nexarState.sending'), false); assert.equal(p.$('#nexar-send-btn').disabled, false);
+  }
+});
+test('P3 a matching session sends with that member\'s token', async () => {
+  const s = stream(); const p = page({ backend: jobsBackend, fetchImpl: async () => s.resp });
+  const done = type(p, 'hello'); s.push(ev('delta', { text: 'hi' }) + ev('done', {})); s.end(); await done;
+  assert.equal(p.fetches.length, 1); assert.equal(p.fetches[0].auth, 'Bearer token-for-user-1');
+});
+test('P3 delete answer: a session for someone else sends nothing and leaves the request as it was', async () => {
+  const p = page({ backend: jobsBackend, fetchImpl: async () => res(200, { ok: true, action: 'deleted' }) });
+  p.run(`nexarRenderConfirmCard(${REQ})`);
+  p.session.userId = 'user-2';
+  await p.run(`nexarConfirmAction('11111111-1111-4111-8111-111111111111', true, document.querySelector('.nexar-confirm-card'))`);
+  let c = p.card();
+  assert.equal(p.fetches.length, 0); assert.equal(c.state, 'open'); assert.deepEqual(c.buttons, ['KEEP JOB', 'DELETE']);
+  assert.match(c.body, /^Delete "/); assert.match(c.meta, /Your answer was not sent/);
+  assert.equal(c.el.dataset.sentAccept, undefined); assert.equal(p.storage.getItem('nexar.confirm.user-1.11111111-1111-4111-8111-111111111111'), null, 'no choice was recorded');
+  p.session.userId = undefined;                                 // sign-in is right again: either answer can be given
+  await p.run(`nexarConfirmAction('11111111-1111-4111-8111-111111111111', false, document.querySelector('.nexar-confirm-card'))`);
+  assert.equal(p.fetches.length, 1); assert.equal(p.fetches[0].auth, 'Bearer token-for-user-1');
+});
+test('P3 checking a request under someone else\'s session never closes the card or drops the saved answer', async () => {
+  const p = page({ backend: (q) => q.op === 'rpc' ? { data: { found: false }, error: null } : jobsBackend(q), fetchImpl: async () => { throw new Error('network'); } });
+  p.run(`nexarRenderConfirmCard(${REQ})`);
+  await p.run(`nexarConfirmAction('11111111-1111-4111-8111-111111111111', true, document.querySelector('.nexar-confirm-card'))`);
+  const c = p.card();
+  assert.equal(c.state, 'uncertain'); assert.equal(c.body, 'Could not check this request.'); assert.deepEqual(c.buttons, ['CHECK AGAIN']);
+  assert.equal(p.storage.getItem('nexar.confirm.user-1.11111111-1111-4111-8111-111111111111'), 'true');
+});
+
+const plain = (status, body, type = 'application/json') => ({ ok: status >= 200 && status < 300, status, headers: { get: () => type },
+  json: async () => { if (body === undefined) throw new Error('not json'); return body; } });
+test('P4 an unclear answer after the message went out: outcome stays "not known" and no retry is suggested', async () => {
+  const cases = { '504 gateway timeout (JSON)': plain(504, { code: 504, message: 'Gateway Timeout' }), '504 gateway timeout (HTML)': plain(504, undefined, 'text/html'),
+    '502 bad gateway': plain(502, undefined, 'text/html'), '500 with an unknown body': plain(500, { message: 'worker crashed' }), '500 with an unknown error code': plain(500, { error: 'boot_error' }),
+    '546 resource limit': plain(546, { code: 'WORKER_LIMIT' }), '200 that is not a stream': plain(200, { ok: true }) };
+  for (const [name, resp] of Object.entries(cases)) {
+    const storage = memoryStorage(); const p = page({ storage, fetchImpl: async () => resp });
+    await type(p, 'Add Marlow Health as Applied');
+    const v = shown(p);
+    assert.equal(v.notes, 1, name); assert.ok(storage.getItem('nexar.interrupted.user-1'), name);
+    assert.equal(/try again/i.test(v.text), false, name + ': no retry advice'); assert.match(v.text, /do not know whether that completed/);
+    assert.equal(p.run('nexarState.sending'), false); assert.equal(p.$('#nexar-input').value, '', 'the text is not handed back for resending');
+  }
+});
+test('P4 the chat function\'s own refusals are still plain errors with nothing recorded', async () => {
+  for (const [status, code] of [[401, 'invalid_session'], [400, 'message_too_long'], [500, 'rate_check_failed'], [500, 'internal_error']]) {
+    const p = page({ fetchImpl: async () => plain(status, { error: code }) });
+    await type(p, 'hi');
+    assert.match(shown(p).text, new RegExp('SYSTEM ERROR — ' + code + '\\. Try again\\.')); assert.equal(shown(p).notes, 0); assert.equal(p.storage.getItem('nexar.interrupted.user-1'), null);
+  }
 });

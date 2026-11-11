@@ -27,10 +27,18 @@ export const NAMES = ['nexarRenderConfirmCard', 'nexarConfirmOpenButtons', 'nexa
   'nexarPipelineAddCancel', 'nexarPipelineSave', 'nexarPipelineSetStatus', 'nexarPipelineDelete',
   'nexarSend', 'nexarAbandonSend', 'nexarMarkInterrupted', 'nexarReadInterrupted', 'nexarClearInterrupted', 'nexarShowInterruptedNote',
   'nexarHandleToolCall', 'nexarHandleToolResult', 'renderNexarMessage', 'nexarFormat', 'scrollNexarBottom', 'showNexarTyping', 'hideNexarTyping',
-  'nexarAutoGrow', 'nexarLoadHistory', 'renderNexarEmpty', 'nexarComputePipelineReminders'];
+  'nexarAutoGrow', 'nexarLoadHistory', 'renderNexarEmpty', 'nexarComputePipelineReminders',
+  'nexarPipelineOwnedByCurrent', 'nexarPipelineInvalidate', 'nexarPipelineWatchAuth'];
+// A top-level declaration copied out of index.html, so tests use the shipped value.
+export function decl(name, src = html) {
+  const m = new RegExp('(?:const|let)\\s+' + name + '\\s*=[\\s\\S]*?;\\n').exec(src);
+  if (!m) { if (process.env.NEXAR_TEST_ALLOW_MISSING) return ''; throw new Error('declaration not found: ' + name); }
+  return m[0];
+}
 
 // A fake Supabase client: every awaited query is passed to `backend(query)`.
-export function fakeSb(backend, log) {
+export function fakeSb(backend, log, sessionUserId = () => null) {
+  const authListeners = [];
   const from = (table) => {
     const q = { table, op: 'select', filters: {}, cols: null, payload: null };
     const b = new Proxy({}, { get(_, k) {
@@ -47,7 +55,9 @@ export function fakeSb(backend, log) {
     return b;
   };
   const rpc = (name, args) => { const q = { table: 'rpc:' + name, op: 'rpc', name, args }; log.push(q); return Promise.resolve().then(() => backend(q)); };
-  return { from, rpc, auth: { getSession: async () => ({ data: { session: { access_token: 'staging-token' } } }) } };
+  return { from, rpc, _authListeners: authListeners, auth: {
+    getSession: async () => ({ data: { session: { access_token: 'token-for-' + sessionUserId(), user: { id: sessionUserId() } } } }),
+    onAuthStateChange: (cb) => { authListeners.push(cb); return { data: { subscription: { unsubscribe() {} } } }; } } };
 }
 
 export function memoryStorage() { const m = new Map(); return { getItem: (k) => m.has(k) ? m.get(k) : null, setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); }, _m: m }; }
@@ -75,17 +85,20 @@ export function page({ tier = 'pro', backend = () => ({ data: [], error: null })
     nexarRenderDraftBlock: (text, handle, id) => drafts.push({ text, handle, id }),
     nexarStartCheckout() {}, nexarRefreshTier: async () => {},
   });
-  ctx.sb = fakeSb(backend, log);
+  // The session follows whoever the page shows, unless a test sets session.userId.
+  const session = { userId: undefined };
+  ctx.sb = fakeSb(backend, log, () => (session.userId !== undefined ? session.userId : (ctx.currentUser ? ctx.currentUser.id : null)));
   if (getSession) ctx.sb.auth.getSession = getSession;
   vm.runInContext(`let _pipelineCache = []; let _pipelineFilter = 'all'; let _pipelineFocusMode = false; let _pipelineFocusIds = [];
-    let _pipelineCanWrite = false; let _pipelineLoadFailed = false; let _pipelineCacheOwner = null;
+    let _pipelineCanWrite = false; let _pipelineLoadFailed = false; let _pipelineCacheOwner = null; let _pipelineLoadSeq = 0; let _pipelineAuthClient = null;
+    ` + decl('NEXAR_CHAT_REFUSALS') + `
     const NEXAR_REMINDER_THRESHOLDS = { Applied: 7, Responded: 3, Interview: 3, Offered: 2 };
     const nexarInterruptedMem = new Map(); let nexarSendSeq = 0; let nexarActiveSend = null;\n` + NAMES.map((n) => { try { return fn(n); } catch (e) { if (process.env.NEXAR_TEST_ALLOW_MISSING) return ''; throw e; } }).join('\n') +
-    `\nglobalThis.__get = () => ({ canWrite: _pipelineCanWrite, cache: _pipelineCache });`, ctx);
+    `\nglobalThis.__get = () => ({ canWrite: _pipelineCanWrite, cache: _pipelineCache, owner: _pipelineCacheOwner, failed: _pipelineLoadFailed });`, ctx);
   const $ = (s) => dom.window.document.querySelector(s);
   const card = () => { const c = $('.nexar-confirm-card:last-child'); return { el: c, state: c.dataset.state, body: c.querySelector('.ncc-body').textContent,
     meta: c.querySelector('.ncc-meta').textContent, buttons: [...c.querySelectorAll('.ncc-btn')].map(b => b.textContent) }; };
-  return { ctx, dom, $, log, toasts, fetches, drafts, card, storage, modals, run: (code) => vm.runInContext(code, ctx) };
+  return { ctx, dom, $, log, toasts, fetches, drafts, card, storage, modals, session, authEvent: (event, s) => ctx.sb._authListeners.forEach((cb) => cb(event, s)), run: (code) => vm.runInContext(code, ctx) };
 }
 export const res = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 export const REQ = `{ action_id: '11111111-1111-4111-8111-111111111111', preview: 'Delete "Design system clean-up" @ Tidewater Studio (Applied)?', expires_at: new Date(Date.now() + 600000).toISOString() }`;
