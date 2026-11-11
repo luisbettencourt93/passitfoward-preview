@@ -20298,10 +20298,23 @@ let _pipelineLoadFailed = false;
 let _pipelineCacheOwner = null;   // member id the cached jobs belong to
 let _pipelineLoadSeq = 0;         // orders overlapping loads
 let _pipelineAuthClient = null;   // client whose sign-in changes are being watched
+// The member the session was last seen to belong to, as reported by the auth
+// callback itself: undefined = not seen yet, null = signed out. Kept apart from
+// the cache owner, the displayed profile and NEXAR's own markers, because a
+// Pipeline read can start (from the Command Centre) before NEXAR is opened.
+let _pipelineSessionUserId = undefined;
+// Goes up every time that session identity changes. A read started under an
+// earlier value is out of date, whatever the page still displays.
+let _pipelineAuthEpoch = 0;
+
+function nexarPipelineSessionAllows(userId) {
+  return _pipelineSessionUserId === undefined || _pipelineSessionUserId === userId;
+}
 
 // True only for jobs loaded for the member who is signed in right now.
 function nexarPipelineOwnedByCurrent() {
-  return !!currentUser && !nexarState.authSignedOut && _pipelineCacheOwner === currentUser.id;
+  return !!currentUser && !nexarState.authSignedOut && _pipelineCacheOwner === currentUser.id &&
+    nexarPipelineSessionAllows(currentUser.id);
 }
 
 // Drop the cached jobs AND what is drawn from them. Used whenever the jobs on
@@ -20324,13 +20337,26 @@ function nexarPipelineInvalidate() {
   }
 }
 
-// Invalidate as soon as the sign-in changes, without waiting for the next load.
+// React to the sign-in changing as soon as the auth callback reports it, without
+// waiting for the displayed profile or for NEXAR's markers to catch up:
+// pending reads become out of date, and the cache and the job view are cleared.
+// A callback for the same member (a token refresh, for example) changes nothing.
 function nexarPipelineWatchAuth() {
   if (!sb || _pipelineAuthClient === sb || !sb.auth || typeof sb.auth.onAuthStateChange !== 'function') return;
-  _pipelineAuthClient = sb;
-  sb.auth.onAuthStateChange((event, session) => {
-    const id = (session && session.user) ? session.user.id : null;
-    if (event === 'SIGNED_OUT' || !id || (_pipelineCacheOwner && id !== _pipelineCacheOwner)) nexarPipelineInvalidate();
+  const client = sb;
+  if (_pipelineAuthClient) {
+    // A different client: what was seen so far says nothing about this one.
+    _pipelineSessionUserId = undefined;
+    _pipelineAuthEpoch++;
+  }
+  _pipelineAuthClient = client;
+  client.auth.onAuthStateChange((event, session) => {
+    if (_pipelineAuthClient !== client) return;   // an older client's callback
+    const id = (event !== 'SIGNED_OUT' && session && session.user && session.user.id) ? session.user.id : null;
+    if (id === _pipelineSessionUserId) return;    // same member, or still signed out
+    _pipelineSessionUserId = id;
+    _pipelineAuthEpoch++;
+    nexarPipelineInvalidate();
   });
 }
 let _pipelineFocusMode = false;   // Follow-up Focus Mode active?
@@ -20366,11 +20392,22 @@ async function nexarPipelineRefresh() {
   // Adding and editing need NEXAR Pro. Every member keeps read and delete
   // access to their own jobs, so the list is always loaded.
   const snap = (sb && currentUser) ? nexarConfirmSnap() : null;
-  await nexarPipelineLoad();
-  // The account may have changed while the jobs were loading. Draw nothing for
-  // the earlier member, and clear anything of theirs that is still on screen.
-  if (snap && !nexarConfirmSnapValid(snap)) {
+  const applied = await nexarPipelineLoad();
+  // The account may have changed while the jobs were loading, or the read may
+  // have been refused or dropped. Draw nothing for the earlier member, and
+  // clear anything of theirs that is still on screen.
+  if (applied === false || (snap && !nexarConfirmSnapValid(snap))) {
     if (!nexarPipelineOwnedByCurrent()) nexarPipelineInvalidate();
+    // The page and the session disagree about who is signed in, so no jobs
+    // were read. Say so instead of leaving a blank or a "no jobs" screen.
+    if (applied === false && snap && nexarConfirmSnapValid(snap) && !nexarPipelineSessionAllows(snap.userId)) {
+      const empty = document.getElementById('np-empty');
+      const et = empty && empty.querySelector('.np-empty-title');
+      const eb = empty && empty.querySelector('.np-empty-body');
+      if (et) et.textContent = 'Could not confirm your sign-in';
+      if (eb) eb.textContent = 'Reload the page to see your pipeline.';
+      if (empty) empty.style.display = 'flex';
+    }
     return;
   }
   _pipelineCanWrite = tier === 'pro';
@@ -20396,33 +20433,48 @@ async function nexarPipelineRefresh() {
 
 async function nexarPipelineLoad() {
   // The jobs are shared page state (Pipeline, Command Centre, NEXAR context).
-  // A read applies its result, or its failure, only if it still belongs to the
-  // signed-in member and no newer load has started.
+  // A read applies its result, or its failure, only if:
+  //   - the page and NEXAR's markers still show the member it was started for,
+  //   - the session was not seen to change since it started (sign-out, another
+  //     member, or away and back), and still belongs to that member,
+  //   - no newer load has started.
+  // Returns false when the read was refused or dropped, true otherwise.
   let snap = null;
+  let epoch = _pipelineAuthEpoch;
   const seq = ++_pipelineLoadSeq;
-  const current = () => !!snap && nexarConfirmSnapValid(snap) && seq === _pipelineLoadSeq;
+  const current = () => !!snap && nexarConfirmSnapValid(snap) && seq === _pipelineLoadSeq &&
+    epoch === _pipelineAuthEpoch && _pipelineSessionUserId === snap.userId;
   try {
-    if (!sb || !currentUser) { nexarPipelineInvalidate(); return; }
+    if (!sb || !currentUser) { nexarPipelineInvalidate(); return true; }
     nexarPipelineWatchAuth();
     snap = nexarConfirmSnap();
+    // Until the auth callback has reported, take the displayed member as the
+    // session's member. The callback corrects this, and drops this read, if not.
+    if (_pipelineSessionUserId === undefined) _pipelineSessionUserId = snap.userId;
+    epoch = _pipelineAuthEpoch;
+    // The session is known to be signed out or someone else's: do not read on
+    // behalf of the member the page still displays.
+    if (_pipelineSessionUserId !== snap.userId) { nexarPipelineInvalidate(); return false; }
     if (_pipelineCacheOwner !== snap.userId) nexarPipelineInvalidate();
     const { data, error } = await snap.client
       .from('nexar_pipeline')
       .select('id, title, company, status, notes, created_at, updated_at')
       .eq('user_id', snap.userId)
       .order('updated_at', { ascending: false });
-    if (!current()) return;
+    if (!current()) return false;
     _pipelineCacheOwner = snap.userId;
-    if (error) { console.error('[pipeline] load', error); _pipelineCache = []; _pipelineLoadFailed = true; return; }
+    if (error) { console.error('[pipeline] load', error); _pipelineCache = []; _pipelineLoadFailed = true; return true; }
     _pipelineCache = data || [];
     _pipelineLoadFailed = false;
+    return true;
   } catch (e) {
     console.error('[pipeline] load fail', e);
     // An old read failing must not clear the jobs of whoever is signed in now.
-    if (!current()) return;
+    if (!current()) return false;
     _pipelineCacheOwner = snap.userId;
     _pipelineCache = [];
     _pipelineLoadFailed = true;
+    return true;
   }
 }
 
