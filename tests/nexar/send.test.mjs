@@ -222,6 +222,7 @@ test('S8 follow-up reminders never use jobs cached for a different member', asyn
   assert.equal((await p.run('nexarComputePipelineReminders()')).count, 1, 'the owner still gets their follow-up');
   rows = [];
   p.run(`currentUser = { id: 'user-2' }; nexarState.authVersion++; nexarState.authUserId = 'user-2';`);
+  p.authEvent('SIGNED_IN', { user: { id: 'user-2' } });         // a real switch also reaches the auth callback
   const r = await p.run('nexarComputePipelineReminders()');
   assert.deepEqual([r.count, r.items.length], [0, 0]);
   assert.equal(p.log.at(-1).filters.user_id, 'user-2', 'it reloads for the member who is signed in');
@@ -272,7 +273,7 @@ test('P2 an old read that fails late cannot erase the new member\'s jobs', async
     const gateA = deferred(); let n = 0;
     const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? (++n === 1 ? gateA.promise : { data: B_JOBS, error: null }) : { data: [], error: null } });
     const a = p.run('nexarPipelineLoad()'); await tick();
-    p.run(OTHER);
+    p.run(OTHER); p.authEvent('SIGNED_IN', { user: { id: 'user-2' } });   // a real switch also reaches the auth callback
     await p.run('nexarPipelineLoad()');
     assert.equal(p.run('__get().cache[0].id'), 'b1');
     failure === 'rejects' ? gateA.reject(new Error('network')) : gateA.resolve({ data: null, error: { message: 'boom' } });
@@ -355,4 +356,116 @@ test('P4 the chat function\'s own refusals are still plain errors with nothing r
     await type(p, 'hi');
     assert.match(shown(p).text, new RegExp('SYSTEM ERROR — ' + code + '\\. Try again\\.')); assert.equal(shown(p).notes, 0); assert.equal(p.storage.getItem('nexar.interrupted.user-1'), null);
   }
+});
+
+// ---- Regression: review round 5 -------------------------------------------------
+// Everything here goes through the auth callback only. The displayed profile
+// (currentUser) and NEXAR's markers (nexarState) are left exactly as they were
+// until the pending read has finished, as when NEXAR has not been opened yet.
+const STATE0 = JSON.stringify({ tier: 'pro', authVersion: 1, loadRequest: 1, authSignedOut: false, authUserId: 'user-1', sending: false, remainingToday: null });
+const untouched = (p) => { assert.equal(p.run('currentUser.id'), 'user-1'); assert.equal(p.run('JSON.stringify(nexarState)'), STATE0); };
+const pipelineReads = (p) => p.log.filter((q) => q.table === 'nexar_pipeline').length;
+
+test('Q1 Command Centre read pending at sign-out: the earlier member\'s job does not come back into the cache or the follow-up list', async () => {
+  for (const cachedFirst of [false, true]) {
+    let gate = null;
+    const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? (gate ? gate.promise : { data: A_JOBS, error: null }) : { data: [], error: null } });
+    if (cachedFirst) { await p.run('nexarPipelineRefresh()'); assert.match(listText(p), /Member one job/); p.run('_pipelineCache = _pipelineCache.slice()'); }
+    gate = deferred();
+    const pending = cachedFirst ? p.run('nexarPipelineLoad().then(() => nexarComputePipelineReminders())') : p.run('nexarComputePipelineReminders()');
+    await tick();
+    assert.equal(pipelineReads(p), cachedFirst ? 2 : 1, 'a read is in flight');
+    p.authEvent('SIGNED_OUT', null);                             // the callback only
+    untouched(p);
+    assert.equal(p.run('__get().cache.length'), 0); assert.equal(listText(p), '', 'cache and view are cleared at once');
+    gate.resolve({ data: A_JOBS, error: null });
+    const r = await pending;
+    untouched(p);
+    assert.equal(p.run('__get().cache.length'), 0, 'the pending read did not refill the cache'); assert.equal(p.run('__get().owner'), null);
+    assert.deepEqual([r.count, r.items.length], [0, 0], 'and nothing reaches the follow-up list'); assert.equal(listText(p), '');
+  }
+});
+test('Q2 another member signs in during an initially empty load: the earlier member\'s jobs are not cached for them', async () => {
+  const gate = deferred();
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? gate.promise : { data: [], error: null } });
+  const pending = p.run('nexarComputePipelineReminders()'); await tick();
+  assert.equal(p.run('__get().owner'), null, 'nothing was cached before');
+  p.authEvent('SIGNED_IN', { user: { id: 'user-2' } });          // the callback only
+  untouched(p);
+  gate.resolve({ data: A_JOBS, error: null });
+  const r = await pending;
+  untouched(p);
+  assert.equal(p.run('__get().cache.length'), 0); assert.deepEqual([r.count, r.items.length], [0, 0]);
+  assert.equal(p.run('__get().sessionUser'), 'user-2');
+  // and while the page still displays the earlier member, nothing is read or drawn in their name
+  const before = pipelineReads(p);
+  await p.run('nexarPipelineRefresh()');
+  assert.equal(pipelineReads(p), before, 'no read is made as the displayed member'); assert.equal(listText(p), '');
+  assert.equal(p.$('.np-empty-title').textContent, 'Could not confirm your sign-in', 'and the screen does not claim there are no jobs');
+});
+test('Q3 a failed pending read after the callback reported a change cannot mark or clear anything', async () => {
+  const gate = deferred();
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? gate.promise : { data: [], error: null } });
+  const pending = p.run('nexarPipelineLoad()'); await tick();
+  p.authEvent('SIGNED_OUT', null); gate.reject(new Error('network'));
+  assert.equal(await pending, false); assert.equal(p.run('__get().failed'), false); assert.equal(p.run('__get().owner'), null);
+});
+test('Q4 same-member callbacks keep a pending read and the cache: token refresh, repeated sign-in, initial session', async () => {
+  for (const event of ['TOKEN_REFRESHED', 'SIGNED_IN', 'INITIAL_SESSION', 'USER_UPDATED']) {
+    const gate = deferred();
+    const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? gate.promise : { data: [], error: null } });
+    const pending = p.run('nexarComputePipelineReminders()'); await tick();
+    p.authEvent(event, { user: { id: 'user-1' } });
+    gate.resolve({ data: A_JOBS, error: null });
+    const r = await pending;
+    assert.equal(r.count, 1, event); assert.equal(p.run('__get().cache.length'), 1); assert.equal(p.run('__get().epoch'), 0, 'nothing was invalidated');
+    p.authEvent(event, { user: { id: 'user-1' } });
+    assert.equal(p.run('__get().cache.length'), 1, 'and a later same-member callback keeps the cache');
+  }
+});
+test('Q5 away and back to the same member through the callback: the old read is dropped, a new one works', async () => {
+  const gate = deferred(); let n = 0;
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? (++n === 1 ? gate.promise : { data: B_JOBS, error: null }) : { data: [], error: null } });
+  const old = p.run('nexarPipelineLoad()'); await tick();
+  p.authEvent('SIGNED_OUT', null); p.authEvent('SIGNED_IN', { user: { id: 'user-1' } });
+  gate.resolve({ data: A_JOBS, error: null });
+  assert.equal(await old, false); assert.equal(p.run('__get().cache.length'), 0);
+  assert.equal(await p.run('nexarPipelineLoad()'), true); assert.equal(p.run('__get().cache[0].id'), 'b1'); assert.equal(p.run('__get().owner'), 'user-1');
+});
+test('Q6 while signed out is the last thing seen, no read is made for the member still displayed; a first session for someone else drops the read', async () => {
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? { data: A_JOBS, error: null } : { data: [], error: null } });
+  await p.run('nexarPipelineLoad()'); p.authEvent('SIGNED_OUT', null);
+  const before = pipelineReads(p);
+  assert.equal(await p.run('nexarPipelineLoad()'), false); assert.equal(pipelineReads(p), before); assert.equal(p.run('__get().cache.length'), 0);
+  assert.deepEqual((await p.run('nexarComputePipelineReminders()')).count, 0);
+
+  const gate = deferred();
+  const q = page({ backend: (x) => x.table === 'nexar_pipeline' ? gate.promise : { data: [], error: null } });
+  const pending = q.run('nexarPipelineLoad()'); await tick();
+  q.authEvent('INITIAL_SESSION', { user: { id: 'user-2' } });     // the session never was the displayed member's
+  gate.resolve({ data: A_JOBS, error: null });
+  assert.equal(await pending, false); assert.equal(q.run('__get().cache.length'), 0);
+});
+test('Q7 a callback from a client that has been replaced is ignored; the new client starts unseen', async () => {
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? { data: A_JOBS, error: null } : { data: [], error: null } });
+  await p.run('nexarPipelineLoad()');
+  const oldListeners = p.run('sb._authListeners').slice();
+  p.run(`{ const l = []; sb = { ...sb, _authListeners: l, auth: { ...sb.auth, onAuthStateChange: (cb) => { l.push(cb); return { data: { subscription: { unsubscribe() {} } } }; } } }; }`);
+  assert.equal(await p.run('nexarPipelineLoad()'), true); assert.equal(p.run('__get().cache.length'), 1);
+  oldListeners.forEach((cb) => cb('SIGNED_OUT', null));
+  assert.equal(p.run('__get().cache.length'), 1, 'the old client cannot clear the new client\'s jobs');
+  p.authEvent('SIGNED_OUT', null);
+  assert.equal(p.run('__get().cache.length'), 0, 'the current client still can');
+});
+test('Q8 the page shows a different member than the session was last seen as: nothing is read, and the screen says why', async () => {
+  const p = page({ backend: (q) => q.table === 'nexar_pipeline' ? { data: A_JOBS, error: null } : { data: [], error: null } });
+  await p.run('nexarPipelineRefresh()');
+  p.run(`currentUser = { id: 'user-2' }; nexarState.authVersion++; nexarState.authUserId = 'user-2';`);   // profile changed, no callback seen
+  const before = pipelineReads(p);
+  await p.run('nexarPipelineRefresh()');
+  assert.equal(pipelineReads(p), before); assert.equal(listText(p), ''); assert.equal(p.run('__get().cache.length'), 0);
+  assert.equal(p.$('.np-empty-title').textContent, 'Could not confirm your sign-in'); assert.equal(p.$('#np-empty').style.display, 'flex');
+  p.authEvent('SIGNED_IN', { user: { id: 'user-2' } });         // once the callback agrees, the new member loads normally
+  await p.run('nexarPipelineRefresh()');
+  assert.equal(pipelineReads(p), before + 1); assert.equal(p.run('__get().owner'), 'user-2');
 });

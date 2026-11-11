@@ -28,7 +28,7 @@ export const NAMES = ['nexarRenderConfirmCard', 'nexarConfirmOpenButtons', 'nexa
   'nexarSend', 'nexarAbandonSend', 'nexarMarkInterrupted', 'nexarReadInterrupted', 'nexarClearInterrupted', 'nexarShowInterruptedNote',
   'nexarHandleToolCall', 'nexarHandleToolResult', 'renderNexarMessage', 'nexarFormat', 'scrollNexarBottom', 'showNexarTyping', 'hideNexarTyping',
   'nexarAutoGrow', 'nexarLoadHistory', 'renderNexarEmpty', 'nexarComputePipelineReminders',
-  'nexarPipelineOwnedByCurrent', 'nexarPipelineInvalidate', 'nexarPipelineWatchAuth'];
+  'nexarPipelineOwnedByCurrent', 'nexarPipelineInvalidate', 'nexarPipelineWatchAuth', 'nexarPipelineSessionAllows'];
 // A top-level declaration copied out of index.html, so tests use the shipped value.
 export function decl(name, src = html) {
   const m = new RegExp('(?:const|let)\\s+' + name + '\\s*=[\\s\\S]*?;\\n').exec(src);
@@ -91,10 +91,10 @@ export function page({ tier = 'pro', backend = () => ({ data: [], error: null })
   if (getSession) ctx.sb.auth.getSession = getSession;
   vm.runInContext(`let _pipelineCache = []; let _pipelineFilter = 'all'; let _pipelineFocusMode = false; let _pipelineFocusIds = [];
     let _pipelineCanWrite = false; let _pipelineLoadFailed = false; let _pipelineCacheOwner = null; let _pipelineLoadSeq = 0; let _pipelineAuthClient = null;
-    ` + decl('NEXAR_CHAT_REFUSALS') + `
+    ` + decl('NEXAR_CHAT_REFUSALS') + decl('_pipelineSessionUserId') + decl('_pipelineAuthEpoch') + `
     const NEXAR_REMINDER_THRESHOLDS = { Applied: 7, Responded: 3, Interview: 3, Offered: 2 };
     const nexarInterruptedMem = new Map(); let nexarSendSeq = 0; let nexarActiveSend = null;\n` + NAMES.map((n) => { try { return fn(n); } catch (e) { if (process.env.NEXAR_TEST_ALLOW_MISSING) return ''; throw e; } }).join('\n') +
-    `\nglobalThis.__get = () => ({ canWrite: _pipelineCanWrite, cache: _pipelineCache, owner: _pipelineCacheOwner, failed: _pipelineLoadFailed });`, ctx);
+    `\nglobalThis.__get = () => ({ canWrite: _pipelineCanWrite, cache: _pipelineCache, owner: _pipelineCacheOwner, failed: _pipelineLoadFailed, sessionUser: (typeof _pipelineSessionUserId === 'undefined') ? undefined : _pipelineSessionUserId, epoch: (typeof _pipelineAuthEpoch === 'undefined') ? undefined : _pipelineAuthEpoch });`, ctx);
   const $ = (s) => dom.window.document.querySelector(s);
   const card = () => { const c = $('.nexar-confirm-card:last-child'); return { el: c, state: c.dataset.state, body: c.querySelector('.ncc-body').textContent,
     meta: c.querySelector('.ncc-meta').textContent, buttons: [...c.querySelectorAll('.ncc-btn')].map(b => b.textContent) }; };
