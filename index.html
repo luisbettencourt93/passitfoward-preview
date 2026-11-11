@@ -18995,7 +18995,6 @@ function nexarConfirmStore(userId) {
 // passed deadline does not say what an answer already being processed did.
 function nexarConfirmOutcomeText(row) {
   if (!row) return null;
-  if (row.found === false)    return ['This request is closed.', 'Check your Pipeline for the current state.'];
   const o = row.outcome;
   if (o === 'deleted')        return ['Deleted.', 'The server confirmed this deletion.'];
   if (o === 'cancelled')      return ['Request cancelled.', 'This request did not delete the job.'];
@@ -19022,7 +19021,9 @@ async function nexarConfirmResolve(card, opts) {
   let row = null, failed = false;
   try {
     const { data, error } = await sb.rpc('nexar_settle_pending_action', { p_action_id: id });
-    if (error || !data || typeof data !== 'object') failed = true; else row = data;
+    // "Not found" is not an outcome. The server answers that when the session
+    // is not this member's, so it is treated as "could not check", never as closed.
+    if (error || !data || typeof data !== 'object' || data.found === false) failed = true; else row = data;
   } catch (_) { failed = true; }
 
   // The account, connection or page changed while we waited: show nothing.
@@ -19176,26 +19177,48 @@ async function nexarConfirmAction(action_id, accept, card) {
   const snap = nexarConfirmSnap();
   if (!nexarConfirmCardValid(card, snap)) return;
 
+  const wasSent = (sent === 'true' || sent === 'false');
+  const shownText = card.querySelector('.ncc-body')?.textContent || 'Delete this job?';
+  card.dataset.seq = String((Number(card.dataset.seq) || 0) + 1);   // older reads are now out of date
+  nexarConfirmShow(card, 'sending', accept ? 'Deleting…' : 'Cancelling…', 'Checking your sign-in.');
+
+  // The token must belong to the member this card belongs to. Checked before
+  // the choice is saved, so a refused attempt leaves no trace.
+  let token = null, sessionUserId = null;
+  try {
+    const { data: sess } = await snap.client.auth.getSession();
+    token = sess?.session?.access_token || null;
+    sessionUserId = sess?.session?.user?.id || null;
+  } catch (e) {
+    console.error('[nexarConfirmAction] session', e);
+  }
+  if (!nexarConfirmCardValid(card, snap)) return;
+  if (!token || sessionUserId !== snap.userId) {
+    const why = 'Your answer was not sent. Your sign-in could not be confirmed for this account. Reload the page and try again.';
+    if (wasSent) {
+      nexarConfirmShow(card, 'uncertain', 'Not confirmed yet.', why + ' An earlier answer may still be on its way.',
+        [['CHECK AGAIN', 'ncc-no', () => nexarConfirmResolve(card)]]);
+    } else {
+      nexarConfirmShow(card, 'open', shownText, why, []);
+      nexarConfirmOpenButtons(card);
+    }
+    return;
+  }
+
   // Save the choice BEFORE sending and make sure it really was saved. Without
   // it, a reload could offer the opposite answer while this one is still
   // running, so an answer that cannot be recorded is not sent at all.
   if (!nexarConfirmStore(snap.userId).set(action_id, accept)) {
-    nexarConfirmShow(card, 'info', card.querySelector('.ncc-body')?.textContent || 'Delete this job?',
+    nexarConfirmShow(card, 'info', shownText,
       'Your answer was not sent. This browser could not save your choice, which is needed to keep this request safe after a reload. ' +
       'Allow site storage for this site and reload, or delete the job from Pipeline.', []);
     return;
   }
   card.dataset.sentAccept = String(accept);
-  card.dataset.seq = String((Number(card.dataset.seq) || 0) + 1);   // older reads are now out of date
   nexarConfirmShow(card, 'sending', accept ? 'Deleting…' : 'Cancelling…', 'Waiting for the server.');
 
   let resp = null, result = null;
   try {
-    const { data: sess } = await snap.client.auth.getSession();
-    const token = sess?.session?.access_token;
-    if (!token) throw new Error('Not authenticated');
-    if (!nexarConfirmCardValid(card, snap)) return;
-
     // Same environment as every other NEXAR call (was a fixed address).
     resp = await fetch(`${NEXAR_FN_BASE}/nexar-confirm-action`, {
       method: 'POST',
@@ -19447,6 +19470,10 @@ function nexarShowInterruptedNote() {
   stream.appendChild(wrap);
 }
 
+// Error codes nexar-chat returns before it starts a reply or runs any action.
+const NEXAR_CHAT_REFUSALS = ['unauthorized', 'invalid_session', 'empty_message', 'message_too_long', 'no_profile',
+  'status_check_failed', 'rate_check_failed', 'rate_limit', 'method_not_allowed', 'internal_error'];
+
 let nexarSendSeq = 0;
 let nexarActiveSend = null;   // the send that currently owns the composer controls
 
@@ -19535,6 +19562,15 @@ function nexarAbandonSend(send) {
 
     if (!token) throw new Error('no_session');
 
+    // The token must belong to the member this page is showing. If the session
+    // is someone else's, the message is not sent under their name.
+    if (sess?.session?.user?.id !== snap.userId) {
+      hideNexarTyping();
+      if (!ta.value) { ta.value = msg; nexarAutoGrow(ta); }   // nothing was sent: give the text back
+      renderNexarMessage('assistant', '⚠ NOT SENT. Your sign-in changed or could not be confirmed for this account. Reload the page, then send it again.');
+      return;
+    }
+
     const context = await ccBuildNexarContext();
     if (!live()) return;   // never send one member's message with another member's context or session
 
@@ -19562,25 +19598,27 @@ function nexarAbandonSend(send) {
       return;
     }
 
-    // Non-streaming error response
+    // Non-streaming response
     const contentType = resp.headers.get('content-type') || '';
 
     if (!resp.ok || !contentType.includes('text/event-stream')) {
-      send.requested = false;   // the server answered without starting the reply or any action
-      let errMsg = 'unexpected';
+      let data = null;
+      try { data = await resp.json(); } catch (_) {}
+      console.error('nexar-chat failed', resp.status, data);
+      if (!live()) { stop(); return; }
 
-      try {
-        const data = await resp.json();
-        errMsg = data.error || errMsg;
-        console.error('nexar-chat failed', resp.status, data);
-      } catch (_) {
-        console.error('nexar-chat failed', resp.status);
+      // Only the chat function's own refusals, which it returns before it
+      // starts a reply or any action, prove that nothing ran. Anything else
+      // (a gateway timeout, a proxy error, an unknown body) leaves the outcome
+      // not known: the function may have started, or still be running.
+      const code = (data && typeof data.error === 'string') ? data.error : null;
+      if (code && NEXAR_CHAT_REFUSALS.indexOf(code) !== -1) {
+        send.requested = false;
+        hideNexarTyping();
+        renderNexarMessage('assistant', `⚠ SYSTEM ERROR — ${code}. Try again.`);
+        return;
       }
-      if (!live()) return;
-
-      hideNexarTyping();
-      renderNexarMessage('assistant', `⚠ SYSTEM ERROR — ${errMsg}. Try again.`);
-      return;
+      throw new Error('no clear answer from the server (' + resp.status + ')');
     }
 
     // SSE stream
@@ -19730,6 +19768,7 @@ function nexarAbandonSend(send) {
       // not known: say so, keep it recorded, and do not suggest sending again.
       nexarMarkInterrupted(snap.userId, send.tool);
       if (assistantBubble) assistantBubble.innerHTML = nexarFormat(fullText + '\n\n⚠ CONNECTION LOST');
+      else renderNexarMessage('assistant', '⚠ NO CLEAR ANSWER FROM THE SERVER.');
       const sub = document.getElementById('nexar-sub-line');
       if (sub && sub.dataset.toolBusy) { sub.textContent = 'AI OPERATOR · ONLINE'; delete sub.dataset.toolBusy; }
       nexarShowInterruptedNote();
@@ -20202,7 +20241,7 @@ const NEXAR_REMINDER_THRESHOLDS = {
 async function nexarComputePipelineReminders() {
   try {
     // Never work from jobs cached for a different member.
-    if (!currentUser || _pipelineCacheOwner !== currentUser.id) { _pipelineCache = []; _pipelineCacheOwner = null; }
+    if (!nexarPipelineOwnedByCurrent()) nexarPipelineInvalidate();
     if (typeof nexarPipelineLoad === 'function') {
       if (!Array.isArray(_pipelineCache) || _pipelineCache.length === 0) {
         await nexarPipelineLoad();
@@ -20257,6 +20296,43 @@ let _pipelineFilter = 'all';
 let _pipelineCanWrite = false;    // true only for a confirmed NEXAR Pro member (server enforces the same rule)
 let _pipelineLoadFailed = false;
 let _pipelineCacheOwner = null;   // member id the cached jobs belong to
+let _pipelineLoadSeq = 0;         // orders overlapping loads
+let _pipelineAuthClient = null;   // client whose sign-in changes are being watched
+
+// True only for jobs loaded for the member who is signed in right now.
+function nexarPipelineOwnedByCurrent() {
+  return !!currentUser && !nexarState.authSignedOut && _pipelineCacheOwner === currentUser.id;
+}
+
+// Drop the cached jobs AND what is drawn from them. Used whenever the jobs on
+// the page may belong to someone other than the signed-in member.
+function nexarPipelineInvalidate() {
+  _pipelineCache = [];
+  _pipelineCacheOwner = null;
+  _pipelineLoadFailed = false;
+  _pipelineCanWrite = false;
+  _pipelineFocusMode = false;
+  _pipelineFocusIds = [];
+  const list = document.getElementById('np-list');
+  if (list) list.textContent = '';
+  const empty = document.getElementById('np-empty');
+  if (empty) empty.style.display = 'none';
+  const form = document.getElementById('np-form');
+  if (form) {
+    form.style.display = 'none';
+    ['np-form-id', 'np-form-title', 'np-form-company', 'np-form-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  }
+}
+
+// Invalidate as soon as the sign-in changes, without waiting for the next load.
+function nexarPipelineWatchAuth() {
+  if (!sb || _pipelineAuthClient === sb || !sb.auth || typeof sb.auth.onAuthStateChange !== 'function') return;
+  _pipelineAuthClient = sb;
+  sb.auth.onAuthStateChange((event, session) => {
+    const id = (session && session.user) ? session.user.id : null;
+    if (event === 'SIGNED_OUT' || !id || (_pipelineCacheOwner && id !== _pipelineCacheOwner)) nexarPipelineInvalidate();
+  });
+}
 let _pipelineFocusMode = false;   // Follow-up Focus Mode active?
 let _pipelineFocusIds = [];       // pipeline_ids of stale entries to highlight
 
@@ -20289,8 +20365,15 @@ async function nexarPipelineRefresh() {
 
   // Adding and editing need NEXAR Pro. Every member keeps read and delete
   // access to their own jobs, so the list is always loaded.
-  _pipelineCanWrite = tier === 'pro';
+  const snap = (sb && currentUser) ? nexarConfirmSnap() : null;
   await nexarPipelineLoad();
+  // The account may have changed while the jobs were loading. Draw nothing for
+  // the earlier member, and clear anything of theirs that is still on screen.
+  if (snap && !nexarConfirmSnapValid(snap)) {
+    if (!nexarPipelineOwnedByCurrent()) nexarPipelineInvalidate();
+    return;
+  }
+  _pipelineCanWrite = tier === 'pro';
 
   const showLocked = tier === 'basic' && !_pipelineLoadFailed && _pipelineCache.length === 0;
   lockedEl.style.display = showLocked ? 'flex' : 'none';
@@ -20312,24 +20395,32 @@ async function nexarPipelineRefresh() {
 }
 
 async function nexarPipelineLoad() {
+  // The jobs are shared page state (Pipeline, Command Centre, NEXAR context).
+  // A read applies its result, or its failure, only if it still belongs to the
+  // signed-in member and no newer load has started.
+  let snap = null;
+  const seq = ++_pipelineLoadSeq;
+  const current = () => !!snap && nexarConfirmSnapValid(snap) && seq === _pipelineLoadSeq;
   try {
-    if (!sb || !currentUser) { _pipelineCache = []; _pipelineCacheOwner = null; return; }
-    // The jobs are shared page state (Pipeline, Command Centre, NEXAR context).
-    // A read that finishes after a sign-out or account switch must not fill it.
-    const snap = nexarConfirmSnap();
-    if (_pipelineCacheOwner !== snap.userId) { _pipelineCache = []; _pipelineCacheOwner = snap.userId; }
+    if (!sb || !currentUser) { nexarPipelineInvalidate(); return; }
+    nexarPipelineWatchAuth();
+    snap = nexarConfirmSnap();
+    if (_pipelineCacheOwner !== snap.userId) nexarPipelineInvalidate();
     const { data, error } = await snap.client
       .from('nexar_pipeline')
       .select('id, title, company, status, notes, created_at, updated_at')
       .eq('user_id', snap.userId)
       .order('updated_at', { ascending: false });
-    if (!nexarConfirmSnapValid(snap)) return;
+    if (!current()) return;
+    _pipelineCacheOwner = snap.userId;
     if (error) { console.error('[pipeline] load', error); _pipelineCache = []; _pipelineLoadFailed = true; return; }
     _pipelineCache = data || [];
-    _pipelineCacheOwner = snap.userId;
     _pipelineLoadFailed = false;
   } catch (e) {
     console.error('[pipeline] load fail', e);
+    // An old read failing must not clear the jobs of whoever is signed in now.
+    if (!current()) return;
+    _pipelineCacheOwner = snap.userId;
     _pipelineCache = [];
     _pipelineLoadFailed = true;
   }
@@ -20362,6 +20453,8 @@ function nexarPipelineRender() {
   const list  = document.getElementById('np-list');
   const empty = document.getElementById('np-empty');
   if (!list || !empty) return;
+  // Never draw jobs cached for a different member.
+  if (_pipelineCache.length && !nexarPipelineOwnedByCurrent()) { nexarPipelineInvalidate(); return; }
 
   const focusSet = (_pipelineFocusMode && _pipelineFocusIds.length)
     ? new Set(_pipelineFocusIds)
