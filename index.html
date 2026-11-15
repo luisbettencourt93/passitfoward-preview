@@ -5715,7 +5715,7 @@ try {
       }
     });
   }
-} catch(e) { console.warn('Supabase init failed, running in demo mode:', e.message); }
+} catch(e) { console.warn('Supabase init failed, running in demo mode:', e.message); } // A password-reset link is announced once, as soon as the client starts. Remember it until init() is listening. let pifPasswordRecoveryPending = false; try { if (sb) sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') pifPasswordRecoveryPending = true; }); } catch (e) {}
 
 function isFounder() { return !!(currentUser && currentUser.role === 'founder'); }
 
@@ -16332,7 +16332,7 @@ async function init() {
           return;
         }
       }
-     if(event === 'PASSWORD_RECOVERY') {
+     if(event === 'PASSWORD_RECOVERY' || (pifPasswordRecoveryPending && event === 'INITIAL_SESSION')) {         pifPasswordRecoveryPending = false;
         setTimeout(() => {
           var modalHtml = '<div id="pw-reset-modal" style="display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:5000;align-items:center;justify-content:center;"><div style="background:#0d1526;border:1px solid #2d4f6f;border-radius:16px;padding:1.5rem;width:90%;max-width:400px;"><h2 style="color:white;font-size:1.1rem;font-weight:700;margin:0 0 4px;">Set New Password</h2><p style="color:#64748b;font-size:0.85rem;margin:0 0 1rem;">Enter your new password below.</p><input id="pw-r-new" type="password" placeholder="New password (6+ characters)" class="form-input" style="margin-bottom:0.8rem;"><input id="pw-r-confirm" type="password" placeholder="Confirm new password" class="form-input" style="margin-bottom:1rem;"><button id="pw-r-btn" style="width:100%;background:#2dd4a0;color:#0d1520;border:none;padding:10px;border-radius:10px;font:700 14px/1 Inter,sans-serif;cursor:pointer;">Update Password</button><button onclick="document.getElementById(\'pw-reset-modal\').remove()" style="width:100%;background:transparent;color:#64748b;border:none;padding:8px;cursor:pointer;font-size:0.85rem;margin-top:6px;">Cancel</button></div></div>';
           document.body.insertAdjacentHTML('beforeend', modalHtml);
