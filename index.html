@@ -5715,7 +5715,10 @@ try {
       }
     });
   }
-} catch(e) { console.warn('Supabase init failed, running in demo mode:', e.message); } // A password-reset link is announced once, as soon as the client starts. Remember it until init() is listening. let pifPasswordRecoveryPending = false; try { if (sb) sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') pifPasswordRecoveryPending = true; }); } catch (e) {}
+} catch(e) { console.warn('Supabase init failed, running in demo mode:', e.message); }
+// A password-reset link is announced once, as soon as the client starts. Remember it until init() is listening.
+let pifPasswordRecoveryPending = false;
+try { if (sb) sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') pifPasswordRecoveryPending = true; }); } catch (e) {}
 
 function isFounder() { return !!(currentUser && currentUser.role === 'founder'); }
 
