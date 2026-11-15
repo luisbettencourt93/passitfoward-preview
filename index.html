@@ -5684,11 +5684,12 @@ create policy "raises_delete" on member_raises for delete using (auth.uid() = po
 // at the S4a staging project for testing. Both keys are PUBLIC anon keys
 // (role=anon), not secrets. No effect on the deployed prod default.
 const PIF_ENVS = {
-  production: {
+   production: {
+    appUrl: 'https://passitfoward.xyz/',
     url: 'https://liujbjfjdycacmaujawu.supabase.co',
     anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxpdWpiamZqZHljYWNtYXVqYXd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2MzQxMjYsImV4cCI6MjA4ODIxMDEyNn0.g8P98rM5OVFml5_bQY3V5x7nX5CHnVRqITSMu72Wy2Y'
   },
-  staging: {
+  staging: {     appUrl: 'https://luisbettencourt93.github.io/passitfoward-preview/',
     url: 'https://kjkhvhwykbeblyomiuxj.supabase.co',
     anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtqa2h2aHd5a2JlYmx5b21pdXhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNzUwMDcsImV4cCI6MjA5OTk1MTAwN30.px1jO1L0wMxmSIEqDsw6ZVKETO1ZjXUsEOf7vLeQios'
   }
@@ -6143,7 +6144,7 @@ async function handleForgotPassword(){
   if(!email) return showToast("Enter your email address first");
   if(!sb) return showToast("Not available in demo mode");
   const { error } = await sb.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin
+    redirectTo: PIF_ENVS[PIF_ENV].appUrl
   });
   if(error) return showToast("❌ " + error.message);
   showToast("📧 Password reset email sent!");
@@ -6216,7 +6217,7 @@ if (!cleanHandle) {
     return showToast("❌ That code has already been used");
   }
 
-  const { data, error } = await sb.auth.signUp({ email, password });
+   const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: PIF_ENVS[PIF_ENV].appUrl } });
 
   if (btn) { btn.textContent = 'Create Account'; btn.disabled = false; }
   if (error) return showToast("❌ " + error.message);
