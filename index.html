@@ -5718,7 +5718,7 @@ try {
 } catch(e) { console.warn('Supabase init failed, running in demo mode:', e.message); }
 // A password-reset link is announced once, as soon as the client starts. Remember it until init() is listening.
 let pifPasswordRecoveryPending = false;
-try { if (sb) sb.auth.onAuthStateChange((event) => { if (event === 'PASSWORD_RECOVERY') pifPasswordRecoveryPending = true; }); } catch (e) {}
+try { if (sb) sb.auth.onAuthStateChange((event, session) => { if (event === 'PASSWORD_RECOVERY') pifPasswordRecoveryPending = true; try { pifNoteAccount((session && session.user && session.user.id) || null); } catch (e2) {} }); } catch (e) {}
 
 function isFounder() { return !!(currentUser && currentUser.role === 'founder'); }
 
@@ -6138,9 +6138,10 @@ async function handleLogin() {
     }
     return showToast("❌ " + error.message);
   }
-  await loadCurrentUser(data.user);
+  // SIGNUP-R2: an account with no profile is not a member yet; loadCurrentUser shows the finish-setup prompt.
+  const pifIsMember = await loadCurrentUser(data.user);
   closeModal('login-modal');
-  showMemberTabs();
+  if (pifIsMember && pifMayShowMember(data.user.id)) showMemberTabs();
 }
 async function handleForgotPassword(){
   const email = document.getElementById('login-email')?.value?.trim();
@@ -6166,6 +6167,209 @@ async function changePassword(){
   showToast("✅ Password changed successfully!");
 }
   
+
+// SIGNUP-R2: invitation sign-up that survives email confirmation.
+// The invite code and handle go to the server before sign-up (the signup-claim route). The member profile
+// is created by one server function (complete_invite_signup) once the email is confirmed and the member
+// has signed in. The page never reads invite codes, never inserts a profile and never invents a handle.
+const PIF_SIGNUP_TEXT = {
+  signups_paused: 'Sign-ups are paused right now. Please try again later.',
+  too_many_requests: 'Too many attempts.',
+  too_many_attempts: 'Too many attempts.',
+  invalid_request: 'Please check your email, X handle and invite code.',
+  missing_claim: 'Enter your invite code and X handle to finish setting up your account.',
+  claim_expired: 'Your sign-up took too long to confirm. Enter your invite code and X handle again.',
+  invalid_code: 'That invite code is not valid. Enter a different code.',
+  invite_used: 'That invite code has already been used. Enter a different code.',
+  code_reissue_required: 'That invite code has been replaced. Ask for a new code and enter it here.',
+  handle_taken: 'That handle is already taken. Choose another.',
+  invalid_handle: 'Handles are 1 to 15 letters, numbers or underscores. Choose another.',
+  email_not_confirmed: 'Please confirm your email first, then log in.',
+  not_signed_in: 'Please log in again.',
+  profile_unavailable: "We couldn't load your profile. Check your connection and try again.",
+  try_again: 'Something went wrong. Please try again.'
+};
+function pifSignupMessage(error, retryAt) {
+  let msg = PIF_SIGNUP_TEXT[error] || PIF_SIGNUP_TEXT.try_again;
+  if ((error === 'too_many_requests' || error === 'too_many_attempts') && retryAt) {
+    const d = new Date(retryAt);
+    if (!isNaN(d)) msg += ' Try again after ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '.';
+  }
+  return msg;
+}
+async function pifCompleteSignup(code, handle) {
+  if (!sb) return { ok: false, error: 'try_again' };
+  try {
+    const args = {};
+    if (code) args.p_code = code;
+    if (handle) args.p_handle = handle;
+    const { data, error } = await sb.rpc('complete_invite_signup', args);
+    if (error || !data) return { ok: false, error: 'try_again' };
+    return data;
+  } catch (e) {
+    return { ok: false, error: 'try_again' };
+  }
+}
+// SIGNUP-R2: which account the sign-in layer last reported (kept up to date, synchronously, by the auth listener).
+let pifSeenUserId;              // undefined until the first report
+const pifCompletedUsers = new Set();  // accounts whose sign-up completion the server has already confirmed on this page
+function pifNoteAccount(userId) {
+  pifSeenUserId = userId;
+  pifSetupAccountChanged(userId);
+}
+// False as soon as the sign-in layer has reported a different account OR a sign-out (null). Only "nothing
+// reported yet" is given the benefit of the doubt; pifStillAccount then asks the sign-in layer directly.
+function pifAccountIsNow(userId) {
+  return pifSeenUserId === undefined || pifSeenUserId === userId;
+}
+// Work started for one account is only kept if that account is still the one signed in.
+async function pifStillAccount(userId) {
+  if (!pifAccountIsNow(userId)) return false;
+  const now = await pifSessionUserId();
+  return now === userId && pifAccountIsNow(userId);
+}
+// The last look before the member area is shown: the loaded profile and the signed-in account are the same one.
+function pifMayShowMember(userId) {
+  return !!currentUser && currentUser.id === userId && pifAccountIsNow(userId);
+}
+// SIGNUP-R2: the finish-setup form belongs to ONE account: the one it was opened for.
+let pifSetupUserId = null;
+let pifSetupMode = 'finish';   // 'finish' = ask for code/handle, 'retry' = the profile could not be read
+async function pifSessionUserId() {
+  try { const { data } = await sb.auth.getSession(); return (data && data.session && data.session.user && data.session.user.id) || null; } catch (e) { return null; }
+}
+function pifClearFinishSetupFields() {
+  const c = document.getElementById('finish-setup-code'); if (c) c.value = '';
+  const h = document.getElementById('finish-setup-handle'); if (h) h.value = '';
+}
+function pifHideFinishSetup() {
+  const m = document.getElementById('finish-setup-modal');
+  if (m) m.style.display = 'none';
+  pifClearFinishSetupFields();
+  pifSetupUserId = null;
+  pifSetupMode = 'finish';
+}
+// Called (synchronously) whenever the signed-in account changes: a form opened for another account is closed and emptied.
+function pifSetupAccountChanged(userId) {
+  if (pifSetupUserId && pifSetupUserId !== userId) pifHideFinishSetup();
+}
+function pifShowFinishSetup(reason, retryAt, userId) {
+  let m = document.getElementById('finish-setup-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'finish-setup-modal';
+    m.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:5000;align-items:center;justify-content:center;';
+    m.innerHTML = '<div style="background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:1.5rem;width:min(92vw,420px);">' +
+      '<h3 style="margin:0 0 0.6rem 0;">Finish setting up your account</h3>' +
+      '<p id="finish-setup-msg" style="font-size:0.9rem;color:#94a3b8;margin:0 0 1rem 0;"></p>' +
+      '<input type="text" id="finish-setup-code" aria-label="Invite code" placeholder="Invite code" class="form-input" style="margin-bottom:0.8rem;">' +
+      '<input type="text" id="finish-setup-handle" aria-label="X handle" placeholder="X handle" class="form-input" style="margin-bottom:0.8rem;">' +
+      '<button id="finish-setup-btn" class="btn" style="width:100%;margin-bottom:0.6rem;" onclick="pifFinishSetupAction()">Finish</button>' +
+      '<button id="finish-setup-logout" class="btn btn-sm" style="width:100%;background:none;" onclick="pifFinishSetupLogout()">Log out</button>' +
+      '</div>';
+    document.body.appendChild(m);
+  }
+  // Never open the form for an account that is no longer the one signed in.
+  if (userId && !pifAccountIsNow(userId)) return;
+  // A form that was open for a different account never keeps that account's typed values.
+  if (pifSetupUserId !== (userId || null)) pifClearFinishSetupFields();
+  pifSetupUserId = userId || null;
+  pifSetupMode = reason === 'profile_unavailable' ? 'retry' : 'finish';
+  document.getElementById('finish-setup-msg').textContent = pifSignupMessage(reason, retryAt);
+  // A code problem asks for a code, a handle problem for a handle, anything else for both. A failed profile read asks for neither.
+  const retry = pifSetupMode === 'retry';
+  const needCode = ['invite_used', 'invalid_code', 'code_reissue_required'].includes(reason);
+  const needHandle = ['handle_taken', 'invalid_handle'].includes(reason);
+  document.getElementById('finish-setup-code').style.display = (needHandle || retry) ? 'none' : '';
+  document.getElementById('finish-setup-handle').style.display = (needCode || retry) ? 'none' : '';
+  const btn = document.getElementById('finish-setup-btn');
+  btn.disabled = false; btn.textContent = retry ? 'Retry' : 'Finish';
+  m.style.display = 'flex';
+}
+function pifFinishSetupAction() {
+  return pifSetupMode === 'retry' ? pifRetryProfileLoad() : pifSubmitFinishSetup();
+}
+// The signed-in account is no longer the one this form was opened for: drop the form and carry on for whoever is signed in now.
+async function pifSetupResumeForPresentAccount() {
+  pifHideFinishSetup();
+  let user = null;
+  try { user = (await sb.auth.getSession()).data.session.user; } catch (e) {}
+  if (user && await loadCurrentUser(user) && pifMayShowMember(user.id)) { closeModal('login-modal'); showMemberTabs(); }
+}
+async function pifRetryProfileLoad() {
+  const forUser = pifSetupUserId;
+  const btn = document.getElementById('finish-setup-btn');
+  let user = null;
+  try { user = (await sb.auth.getSession()).data.session.user; } catch (e) {}
+  if (!user) return pifHideFinishSetup();
+  if (user.id !== forUser) return pifSetupResumeForPresentAccount();
+  if (btn) { btn.disabled = true; btn.textContent = 'Retrying…'; }
+  // After a completion the server already confirmed, Retry only repeats the profile read (loadCurrentUser sees to that).
+  const ok = await loadCurrentUser(user);
+  if (ok && pifMayShowMember(forUser)) { closeModal('login-modal'); showMemberTabs(); }
+}
+async function pifSubmitFinishSetup() {
+  const forUser = pifSetupUserId;
+  const btn = document.getElementById('finish-setup-btn');
+  const code = (document.getElementById('finish-setup-code')?.value || '').trim().toUpperCase();
+  const handle = pifNormalizeHandleKey(document.getElementById('finish-setup-handle')?.value || '');
+  // Never send one account's typed values under another account's sign-in.
+  if (!forUser || (await pifSessionUserId()) !== forUser) return pifSetupResumeForPresentAccount();
+  if (btn) { btn.disabled = true; btn.textContent = 'Finishing…'; }
+  const res = await pifCompleteSignup(code, handle);
+  let user = null;
+  try { user = (await sb.auth.getSession()).data.session.user; } catch (e) {}
+  // A result that arrives after the account changed belongs to the previous account: discard it, before
+  // anything is recorded or shown.
+  if (pifSetupUserId !== forUser || !pifAccountIsNow(forUser)) return;
+  if (!user || user.id !== forUser) return pifSetupResumeForPresentAccount();
+  if (res && res.ok) {
+    pifCompletedUsers.add(forUser);
+    // The form stays up until this same account's profile has loaded; if it cannot be read, it turns into Retry.
+    const ok = await loadCurrentUser(user, true);
+    if (ok && pifMayShowMember(forUser)) {
+      closeModal('login-modal');
+      showMemberTabs();
+      showToast('✅ Your account is ready.');
+    }
+    return;
+  }
+  pifShowFinishSetup(res && res.error, res && res.retry_at, forUser);
+}
+async function pifFinishSetupLogout() {
+  pifHideFinishSetup();
+  await logout();
+}
+// One profile lookup for login, session restore and after completion. "No profile" and "could not read" are different answers.
+async function pifReadProfile(userId) {
+  try {
+    const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
+    if (error) return { state: 'error' };
+    return data ? { state: 'found', profile: data } : { state: 'none' };
+  } catch (e) {
+    return { state: 'error' };
+  }
+}
+// The one banned check. True means the account was signed out and must not be treated as a member.
+async function pifRefuseIfBanned(profile) {
+  if (!profile || !profile.banned) return false;
+  currentUser = null;
+  pifHideFinishSetup();
+  try { await sb.auth.signOut(); } catch (e) {}
+  setTimeout(() => {
+    showToast('🚫 Your account has been banned for repeated deal failures. Contact @miguelbettencourt74 on X to appeal.');
+  }, 500);
+  return true;
+}
+// Signed in, and a successful lookup found NO profile: ask the server to finish sign-up, else show the form for this account.
+async function pifStartCompletion(user) {
+  currentUser = null;
+  const res = await pifCompleteSignup();
+  if (!(await pifStillAccount(user.id))) return false;   // the account changed while waiting: nothing is recorded or shown
+  if (res && res.ok) { pifCompletedUsers.add(user.id); return await loadCurrentUser(user, true); }
+  pifShowFinishSetup(res && res.error, res && res.retry_at, user.id);
+  return false;
+}
 
 async function handleSignup() {
   const email = (document.getElementById('signup-email')?.value || '').trim();
@@ -6204,100 +6408,93 @@ if (!cleanHandle) {
 
   if (btn) { btn.textContent = 'Creating account…'; btn.disabled = true; }
 
-  // Check invite code
-  const { data: codeRow } = await sb.from('invite_codes')
-    .select('*')
-    .eq('code', code)
-    .single();
+  const pifResetSignupBtn = () => { if (btn) { btn.textContent = 'Create Account'; btn.disabled = false; } };
 
-  if (!codeRow) {
-    if (btn) { btn.textContent = 'Create Account'; btn.disabled = false; }
-    return showToast("❌ Invalid invite code");
+  // SIGNUP-R2: the server keeps the invite code and handle. The page only receives a reference, and the
+  // answer is the same whether or not the code is valid.
+  let claim = null;
+  try {
+    const claimRes = await fetch(SUPABASE_URL + '/functions/v1/signup-claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
+      body: JSON.stringify({ code: code, handle: cleanHandle, email: email })
+    });
+    claim = await claimRes.json();
+  } catch (e) {
+    claim = null;
+  }
+  if (!claim || claim.ok !== true || !claim.ref) {
+    pifResetSignupBtn();
+    return showToast("❌ " + pifSignupMessage(claim && claim.error, claim && claim.retry_at));
   }
 
-  if (codeRow.used_by) {
-    if (btn) { btn.textContent = 'Create Account'; btn.disabled = false; }
-    return showToast("❌ That code has already been used");
-  }
+  const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: PIF_ENVS[PIF_ENV].appUrl, data: { signup_claim_ref: claim.ref } } });
 
-   const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: PIF_ENVS[PIF_ENV].appUrl } });
-
-  if (btn) { btn.textContent = 'Create Account'; btn.disabled = false; }
+  pifResetSignupBtn();
   if (error) return showToast("❌ " + error.message);
 
-  if (data.user) {
-    // E1 (S4a): plain INSERT ... ON CONFLICT (id) DO NOTHING; xp omitted (server default 0).
-    // xp is no longer client-writable post-07; a DO-NOTHING upsert needs only INSERT
-    // privilege on the listed columns (id,handle,bio,skills,x_url,last_seen).
-    const { error: pErr } = await sb.from('profiles').upsert({
-      id: data.user.id,
-      handle: cleanHandle,
-      bio: '',
-      skills: [],
-      x_url: '',
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'id', ignoreDuplicates: true });
-
-   // INVITE-TRACK-1: redeem invite code via SECURITY DEFINER RPC.
-// Old direct .update() was silently blocked by founder-only RLS.
-// The RPC validates + marks atomically server-side and returns a result.
-var inviteResult = null;
-
-try {
-  const { data: rpcData, error: rpcErr } = await sb.rpc('redeem_invite_code', {
-    p_code: code,
-    p_handle: cleanHandle
-  });
-
-  if (rpcErr) {
-    console.warn('Invite redeem RPC error:', rpcErr.message);
-  } else {
-    inviteResult = rpcData;
+  if (data.session && data.user) {
+    // Email confirmation is switched off for this project: finish straight away.
+    const pifIsMember = await loadCurrentUser(data.user);
+    closeModal('login-modal');
+    if (pifIsMember && pifMayShowMember(data.user.id)) { showMemberTabs(); showToast("✅ Account created!"); }
+    return;
   }
-} catch (e) {
-  console.warn('Invite redeem call failed:', e);
+  closeModal('login-modal');
+  showToast("📧 Check your email and confirm your account, then log in.");
 }
-
-if (pErr) {
-  console.warn('Profile create:', pErr.message);
-  if (pErr.code === '23505' || /duplicate key|unique/i.test(pErr.message || '')) {
-    return showToast("❌ That handle is already taken — please choose another");
-  }
-}
-
-// Surface invite redemption outcome.
-// Account is already created by this point, so this is logged for diagnosis.
-if (inviteResult && inviteResult.ok === false) {
-  console.warn('Invite not marked used:', inviteResult.error);
-}
-
-await loadCurrentUser(data.user);
-closeModal('login-modal');
-showToast("✅ Account created! You can log in now.");
-}
-}
- async function loadCurrentUser(user) {
-  if (!user) return;
+ async function loadCurrentUser(user, pifAfterCompletion) {
+  if (!user) return false;
   // HN1.2: derive a canonical fallback handle (bare lower) from email.
   let handle = pifNormalizeHandleKey(user.email.split('@')[0]);
-  if (sb) {
-    const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    if (data) {
-      // HN1.2: force session handle canonical even if a stale mixed row exists.
-      // Post-HN1.1 migration this is already canonical; this guarantees it.
-      currentUser = { ...data, handle: pifNormalizeHandleKey(data.handle), email: user.email };
-      // Hydrate XP + locked XP from the live profile row.
-      // Use ?? not || so 0 still gets cached (|| treats 0 as falsy and skips).
-      localStorage.setItem('pf_xp_' + data.handle, data.xp ?? 0);
-      localStorage.setItem('pf_locked_xp_' + data.handle, data.locked_xp ?? 0);
-      localStorage.setItem('pf_current_handle', data.handle);
-      localStorage.setItem('pf_profile_' + data.handle, JSON.stringify(data));
-await pifLoadGoalState();
-return;
-    }
+  if (!sb) {
+    currentUser = { id: user.id, email: user.email, handle };
+    localStorage.setItem('pf_current_handle', handle);
+    return true;
   }
-  currentUser = { id: user.id, email: user.email, handle };
-  localStorage.setItem('pf_current_handle', handle);
+  const pifRead = await pifReadProfile(user.id);
+  // SIGNUP-R2: an answer that arrives after the account changed is discarded.
+  if (!(await pifStillAccount(user.id))) return false;
+  if (pifRead.state === 'error') {
+    // The profile could not be read. That says nothing about whether one exists: never start sign-up
+    // completion from here. Keep a visible Retry.
+    currentUser = null;
+    pifShowFinishSetup('profile_unavailable', null, user.id);
+    return false;
+  }
+  if (pifRead.state === 'found') {
+    const data = pifRead.profile;
+    if (await pifRefuseIfBanned(data)) return false;
+    // HN1.2: force session handle canonical even if a stale mixed row exists.
+    // Post-HN1.1 migration this is already canonical; this guarantees it.
+    currentUser = { ...data, handle: pifNormalizeHandleKey(data.handle), email: user.email };
+    // Hydrate XP + locked XP from the live profile row.
+    // Use ?? not || so 0 still gets cached (|| treats 0 as falsy and skips).
+    localStorage.setItem('pf_xp_' + data.handle, data.xp ?? 0);
+    localStorage.setItem('pf_locked_xp_' + data.handle, data.locked_xp ?? 0);
+    localStorage.setItem('pf_current_handle', data.handle);
+    localStorage.setItem('pf_profile_' + data.handle, JSON.stringify(data));
+    pifHideFinishSetup();
+    pifCompletedUsers.delete(user.id);
+await pifLoadGoalState();
+    // SIGNUP-R2: the account changed while the goal state was loading: this result is no longer wanted.
+    if (!(await pifStillAccount(user.id))) {
+      if (currentUser && currentUser.id === user.id) currentUser = null;
+      if (localStorage.getItem('pf_current_handle') === data.handle) localStorage.removeItem('pf_current_handle');
+      return false;
+    }
+return true;
+  }
+  // SIGNUP-R2: signed in, and the lookup succeeded with zero rows. This account is not a member yet.
+  // A handle is never invented from the email.
+  currentUser = null;
+  if (pifAfterCompletion || pifCompletedUsers.has(user.id)) {
+    // The server said sign-up is complete but no profile came back: say so and offer Retry, never go quiet.
+    // Completion already succeeded for this account, so it is not called again: Retry repeats the read only.
+    pifShowFinishSetup('profile_unavailable', null, user.id);
+    return false;
+  }
+  return await pifStartCompletion(user);
 }
 
 // -- INVITE CODE MANAGER -------------------------------------------
@@ -6342,11 +6539,16 @@ async function loadInviteCodes() {
 
 async function generateInviteCodes() {
   if (!isFounder() || !sb) return;
-  const qty = parseInt(document.getElementById('invite-qty').value) || 5;
-  const codes = Array.from({ length: qty }, () => ({ code: generateCodeString() }));
-  const { error } = await sb.from('invite_codes').insert(codes);
-  if (error) return showToast("Error: " + error.message);
-  showToast(`✅ ${qty} new code${qty > 1 ? 's' : ''} generated!`);
+  const qty = Math.min(parseInt(document.getElementById('invite-qty').value) || 5, 25);
+  // SIGNUP-R2: codes are made by the server. A code made in the browser can no longer be used to sign up.
+  let made = 0, failed = null;
+  for (let i = 0; i < qty; i++) {
+    const { data, error } = await sb.rpc('issue_invite_code');
+    if (error || !data) { failed = error || { message: 'no code returned' }; break; }
+    made++;
+  }
+  if (!made) return showToast("Error: " + ((failed && failed.message) || 'could not generate codes'));
+  showToast(`✅ ${made} new code${made > 1 ? 's' : ''} generated!`);
   await loadInviteCodes();
 }
 
@@ -6408,15 +6610,18 @@ async function initAuth() {
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (session?.user) {
-      const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+      const pifRead = await pifReadProfile(session.user.id);
+      // SIGNUP-R2: the account changed (or signed out) while the profile was being read: discard this answer,
+      // whatever it was, before anything is shown.
+      if (!(await pifStillAccount(session.user.id))) return false;
+      if (pifRead.state === 'error') {
+        // SIGNUP-R2: could not read the profile. Not the same as having none: offer Retry, do not start completion.
+        pifShowFinishSetup('profile_unavailable', null, session.user.id);
+        return false;
+      }
+      const profile = pifRead.profile;
       if (profile) {
-        if(profile.banned) {
-          await sb.auth.signOut();
-          setTimeout(() => {
-            showToast('🚫 Your account has been banned for repeated deal failures. Contact @miguelbettencourt74 on X to appeal.');
-          }, 500);
-          return false;
-        }
+        if (await pifRefuseIfBanned(profile)) return false;
         currentUser = { ...profile, email: session.user.email };
 
         // -- Hydrate xp + locked_xp from the live profile row --
@@ -6426,6 +6631,8 @@ async function initAuth() {
 
         return true;
       }
+      // SIGNUP-R2: the lookup succeeded and found no profile, for example on arriving from the confirmation email.
+      if (await pifStartCompletion(session.user)) return true;
     }
   } catch(e) {}
   return false;
@@ -16354,11 +16561,22 @@ async function init() {
     });
   }
 
+  // SIGNUP-R2: last look before the member area is shown on session restore.
+  if (loggedIn && currentUser && sb && !String(currentUser.id || '').startsWith('demo-') && !(await pifStillAccount(currentUser.id))) currentUser = null;
   if (loggedIn && currentUser) {
-    showMemberTabs();
+    const pifRestoredId = currentUser.id;
     // F3 reload path: initAuth() is the returning-session path and never calls
     // loadCurrentUser(), so goal state is unhydrated here. Hydrate, then repaint.
     await pifLoadGoalState();
+    // SIGNUP-R2: the member area is shown only after goal loading and a final identity check. If the account
+    // changed or signed out meanwhile, nothing of the previous account has been shown: start again from
+    // whoever is signed in now.
+    if (sb && !String(pifRestoredId || '').startsWith('demo-') && !(await pifStillAccount(pifRestoredId))) {
+      currentUser = null;
+      location.reload();
+      return;
+    }
+    showMemberTabs();
     renderGoal();
     // -- ALWAYS hydrate xp + locked_xp from the live DB on every page load --
     // This is the canonical path. Don't trust whatever initAuth cached.
