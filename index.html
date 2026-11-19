@@ -5141,10 +5141,9 @@ body.light .nr-state-unread { color:#059669; }
     <!-- SIGNUP FORM -->
     <div id="auth-signup-form" style="display:none;">
       <input type="email" id="signup-email" aria-label="Email address" placeholder="Email address" class="form-input" style="margin-bottom:0.8rem;">
-      <input type="text" id="signup-handle" aria-label="Choose a handle" placeholder="X Handle (@yourname)" class="form-input" style="margin-bottom:0.8rem;">
-       <input type="text" id="signup-code" aria-label="Invite code" placeholder="Invite code" class="form-input" style="margin-bottom:0.8rem;">
       <input type="password" id="signup-password" aria-label="Choose a password" placeholder="Password (6+ characters)" class="form-input" style="margin-bottom:0.8rem;">
       <input type="password" id="signup-confirm" aria-label="Confirm password" placeholder="Confirm password" class="form-input" style="margin-bottom:1.2rem;">
+      <p id="signup-next-step" style="font-size:0.8rem;color:#94a3b8;margin:0 0 0.9rem 0;">After you confirm your email, we’ll ask for your invite code and X handle.</p>
       <button id="signup-submit-btn" onclick="handleSignup()" class="btn" style="width:100%;">Create Account</button>
       <p style="text-align:center;margin-top:1rem;color:#64748b;font-size:0.85rem;">
         Already have an account? <span onclick="showAuthTab('login')" style="color:var(--primary);cursor:pointer;font-weight:600;">Login →</span>
@@ -6239,6 +6238,11 @@ async function handleLogin() {
   const btn = document.getElementById('login-submit-btn');
   if (btn) { btn.textContent = 'Logging in…'; btn.disabled = true; }
 
+  // The sign-in library did not load. The local demo account is for a developer's own machine only.
+  if (!sb && !pifIsLocalDevHost()) {
+    if (btn) { btn.textContent = 'Login'; btn.disabled = false; }
+    return showToast("Log in isn't available right now. Please refresh the page and try again.");
+  }
   if (!sb) {
     const handle = '@' + email.split('@')[0].replace(/[^a-zA-Z0-9_]/g,'');
     currentUser = { id: 'demo-' + handle, email, handle };
@@ -6288,15 +6292,16 @@ async function changePassword(){
 }
   
 
-// SIGNUP-R2: invitation sign-up that survives email confirmation.
-// The invite code and handle go to the server before sign-up (the signup-claim route). The member profile
-// is created by one server function (complete_invite_signup) once the email is confirmed and the member
-// has signed in. The page never reads invite codes, never inserts a profile and never invents a handle.
+// SIGNUP-R2, fallback 1: invitation sign-up that survives email confirmation without a public claim route.
+// Sign-up takes an email and a password only. Once the email is confirmed and the person has signed in, on
+// whichever device, the page asks for the invite code and X handle once and sends them straight to one
+// server function (complete_invite_signup), which creates the member profile. Neither value is ever put in
+// browser storage. The page never reads invite codes, never inserts a profile and never invents a handle.
 const PIF_SIGNUP_TEXT = {
   signups_paused: 'Sign-ups are paused right now. Please try again later.',
   too_many_requests: 'Too many attempts.',
   too_many_attempts: 'Too many attempts.',
-  invalid_request: 'Please check your email, X handle and invite code.',
+  invalid_request: 'Please check your email and password.',
   missing_claim: 'Enter your invite code and X handle to finish setting up your account.',
   claim_expired: 'Your sign-up took too long to confirm. Enter your invite code and X handle again.',
   invalid_code: 'That invite code is not valid. Enter a different code.',
@@ -6317,14 +6322,27 @@ function pifSignupMessage(error, retryAt) {
   }
   return msg;
 }
-async function pifCompleteSignup(code, handle) {
-  if (!sb) return { ok: false, error: 'try_again' };
+// FINISH-BIND: the request is sent with the token it is given (the session that owns the form), never through
+// the shared client, which would pick "whoever is signed in now" at the moment of sending.
+function pifTokenAccount(token) {
+  try {
+    const part = String(token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(part.padEnd(part.length + (4 - part.length % 4) % 4, '=')));
+    return typeof claims.sub === 'string' && claims.sub ? claims.sub : null;
+  } catch (e) {
+    return null;
+  }
+}
+async function pifCompleteSignup(code, handle, token) {
+  if (!sb || !token) return { ok: false, error: 'try_again' };
   try {
     const args = {};
     if (code) args.p_code = code;
     if (handle) args.p_handle = handle;
-    const { data, error } = await sb.rpc('complete_invite_signup', args);
-    if (error || !data) return { ok: false, error: 'try_again' };
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/complete_invite_signup', { method: 'POST', headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(args) });
+    if (!res.ok) return { ok: false, error: 'try_again' };
+    const data = await res.json();
+    if (!data) return { ok: false, error: 'try_again' };
     return data;
   } catch (e) {
     return { ok: false, error: 'try_again' };
@@ -6433,10 +6451,14 @@ async function pifSubmitFinishSetup() {
   const btn = document.getElementById('finish-setup-btn');
   const code = (document.getElementById('finish-setup-code')?.value || '').trim().toUpperCase();
   const handle = pifNormalizeHandleKey(document.getElementById('finish-setup-handle')?.value || '');
-  // Never send one account's typed values under another account's sign-in.
-  if (!forUser || (await pifSessionUserId()) !== forUser) return pifSetupResumeForPresentAccount();
+  // Never send one account's typed values under another account's sign-in. FINISH-BIND: the session is read once;
+  // it must belong to the account this form was opened for and must not be an ended one; ITS token is the one sent.
+  let held = null;
+  try { held = (await sb.auth.getSession()).data.session; } catch (e) {}
+  if (!forUser || !held || !held.access_token || !held.user || held.user.id !== forUser || pifTokenAccount(held.access_token) !== forUser
+      || pifIsEnded(pifSessionIdOf(held), held.access_token)) return pifSetupResumeForPresentAccount();
   if (btn) { btn.disabled = true; btn.textContent = 'Finishing…'; }
-  const res = await pifCompleteSignup(code, handle);
+  const res = await pifCompleteSignup(code, handle, held.access_token);
   let user = null;
   try { user = (await sb.auth.getSession()).data.session.user; } catch (e) {}
   // A result that arrives after the account changed belongs to the previous account: discard it, before
@@ -6481,44 +6503,38 @@ async function pifRefuseIfBanned(profile) {
   }, 500);
   return true;
 }
-// Signed in, and a successful lookup found NO profile: ask the server to finish sign-up, else show the form for this account.
+// Signed in, and a successful lookup found NO profile: show the finish form for this account. Nothing was kept
+// from sign-up, so there is nothing to send until the person types the invite code and handle.
 async function pifStartCompletion(user) {
   currentUser = null;
-  const res = await pifCompleteSignup();
-  if (!(await pifStillAccount(user.id))) return false;   // the account changed while waiting: nothing is recorded or shown
-  if (res && res.ok) { pifCompletedUsers.add(user.id); return await loadCurrentUser(user, true); }
-  pifShowFinishSetup(res && res.error, res && res.retry_at, user.id);
+  if (!(await pifStillAccount(user.id))) return false;   // the account changed while waiting: nothing is shown
+  pifShowFinishSetup('missing_claim', null, user.id);
   return false;
 }
 
+// True only on a developer's own machine (localhost, 127.0.0.1, [::1], *.localhost, or a page opened from a file).
+function pifIsLocalDevHost() {
+  const h = String(location.hostname || '').toLowerCase();
+  return location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h.endsWith('.localhost');
+}
 async function handleSignup() {
   const email = (document.getElementById('signup-email')?.value || '').trim();
-  const handle = (document.getElementById('signup-handle')?.value || '').trim();
   const password = (document.getElementById('signup-password')?.value || '').trim();
   const confirm = (document.getElementById('signup-confirm')?.value || '').trim();
-  const code = (document.getElementById('signup-code')?.value || '').trim().toUpperCase();
 
   if (!email) return showToast("Enter your email");
-  if (!handle) return showToast("Enter your X handle");
-  if (!code) return showToast("Enter your invite code");
   if (password.length < 6) return showToast("Password needs 6+ characters");
   if (password !== confirm) return showToast("Passwords don't match");
 
-  // HN1.2: canonical bare-lower handle (root-cause fix — was '@' + raw casing).
-  // profiles.handle and invite_codes.used_by both store canonical form.
   const btn = document.getElementById('signup-submit-btn');
-  const cleanHandle = pifNormalizeHandleKey(handle);
-if (!cleanHandle) { 
-  if (btn) { 
-    btn.textContent = 'Create Account'; 
-    btn.disabled = false; 
-  } 
-  return showToast("Enter a valid X handle"); 
-}
-  
-  // DEMO MODE (Supabase not loaded)
+
+  // The sign-in library did not load. The local demo account is for a developer's own machine only: on a hosted
+  // page nothing is created, no handle is invented and nothing is stored.
+  if (!sb && !pifIsLocalDevHost()) return showToast("Sign-up isn't available right now. Please refresh the page and try again.");
+  // DEMO MODE (Supabase not loaded, local development host)
   if (!sb) {
-    currentUser = { id: 'demo-' + cleanHandle, email, handle: cleanHandle };
+    const demoHandle = pifNormalizeHandleKey(email.split('@')[0]) || 'demo';
+    currentUser = { id: 'demo-' + demoHandle, email, handle: demoHandle };
     localStorage.setItem('pf_demo_user', JSON.stringify(currentUser));
     closeModal('login-modal');
     showMemberTabs();
@@ -6530,31 +6546,15 @@ if (!cleanHandle) {
 
   const pifResetSignupBtn = () => { if (btn) { btn.textContent = 'Create Account'; btn.disabled = false; } };
 
-  // SIGNUP-R2: the server keeps the invite code and handle. The page only receives a reference, and the
-  // answer is the same whether or not the code is valid.
-  let claim = null;
-  try {
-    const claimRes = await fetch(SUPABASE_URL + '/functions/v1/signup-claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + SUPABASE_ANON_KEY },
-      body: JSON.stringify({ code: code, handle: cleanHandle, email: email })
-    });
-    claim = await claimRes.json();
-  } catch (e) {
-    claim = null;
-  }
-  if (!claim || claim.ok !== true || !claim.ref) {
-    pifResetSignupBtn();
-    return showToast("❌ " + pifSignupMessage(claim && claim.error, claim && claim.retry_at));
-  }
-
-  const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: PIF_ENVS[PIF_ENV].appUrl, data: { signup_claim_ref: claim.ref } } });
+  // Fallback 1: only the email and password are sent, to Auth. The invite code and handle are asked for
+  // after the email is confirmed, so nothing has to be kept anywhere in between.
+  const { data, error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: PIF_ENVS[PIF_ENV].appUrl } });
 
   pifResetSignupBtn();
   if (error) return showToast("❌ " + error.message);
 
   if (data.session && data.user) {
-    // Email confirmation is switched off for this project: finish straight away.
+    // Email confirmation is switched off for this project: carry on straight away (the finish form opens).
     const pifIsMember = await loadCurrentUser(data.user);
     closeModal('login-modal');
     if (pifIsMember && pifMayShowMember(data.user.id)) { showMemberTabs(); showToast("✅ Account created!"); }
@@ -6895,6 +6895,8 @@ function pifSignedOutUnsaved() {
 
 async function initAuth() {
   if (!sb) {
+    // A saved demo account is only ever restored on a developer's own machine. On a hosted page it is ignored.
+    if (!pifIsLocalDevHost()) return false;
     const demo = localStorage.getItem('pf_demo_user');
     if (demo) {
       try {
