@@ -5703,6 +5703,109 @@ const SUPABASE_ANON_KEY = PIF_ENVS[PIF_ENV].anon;
 if (PIF_ENV === 'staging') console.info('%cPIF ENV: STAGING (' + SUPABASE_URL + ')', 'color:#b45309;font-weight:bold');
 const STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/bJebIUgIS6Yy8VU1B2dEs00';
 const FOUNDER_EMAIL = null;
+// LOGOUT-FIX v8, ended sessions. When Log out is confirmed, the page records that this exact session has ended,
+// under a key of its own. It never removes or rewrites the stored sign-in on its own account: every tab shares that
+// entry, and the sign-in library may be replacing it with a newer sign-in at any moment. Instead the client below
+// uses pifAuthStorage as its storage:
+//   reading:  the stored sign-in reads as "nothing" when it is a session recorded as ended;
+//   writing:  a write of a session recorded as ended is dropped, so a late write for an old session (a token
+//             renewal that was already on its way, say) cannot displace a newer sign-in;
+//   removing: the library's own removal is passed through unchanged.
+// The record is kept in the browser's shared storage; if that is refused, in this tab's own storage; if that is
+// refused too, the page does not reload (see pifSignedOutUnsaved), because after a reload nothing would remember
+// that the session ended and its token can stay valid for up to an hour.
+var PIF_ENDED_PREFIX = 'pif_ended_session:';
+var pifEndedHere = {};          // ended sessions recorded by this tab, kept in memory as well
+function pifShortHash(text) {
+  let a = 0x811c9dc5, b = 0x01000193;
+  for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193) >>> 0; b = Math.imul(b + c, 0x85ebca6b) >>> 0; b = (b ^ (b >>> 13)) >>> 0; }
+  return a.toString(16) + b.toString(16) + text.length.toString(16);
+}
+// The id Supabase gives one sign-in session. It is inside the access token and stays the same when the token is renewed.
+function pifSessionIdOf(session) {
+  try {
+    const part = String(session.access_token).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(part.padEnd(part.length + (4 - part.length % 4) % 4, '=')));
+    return typeof claims.session_id === 'string' && claims.session_id ? claims.session_id : null;
+  } catch (e) {
+    return null;
+  }
+}
+// The record keys for one session: by its id when there is one, and by its token (as a short hash, never the
+// token itself) for the case where no id could be read.
+function pifEndedKeys(id, token) {
+  const keys = [];
+  if (id) keys.push(PIF_ENDED_PREFIX + id);
+  if (token) keys.push(PIF_ENDED_PREFIX + 't:' + pifShortHash(String(token)));
+  return keys;
+}
+function pifIsEnded(id, token) {
+  for (const key of pifEndedKeys(id, token)) {
+    if (pifEndedHere[key]) return true;
+    try { if (localStorage.getItem(key) !== null) return true; } catch (e) {}
+    try { if (sessionStorage.getItem(key) !== null) return true; } catch (e) {}
+  }
+  return false;
+}
+// Records that a session has ended and checks that the record can be read back. One key per session, written
+// once: nothing is read, changed and written back. Returns where the record is held:
+//   'shared'  the browser's shared storage: every tab and every later visit sees it;
+//   'tab'     only this tab's own storage: this tab stays signed out across reloads;
+//   'memory'  nowhere that survives a reload.
+function pifMarkSessionEnded(id, token) {
+  const keys = pifEndedKeys(id, token);
+  const key = keys.length ? keys[0] : null;
+  if (!key) return 'memory';
+  pifEndedHere[key] = true;
+  const stamp = String(Date.now());
+  const put = (store) => { try { store.setItem(key, stamp); return store.getItem(key) !== null; } catch (e) { return false; } };
+  if (put(localStorage)) return 'shared';
+  // The shared storage refused (full, usually). Nothing else in the browser is deleted to make room: saved votes,
+  // stars and notes there may belong to other accounts that use this browser.
+  if (put(sessionStorage)) return 'tab';
+  return 'memory';
+}
+function pifStoredSessionOf(raw) {
+  try {
+    let stored = JSON.parse(raw);
+    if (stored && !stored.access_token && stored.currentSession) stored = stored.currentSession;
+    return stored && stored.access_token ? stored : null;
+  } catch (e) {
+    return null;
+  }
+}
+// What the sign-in client uses as its storage. See the note above.
+function pifAuthStorage() {
+  const isAuthKey = (key) => /-auth-token$/.test(String(key));
+  return {
+    getItem(key) {
+      const raw = localStorage.getItem(key);
+      if (raw === null || !isAuthKey(key)) return raw;
+      const stored = pifStoredSessionOf(raw);
+      if (!stored) return raw;
+      if (pifIsEnded(pifSessionIdOf(stored), stored.access_token)) return null;
+      return raw;
+    },
+    setItem(key, value) {
+      if (isAuthKey(key)) {
+        const incoming = pifStoredSessionOf(value);
+        if (incoming) {
+          if (pifIsEnded(pifSessionIdOf(incoming), incoming.access_token)) return;   // a late write for an ended session: dropped
+        }
+      }
+      localStorage.setItem(key, value);
+    },
+    removeItem(key) { localStorage.removeItem(key); }
+  };
+}
+// Records older than 60 days are cleared when the page loads. By then the library has long since dropped the session.
+try {
+  for (const store of [localStorage, sessionStorage]) {
+    for (const key of Object.keys(store)) {
+      if (key.indexOf(PIF_ENDED_PREFIX) === 0 && !(Date.now() - Number(store.getItem(key)) < 60 * 24 * 3600 * 1000)) store.removeItem(key);
+    }
+  }
+} catch (e) {}
 // Init Supabase safely — never crashes even if CDN is slow or keys are missing
 let sb = null;
 try {
@@ -5711,14 +5814,31 @@ try {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: true,
+        storage: pifAuthStorage()
       }
     });
   }
 } catch(e) { console.warn('Supabase init failed, running in demo mode:', e.message); }
 // A password-reset link is announced once, as soon as the client starts. Remember it until init() is listening.
 let pifPasswordRecoveryPending = false;
-try { if (sb) sb.auth.onAuthStateChange((event, session) => { if (event === 'PASSWORD_RECOVERY') pifPasswordRecoveryPending = true; try { pifNoteAccount((session && session.user && session.user.id) || null); } catch (e2) {} }); } catch (e) {}
+// LOGOUT-FIX v8. A password reset belongs to the one sign-in session its link opened. pifRecoveryFor is that session
+// while the announcement waits for init(); pifRecoveryOpen is that session while the form is on screen.
+let pifRecoveryFor = null;
+let pifRecoveryOpen = null;
+function pifRecoveryRef(session) {
+  return session && session.access_token ? { id: pifSessionIdOf(session), userId: (session.user && session.user.id) || null, token: session.access_token } : null;
+}
+// True when the given session (a library session, or what pifSessionNow returns) is the one the reset was opened for.
+function pifRecoveryIs(ref, id, token) {
+  if (!ref || !token || pifIsEnded(ref.id, ref.token)) return false;
+  return ref.id ? id === ref.id : token === ref.token;
+}
+function pifCloseRecoveryForm() {
+  pifRecoveryOpen = null;
+  try { const m = document.getElementById('pw-reset-modal'); if (m) m.remove(); } catch (e) {}
+}
+try { if (sb) sb.auth.onAuthStateChange((event, session) => { if (session && session.access_token && pifIsEnded(pifSessionIdOf(session), session.access_token)) return; if (event === 'PASSWORD_RECOVERY') { pifRecoveryFor = pifRecoveryRef(session); pifPasswordRecoveryPending = !!pifRecoveryFor; }   /* a late report about a session recorded as ended changes nothing: not the active account, not an open finish-setup form */ try { pifNoteAccount((session && session.user && session.user.id) || null); } catch (e2) {} try { pifNoteSession(session); } catch (e3) {} }); } catch (e) {}
 
 function isFounder() { return !!(currentUser && currentUser.role === 'founder'); }
 
@@ -6567,33 +6687,210 @@ function copyCode(code, btn) {
     setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
   });
 }
-    async function logout() {
-  // PUSH-HARDEN-1: deactivate THIS device's push subscription BEFORE signOut.
-  // Must run while still authenticated — the push_subscriptions UPDATE RLS policy
-  // requires user_handle = current_bare_handle(), which is null after signOut().
-  // Marks active=false (not delete) so the row stays auditable; the dispatcher
-  // only sends to active=true rows, so this stops pushes to this device.
-  // Fully guarded: logout must always proceed even if push cleanup fails.
+    // LOGOUT-FIX v8. Log out ends exactly the sign-in session this browser held when Log out was pressed.
+// The session is taken from what the sign-in layer last reported, in the same instant as the click, with no
+// wait in between. Try again is tied to that same session, by its token when its id is not known. The server is
+// asked once to end that session, using that session's own token; no second sign-out request is ever sent.
+// Once the server confirms, the page records that session as ended (see "ended sessions" near the client set-up)
+// and reloads. It does not remove, rewrite or restore the stored sign-in, so there is nothing a newer sign-in
+// from another tab could be caught by. If the answer is lost, a follow-up question to the server settles it
+// where it can; otherwise the member is told the outcome could not be confirmed and nothing is recorded.
+// If the browser will not keep the "ended" record anywhere that survives a reload, the page does not reload.
+const PIF_LOGOUT_PUSH_DEADLINE_MS = 3000;
+const PIF_LOGOUT_AUTH_DEADLINE_MS = 6000;
+const PIF_LOGOUT_PROBE_DEADLINE_MS = 4000;
+let pifLogoutRunning = false;
+let pifLogoutPushTouched = false;   // true once this page has sent a push update for this device
+let pifLatestSession;               // undefined until the sign-in layer has reported; null = signed out
+
+// Settles like the promise if it settles in time; otherwise rejects when the time is up.
+function pifWithDeadline(promise, ms) {
+  let timer;
+  const deadline = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('deadline')), ms); });
+  return Promise.race([Promise.resolve(promise), deadline]).finally(() => clearTimeout(timer));
+}
+// Called by the sign-in layer on every change (sign-in, token renewal, sign-out), synchronously.
+function pifNoteSession(session) {
+  // A report about a session already recorded as ended (a late renewal announced by another tab) changes nothing.
+  if (session && session.access_token && pifIsEnded(pifSessionIdOf(session), session.access_token)) return;
+  pifLatestSession = session && session.access_token
+    ? { id: pifSessionIdOf(session), userId: (session.user && session.user.id) || null, token: session.access_token }
+    : null;
+}
+// Which session this browser holds at this instant, with no waiting: what the sign-in layer last reported, or,
+// before it has reported anything, what is stored (through the same filter the client uses, so an ended session
+// counts as none). Returns { id, userId, token }, or null when signed out.
+function pifSessionNow() {
+  if (pifLatestSession !== undefined) return pifLatestSession;
   try {
-    if (sb && currentUser && ('serviceWorker' in navigator) && ('PushManager' in window)) {
-      var phReg = await navigator.serviceWorker.ready;
-      var phSub = phReg ? await phReg.pushManager.getSubscription() : null;
-      if (phSub && phSub.endpoint) {
-        await sb.from('push_subscriptions')
-          .update({ active: false })
-          .eq('endpoint', phSub.endpoint)
-          .eq('user_handle', pifNormalizeHandleKey(currentUser.handle));
-      }
+    let key = null;
+    try { if (sb && sb.auth && typeof sb.auth.storageKey === 'string') key = sb.auth.storageKey; } catch (e) {}
+    if (!key) key = Object.keys(localStorage).filter((k) => /^sb-.*-auth-token$/.test(k))[0] || null;
+    const raw = key ? pifAuthStorage().getItem(key) : null;
+    if (raw === null) return null;
+    let stored = JSON.parse(raw);
+    if (stored && !stored.access_token && stored.currentSession) stored = stored.currentSession;
+    return stored && stored.access_token ? { id: pifSessionIdOf(stored), userId: (stored.user && stored.user.id) || null, token: stored.access_token } : { id: null, userId: null, token: null };
+  } catch (e) {
+    return { id: null, userId: null, token: null };
+  }
+}
+// Another tab has recorded a session as ended. If it is the one this tab is showing, this tab signs out too.
+// This is only a prompt to refresh the screen: even if the notice never arrives, this tab's client already
+// reads the stored sign-in as "nothing" for that session.
+try {
+  window.addEventListener('storage', (ev) => {
+    try {
+      if (ev.storageArea !== localStorage || !ev.key || ev.newValue === null || ev.key.indexOf(PIF_ENDED_PREFIX) !== 0) return;
+      const now = pifLatestSession;
+      if (now && pifEndedKeys(now.id, now.token).indexOf(ev.key) !== -1) { pifLatestSession = null; currentUser = null; location.reload(); }
+    } catch (e) {}
+  });
+} catch (e) {}
+// Shown when Log out could not be confirmed. kind 'still' = the server says that session is still active;
+// 'unknown' = no answer could be had. Try again belongs to the same session as the original click, whether or
+// not that session's id could be read; it is never offered when there is no session to tie it to.
+function pifLogoutError(kind, session) {
+  let bar = document.getElementById('logout-error');
+  if (bar) bar.remove();
+  if (!kind) return;
+  bar = document.createElement('div');
+  bar.id = 'logout-error';
+  bar.setAttribute('role', 'alert');
+  bar.setAttribute('data-kind', kind);
+  bar.style.cssText = 'position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);z-index:6000;background:#0f172a;border:1px solid #ef4444;border-radius:12px;padding:0.9rem 1rem;width:min(92vw,460px);color:#e2e8f0;font-size:0.85rem;';
+  const text = document.createElement('p');
+  text.id = 'logout-error-text';
+  text.style.cssText = 'margin:0 0 0.7rem 0;';
+  text.textContent = (kind === 'still'
+      ? "Log out didn't finish. You are still signed in on this browser. Check your connection and try again."
+      : "We couldn't confirm whether you were signed out. Check your connection and try again.")
+    + (pifLogoutPushTouched ? ' Notifications for this device may have been switched off.' : '');
+  const retry = document.createElement('button');
+  retry.type = 'button'; retry.id = 'logout-retry'; retry.className = 'btn btn-sm'; retry.textContent = 'Try again';
+  retry.addEventListener('click', () => logout(null, session));
+  const canRetry = !!(session && session.token);   // with no token there is nothing a retry could be tied to
+  const close = document.createElement('button');
+  close.type = 'button'; close.id = 'logout-error-dismiss'; close.className = 'btn btn-sm'; close.style.cssText = 'background:none;margin-left:0.5rem;'; close.textContent = 'Dismiss';
+  close.addEventListener('click', () => pifLogoutError(null));
+  if (canRetry) bar.append(text, retry, close); else { close.style.marginLeft = '0'; bar.append(text, close); }
+  document.body.appendChild(bar);
+}
+
+    async function logout(pifEvent, pifBoundSession) {
+  // 1. The session this Log out is for, fixed in the same instant as the click and before anything is awaited:
+  //    a Try again always brings its own (it never falls back to whoever is signed in by then); otherwise it is
+  //    the session this browser holds right now.
+  const held = pifBoundSession ? pifBoundSession : pifSessionNow();
+  const mine = held ? { id: held.id, userId: held.userId, token: held.token } : null;
+  if (pifLogoutRunning) return;
+  pifLogoutRunning = true;
+  pifLogoutError(null);
+  const button = document.getElementById('logout-btn');
+  if (button) button.disabled = true;
+  const stop = (kind) => { pifLogoutRunning = false; if (button) button.disabled = false; pifLogoutError(kind, mine); };
+  const leave = () => { currentUser = null; localStorage.removeItem('pf_demo_user'); localStorage.removeItem('pf_current_handle'); location.reload(); };
+  if (!sb || mine === null) return leave();   // nobody is signed in on this browser
+  if (!mine.token) return stop('unknown');     // nothing to show the server: no request, and no Try again
+  // When the session id could not be read (mine.id is null) everything below is tied to the token itself.
+  // True only while the browser still holds that same session. A renewed token for it is picked up.
+  const isMine = () => { const now = pifSessionNow(); if (!now || !now.token) return false; if (mine.id) { if (now.id !== mine.id) return false; mine.token = now.token; return true; } return now.token === mine.token; };
+  const handleKey = currentUser && currentUser.id === mine.userId ? pifNormalizeHandleKey(currentUser.handle) : null;
+
+  // 2. PUSH-HARDEN-1: deactivate THIS device's push subscription BEFORE signing out (the update needs the
+  //    member's own sign-in). It asks for the registration, which answers at once when there is none, where
+  //    navigator.serviceWorker.ready would wait for ever. One deadline: past it, an update in flight is
+  //    cancelled and a lookup that finishes later starts nothing. Nothing is written once another sign-in holds the
+  //    browser, and the update carries that session's own token.
+  if (handleKey && isMine() && ('serviceWorker' in navigator) && ('PushManager' in window)) {
+    const controller = typeof AbortController === 'function' ? new AbortController() : null;
+    let gaveUp = false;
+    try {
+      await pifWithDeadline((async () => {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = registration ? await registration.pushManager.getSubscription() : null;
+        if (gaveUp || !subscription || !subscription.endpoint || !isMine()) return;
+        pifLogoutPushTouched = true;
+        await fetch(SUPABASE_URL + '/rest/v1/push_subscriptions?endpoint=eq.' + encodeURIComponent(subscription.endpoint) + '&user_handle=eq.' + encodeURIComponent(handleKey), {
+          method: 'PATCH',
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + mine.token, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: JSON.stringify({ active: false }),
+          signal: controller ? controller.signal : undefined
+        });
+      })(), PIF_LOGOUT_PUSH_DEADLINE_MS);
+    } catch (phErr) {
+      // Push clean-up must never block Log out.
     }
-  } catch (phErr) {
-    // Silent — push cleanup failure must never block logout.
+    gaveUp = true;
+    if (controller) { try { controller.abort(); } catch (e) {} }
   }
 
-  if (sb) await sb.auth.signOut();
+  // 3. Ask the server, once, to end exactly that session (this device only), with that session's own token.
+  //    The time limit covers the whole answer, including reading it.
+  isMine();
+  const ask = async (path, method, ms) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => { try { controller.abort(); } catch (e) {} }, ms);
+    try {
+      const res = await fetch(SUPABASE_URL + path, { method, headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + mine.token }, signal: controller.signal });
+      const text = await res.text();   // an answer that never finishes arriving counts as no answer (the time limit ends it)
+      let body = null;
+      try { body = JSON.parse(text); } catch (e) {}
+      return { status: res.status, code: body && typeof body.error_code === 'string' ? body.error_code : '' };
+    } catch (e) {
+      return null;   // no answer: lost, refused by the network, or out of time
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const gone = (r) => !!r && (r.status === 204 || r.code === 'session_not_found');
+  const answer = await ask('/auth/v1/logout?scope=local', 'POST', PIF_LOGOUT_AUTH_DEADLINE_MS);
+  let ended = gone(answer);
+  if (!ended) {
+    // No confirmation. The request may still have reached the server, so ask whether that session exists.
+    const probe = await ask('/auth/v1/user', 'GET', PIF_LOGOUT_PROBE_DEADLINE_MS);
+    if (probe && probe.code === 'session_not_found') ended = true;
+    // "Still signed in on this browser" is said only when the server answered both questions (it refused the
+    // Log out and it still knows the session) and this browser still holds that session. A lost answer is
+    // never reported as "still signed in".
+    else return stop(answer && probe && probe.status === 200 && isMine() ? 'still' : 'unknown');
+  }
+
+  // 4. Confirmed. Record that this exact session has ended, and make sure the record is really kept, BEFORE
+  //    reloading. The stored sign-in is left exactly as it is: if it is still this session, the client now reads
+  //    it as nothing; if another tab has signed in since (another account, or this member again), that sign-in
+  //    is untouched and the page reloads into it.
+  const kept = pifMarkSessionEnded(mine.id, mine.token);
+  if (kept === 'memory') return pifSignedOutUnsaved();
+  leave();
+}
+// The server has signed the member out, but this browser refused to keep any record of it. Reloading would hand
+// the old session back to the page (its token can stay valid for up to an hour), so the page stays as it is,
+// with the session ignored for as long as this page is open, and says so.
+function pifSignedOutUnsaved() {
+  pifLogoutRunning = false;
+  pifLatestSession = null;
   currentUser = null;
-  localStorage.removeItem('pf_demo_user');
-  localStorage.removeItem('pf_current_handle');
-  location.reload();
+  try { localStorage.removeItem('pf_demo_user'); localStorage.removeItem('pf_current_handle'); } catch (e) {}
+  let cover = document.getElementById('logout-unsaved');
+  if (cover) return;
+  cover = document.createElement('div');
+  cover.id = 'logout-unsaved';
+  cover.setAttribute('role', 'alertdialog');
+  cover.setAttribute('aria-modal', 'true');
+  cover.style.cssText = 'position:fixed;inset:0;z-index:7000;background:#0b1220;display:flex;align-items:center;justify-content:center;padding:1.5rem;';
+  const box = document.createElement('div');
+  box.style.cssText = 'max-width:460px;color:#e2e8f0;font-size:0.95rem;line-height:1.5;text-align:center;';
+  const title = document.createElement('p');
+  title.style.cssText = 'font-size:1.15rem;font-weight:700;margin:0 0 0.8rem 0;';
+  title.textContent = 'You have been signed out.';
+  const text = document.createElement('p');
+  text.id = 'logout-unsaved-text';
+  text.style.cssText = 'margin:0;';
+  text.textContent = "This browser wouldn't let us save that, so please close this tab now. If the site shows you as signed in when you come back, press Log out again.";
+  box.append(title, text);
+  cover.appendChild(box);
+  document.body.appendChild(cover);
 }
 
 async function initAuth() {
@@ -16542,18 +16839,44 @@ async function init() {
           return;
         }
       }
+      // LOGOUT-FIX v8. A report about a session recorded as ended opens nothing and changes nothing.
+      if (session && session.access_token && pifIsEnded(pifSessionIdOf(session), session.access_token)) return;
+      // An open reset form is closed as soon as this browser is signed out or holds a different session.
+      if (pifRecoveryOpen && (event === 'SIGNED_OUT' || !session || !pifRecoveryIs(pifRecoveryOpen, pifSessionIdOf(session), session.access_token))) pifCloseRecoveryForm();
      if(event === 'PASSWORD_RECOVERY' || (pifPasswordRecoveryPending && event === 'INITIAL_SESSION')) {         pifPasswordRecoveryPending = false;
+        // The form is opened only for the session the reset link opened, and only while that session is the one held.
+        const pifRef = event === 'PASSWORD_RECOVERY' ? pifRecoveryRef(session) : pifRecoveryFor;
+        pifRecoveryFor = null;
+        if (!pifRef || !session || !pifRecoveryIs(pifRef, pifSessionIdOf(session), session.access_token)) return;
+        pifRecoveryOpen = pifRef;
         setTimeout(() => {
-          var modalHtml = '<div id="pw-reset-modal" style="display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:5000;align-items:center;justify-content:center;"><div style="background:#0d1526;border:1px solid #2d4f6f;border-radius:16px;padding:1.5rem;width:90%;max-width:400px;"><h2 style="color:white;font-size:1.1rem;font-weight:700;margin:0 0 4px;">Set New Password</h2><p style="color:#64748b;font-size:0.85rem;margin:0 0 1rem;">Enter your new password below.</p><input id="pw-r-new" type="password" placeholder="New password (6+ characters)" class="form-input" style="margin-bottom:0.8rem;"><input id="pw-r-confirm" type="password" placeholder="Confirm new password" class="form-input" style="margin-bottom:1rem;"><button id="pw-r-btn" style="width:100%;background:#2dd4a0;color:#0d1520;border:none;padding:10px;border-radius:10px;font:700 14px/1 Inter,sans-serif;cursor:pointer;">Update Password</button><button onclick="document.getElementById(\'pw-reset-modal\').remove()" style="width:100%;background:transparent;color:#64748b;border:none;padding:8px;cursor:pointer;font-size:0.85rem;margin-top:6px;">Cancel</button></div></div>';
+          const pifHeld = pifSessionNow();
+          if (pifRecoveryOpen !== pifRef || !pifHeld || !pifRecoveryIs(pifRef, pifHeld.id, pifHeld.token)) { if (pifRecoveryOpen === pifRef) pifRecoveryOpen = null; return; }
+          if (document.getElementById('pw-reset-modal')) return;
+          var modalHtml = '<div id="pw-reset-modal" style="display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:5000;align-items:center;justify-content:center;"><div style="background:#0d1526;border:1px solid #2d4f6f;border-radius:16px;padding:1.5rem;width:90%;max-width:400px;"><h2 style="color:white;font-size:1.1rem;font-weight:700;margin:0 0 4px;">Set New Password</h2><p style="color:#64748b;font-size:0.85rem;margin:0 0 1rem;">Enter your new password below.</p><input id="pw-r-new" type="password" placeholder="New password (6+ characters)" class="form-input" style="margin-bottom:0.8rem;"><input id="pw-r-confirm" type="password" placeholder="Confirm new password" class="form-input" style="margin-bottom:1rem;"><button id="pw-r-btn" style="width:100%;background:#2dd4a0;color:#0d1520;border:none;padding:10px;border-radius:10px;font:700 14px/1 Inter,sans-serif;cursor:pointer;">Update Password</button><button onclick="pifCloseRecoveryForm()" style="width:100%;background:transparent;color:#64748b;border:none;padding:8px;cursor:pointer;font-size:0.85rem;margin-top:6px;">Cancel</button></div></div>';
           document.body.insertAdjacentHTML('beforeend', modalHtml);
           document.getElementById('pw-r-btn').onclick = async function() {
             var np = document.getElementById('pw-r-new').value;
             var cp = document.getElementById('pw-r-confirm').value;
             if(np.length < 6) return showToast('Password must be 6+ characters');
             if(np !== cp) return showToast('Passwords do not match');
-            var r = await sb.auth.updateUser({password: np});
-            if(r.error) return showToast('Error: ' + r.error.message);
-            document.getElementById('pw-reset-modal').remove();
+            // The update is sent for the session the reset link opened, with that session's own token, and never
+            // through "whoever is signed in now". If this browser no longer holds that session, nothing is sent.
+            var held = pifSessionNow();
+            if (pifRecoveryOpen !== pifRef || !held || !pifRecoveryIs(pifRef, held.id, held.token)) {
+              pifCloseRecoveryForm();
+              return showToast('This reset link was opened for a different sign-in. Please request a new link.');
+            }
+            var btn = this; if (btn.disabled) return; btn.disabled = true;
+            var ok = false, why = '';
+            try {
+              var res = await fetch(SUPABASE_URL + '/auth/v1/user', { method: 'PUT', headers: { apikey: SUPABASE_ANON_KEY, Authorization: 'Bearer ' + held.token, 'Content-Type': 'application/json' }, body: JSON.stringify({ password: np }) });
+              ok = res.ok;
+              if (!ok) { try { var j = await res.json(); why = j.msg || j.message || j.error_description || ''; } catch (e2) {} }
+            } catch (e1) { why = 'no connection'; }
+            btn.disabled = false;
+            if(!ok) return showToast('Error: ' + (why || 'the password could not be updated'));
+            pifCloseRecoveryForm();
             showToast('Password updated! You can now login.');
           };
         }, 1000);
