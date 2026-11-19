@@ -18989,6 +18989,8 @@ async function deleteApplication(id, btn) {
 // -- CONFIG -----------------------------------------------------------
 const NEXAR_FN_BASE = `${SUPABASE_URL}/functions/v1`;
 const NEXAR_CHAT_URL      = `${NEXAR_FN_BASE}/nexar-chat`;
+// The delete confirmation goes to the same project as Chat (it used to carry one fixed project address).
+const NEXAR_CONFIRM_URL   = `${NEXAR_FN_BASE}/nexar-confirm-action`;
 const NEXAR_CHECKOUT_URL  = `${NEXAR_FN_BASE}/nexar-create-checkout`;
 
 // -- STATE ------------------------------------------------------------
@@ -19358,7 +19360,7 @@ async function nexarRenderLatestDraftFromDb() {
     if (!token) throw new Error('Not authenticated');
 
     const resp = await fetch(
-      'https://liujbjfjdycacmaujawu.supabase.co/functions/v1/nexar-confirm-action',
+      NEXAR_CONFIRM_URL,
       {
         method: 'POST',
         headers: {
